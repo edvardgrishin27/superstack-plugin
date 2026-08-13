@@ -1,5 +1,18 @@
 # SUPERSTACK
 
+> **Note for English readers.** This tool is **Russian-language**: every verdict,
+> finding and skill instruction it produces is in Russian. The code and its
+> comments are Russian too. An English README would promise something the product
+> does not deliver, so here is the honest summary instead — decide before you install.
+>
+> A Claude Code plugin suite that audits your setup with deterministic probes,
+> never asserts what it did not measure, and makes every change reversible
+> (backup before the first edit, quarantine instead of delete, secrets never
+> copied). Readiness is decided by a script with an exit code — six gates
+> including **hermeticity** (same test count under a different `$HOME`) and
+> **124 registered mutations**, each of which must break the suite. Zero external
+> dependencies, system `python3`. MIT.
+
 Смотрит, как настроен твой Claude Code, объясняет каждый вывод и без спроса
 ничего не меняет.
 
