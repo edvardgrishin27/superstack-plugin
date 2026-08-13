@@ -926,6 +926,41 @@
    "find": "tools: Read",
    "replace": "tools: Read, Grep, Glob",
    "why": "судья получает поиск по дереву и сам достаёт спеку, которую от него скрыли: слепота обходится, а пакет об этом не знает"
+  },
+  {
+   "id": "sync.push-is-default",
+   "file": "tools/sync_public.py",
+   "find": "    push = \"--push\" in sys.argv[1:]",
+   "replace": "    push = True",
+   "why": "выкладка становится побочным эффектом подготовки: необратимое действие выполняется без явного намерения — опубликованное кэшируется и индексируется, «отменить» означает лишь «убрать из виду»"
+  },
+  {
+   "id": "sync.leaks-do-not-block",
+   "file": "tools/sync_public.py",
+   "find": "    if a[\"leaks\"]:\n        blocking.append(f\"КЛЮЧИ ЧЕЛОВЕКА В ДЕРЕВЕ: {a['leaks']}\")",
+   "replace": "    if False:\n        blocking.append(f\"КЛЮЧИ ЧЕЛОВЕКА В ДЕРЕВЕ: {a['leaks']}\")",
+   "why": "утечка ключей человека перестаёт останавливать выкладку: единственная ошибка, которую нельзя отменить, выполняется молча"
+  },
+  {
+   "id": "sync.red-suite-does-not-block",
+   "file": "tools/sync_public.py",
+   "find": "    if code != 0:\n        blocking.append(f\"набор красный (код {code})",
+   "replace": "    if False:\n        blocking.append(f\"набор красный (код {code})",
+   "why": "красный набор перестаёт останавливать выкладку: публикуется то, что не проходит собственные проверки"
+  },
+  {
+   "id": "sync.readme-lies-silently",
+   "file": "tools/sync_public.py",
+   "find": "    if not fresh:\n        blocking.append(\"числа в README не обновлены — измерить не удалось\")",
+   "replace": "    if not False:\n        pass",
+   "why": "витрина публикуется с числами, которых никто не измерял, — ровно то, что продукт про себя запрещает"
+  },
+  {
+   "id": "sync.literals-not-split",
+   "file": "tools/sync_public.py",
+   "find": "    chopped = split_literals(pub / \"tests\")",
+   "replace": "    chopped = 0",
+   "why": "длинные литералы уезжают как есть: push отклоняется сканером, и человек каждый раз чинит это руками — то, ради чего скрипт и написан"
   }
  ]
 }

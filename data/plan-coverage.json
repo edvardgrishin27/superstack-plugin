@@ -534,6 +534,15 @@
     "file": "plugins/superstack-guard/tools/blind_accept.py",
     "contains": "def is_retelling"
    }
+  },
+  {
+   "id": "DIST.sync-is-a-mechanism",
+   "layer": "дистрибуция",
+   "mechanism": "выкладка — скрипт, который ОТКАЗЫВАЕТСЯ: утечка, красный набор и неизмеренные числа останавливают публикацию, а не сопровождают её",
+   "evidence": {
+    "file": "tools/sync_public.py",
+    "contains": "def audit"
+   }
   }
  ]
 }
