@@ -367,10 +367,10 @@
   {
    "id": "INST.base-kit",
    "layer": "установщик",
-   "mechanism": "базовый набор ставится всем без вопросов, а не только диагностируется",
+   "mechanism": "базовый набор ПРИМЕНЯЕТСЯ, а не только перечисляется: диагностика без применения оставляет человека там же, где нашла",
    "evidence": {
     "file": "plugins/superstack-install/tools/apply.py",
-    "contains": "BASE_KIT"
+    "contains": "def act_base_item"
    }
   },
   {

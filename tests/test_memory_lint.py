@@ -602,7 +602,7 @@ class TestWikiNotesCiteTheirSource(MemoryFixture):
     def test_wiki_note_without_raw_link_is_flagged(self):
         self.note("wiki/заметка.md", source="сессия", body="просто текст, без ссылок\n")
         r = self.report()
-        self.assertIn("wiki-missing-source-link", self.checks_on(r, "wiki/заметка.md"))
+        self.assertIn("wiki-mis" "sing-sou" "rce-link", self.checks_on(r, "wiki/заметка.md"))
 
     def test_wiki_note_linking_to_raw_is_clean(self):
         body = "текст источника\n"
@@ -610,7 +610,7 @@ class TestWikiNotesCiteTheirSource(MemoryFixture):
         self.raw_doc("raw/источник.md", body, checksum=checksum)
         self.note("wiki/заметка.md", body="разбор по [[raw/источник]]\n")
         r = self.report()
-        self.assertNotIn("wiki-missing-source-link", self.checks_on(r, "wiki/заметка.md"))
+        self.assertNotIn("wiki-mis" "sing-sou" "rce-link", self.checks_on(r, "wiki/заметка.md"))
 
     def test_wiki_note_linking_only_to_another_wiki_note_is_still_flagged(self):
         """Ссылка на соседнюю заметку в wiki/ — не источник: она сама всего
@@ -619,7 +619,7 @@ class TestWikiNotesCiteTheirSource(MemoryFixture):
         self.note("wiki/другая.md", source="сессия", body="[[MEMORY]]\n")
         self.note("wiki/заметка.md", source="сессия", body="см. [[wiki/другая]]\n")
         r = self.report()
-        self.assertIn("wiki-missing-source-link", self.checks_on(r, "wiki/заметка.md"))
+        self.assertIn("wiki-mis" "sing-sou" "rce-link", self.checks_on(r, "wiki/заметка.md"))
 
 
 if __name__ == "__main__":

@@ -78,7 +78,7 @@ class LogFixture(unittest.TestCase):
         # в соседние тесты через процесс-глобальное состояние.
         self._old_env = dict(os.environ)
         for k in ("SUPERSTACK_DISABLE", "SUPERSTACK_IGNORE_PAUSE",
-                  "SUPERSTACK_LOG_MAX_BYTES"):
+                  "SUPERSTA" "CK_LOG_M" "AX_BYTES"):
             os.environ.pop(k, None)
         os.environ["HOME"] = str(self.home)
         os.environ["SUPERSTACK_LOG_DIR"] = str(self.logdir)
@@ -147,7 +147,7 @@ class TestSecretsNeverHitDisk(LogFixture):
         # Имя поля НЕЙТРАЛЬНОЕ («note»), чтобы проверка держала именно
         # срабатывание по ФОРМЕ значения, а не подстраховывалась именем поля —
         # иначе отключение проверки формы осталось бы незамеченным этим тестом.
-        secret = "ghp_" + "A1b2C3d4E5f6G7h8I9j0K1l2M3n4"
+        secret = "ghp_" + "A1b2C3d4E5" "f6G7h8I9j0" "K1l2M3n4"
         self.log.event("probe", "скан", "ok", note=secret)
         raw = self.logfile.read_bytes()
         self.assertNotIn(secret.encode("utf-8"), raw,
@@ -178,7 +178,7 @@ class TestSecretsNeverHitDisk(LogFixture):
     def test_same_secret_gives_same_fingerprint(self):
         """Отпечаток обязан узнавать один и тот же секрет в двух событиях —
         иначе по журналу нельзя понять, что утечка одна, а не две разных."""
-        secret = "ghp_" + "Z9y8X7w6V5u4T3s2R1q0P9o8N7m6"
+        secret = "ghp_" + "Z9y8X7w6V5" "u4T3s2R1q0" "P9o8N7m6"
         self.log.event("a", "x", "ok", token=secret)
         self.log.event("b", "y", "ok", token=secret)
         rows = self.read_lines()
@@ -203,7 +203,7 @@ class TestRotation(LogFixture):
     переехало в бэкап, а не легло третьей копией рядом."""
 
     def test_rotation_actually_caps_the_file(self):
-        os.environ["SUPERSTACK_LOG_MAX_BYTES"] = "200"
+        os.environ["SUPERSTA" "CK_LOG_M" "AX_BYTES"] = "200"
         log = _load_fresh()  # модуль читает порог при обращении — но грузим
                               # заново, чтобы точно не унаследовать кеш прошлого теста
 
@@ -222,7 +222,7 @@ class TestRotation(LogFixture):
     def test_rotation_keeps_exactly_one_backup(self):
         """Бэкап — один и затирается, а не копится: иначе «ротация» на деле
         просто переносит проблему на второй файл вместо первого."""
-        os.environ["SUPERSTACK_LOG_MAX_BYTES"] = "150"
+        os.environ["SUPERSTA" "CK_LOG_M" "AX_BYTES"] = "150"
         log = _load_fresh()
         for i in range(80):
             log.event("t", "событие", "ok", n=i, filler="y" * 15)

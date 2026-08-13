@@ -4,70 +4,17 @@
     "name": "Edvard Grishin"
   },
   "metadata": {
-    "description": "Агентная система над Claude Code: профилирует машину детерминированными пробами, объясняет каждый вывод и доказывает работоспособность заблокированной попыткой"
+    "description": "Агентная система разработки: профилирует машину, объясняет каждый вывод и доказывает работоспособность живым прогоном"
   },
   "plugins": [
     {
-      "name": "superstack-brain",
-      "source": "./plugins/superstack-brain",
-      "description": "Память и эволюция: линт памяти, журнал находок с планкой доказательности, базовая линия, доктор актуальности.",
-      "version": "0.2.0",
+      "name": "superstack",
+      "source": "./plugins/superstack",
+      "description": "Установщик-решатель и доктор актуальности для Claude Code. Собирает факты о машине, применяет версионируемые правила, показывает вывод в трёх глубинах.",
+      "version": "0.1.0",
       "license": "MIT",
       "category": "workflow",
-      "strict": false
-    },
-    {
-      "name": "superstack-build",
-      "source": "./plugins/superstack-build",
-      "description": "Стройка: /go ведёт от фразы до доказанного куска через два блокирующих гейта — план и верификацию.",
-      "version": "0.2.0",
-      "license": "MIT",
-      "category": "workflow",
-      "strict": false
-    },
-    {
-      "name": "superstack-control",
-      "source": "./plugins/superstack-control",
-      "description": "Словарь новичка: /what — где я и что дальше, /oops — отменить последнее, /fix — что-то сломалось.",
-      "version": "0.2.0",
-      "license": "MIT",
-      "category": "workflow",
-      "strict": false
-    },
-    {
-      "name": "superstack-core",
-      "source": "./plugins/superstack-core",
-      "description": "Ядро: детерминированные пробы, решатель на версионируемых правилах, отчёт страницей, журнал и аварийный тормоз. Ничего не меняет — только смотрит.",
-      "version": "0.2.0",
-      "license": "MIT",
-      "category": "workflow",
-      "strict": false
-    },
-    {
-      "name": "superstack-guard",
-      "source": "./plugins/superstack-guard",
-      "description": "Гейты: верификация решает кодом возврата, доказательство через заблокированную попытку, второе мнение другой моделью.",
-      "version": "0.2.0",
-      "license": "MIT",
-      "category": "workflow",
-      "strict": false
-    },
-    {
-      "name": "superstack-install",
-      "source": "./plugins/superstack-install",
-      "description": "Применение: копия до первой правки, карантин вместо удаления, откат одной командой. Заговаривает первым при первой сессии.",
-      "version": "0.2.0",
-      "license": "MIT",
-      "category": "workflow",
-      "strict": false
-    },
-    {
-      "name": "superstack-spec",
-      "source": "./plugins/superstack-spec",
-      "description": "Проектирование: линт спеки и граф артефактов — агентский markdown гниёт молча, скрипт читает его целиком всегда.",
-      "version": "0.2.0",
-      "license": "MIT",
-      "category": "workflow",
+      "keywords": ["setup", "audit", "hooks", "memory", "security", "doctor"],
       "strict": false
     }
   ]

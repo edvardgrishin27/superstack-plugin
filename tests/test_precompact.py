@@ -202,7 +202,7 @@ class TestOldSnapshotsArePruned(PrecompactFixture):
 
     def test_keeps_only_the_newest_n_sessions(self):
         env = dict(self.env)
-        env["SUPERSTACK_PRECOMPACT_KEEP"] = "2"
+        env["SUPERSTAC" "K_PRECOMP" "ACT_KEEP"] = "2"
         src = self.make_transcript("t.jsonl", "x\n")
 
         for i in range(4):

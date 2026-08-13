@@ -870,6 +870,27 @@
    "find": "                           cwd=str(PLUG), capture_output=True,",
    "replace": "                           cwd=str(PLUG.parent.parent), capture_output=True,",
    "why": "проверка манифеста уходит выше корня репозитория и не находит маркетплейс: ворота падают по причине, к продукту отношения не имеющей"
+  },
+  {
+   "id": "basekit.tool-installs-software-itself",
+   "file": "plugins/superstack-install/tools/apply.py",
+   "find": "    if item[\"touches\"] == \"machine\":\n        return {\"changed\": False, \"human_only\": True,",
+   "replace": "    if False:\n        return {\"changed\": False, \"human_only\": True,",
+   "why": "граница снята: установщик берётся ставить чужой софт на машину сам — тот же захват, что и хук, запускающий проверку без спроса"
+  },
+  {
+   "id": "basekit.overwrites-existing-choice",
+   "file": "plugins/superstack-install/tools/apply.py",
+   "find": "    if before is not None:\n        return {\"changed\": False, \"why\": f\"уже задано: {key}\"}",
+   "replace": "    if False:\n        return {\"changed\": False, \"why\": f\"уже задано: {key}\"}",
+   "why": "существующая настройка человека затирается: «поставлю как лучше» означает потерю чужого решения без единого сообщения"
+  },
+  {
+   "id": "basekit.dry-run-writes",
+   "file": "plugins/superstack-install/tools/apply.py",
+   "find": "    if not dry:\n        data[key] = value",
+   "replace": "    if True:\n        data[key] = value",
+   "why": "сухой прогон пишет на диск: человек смотрит план, а изменения уже применены — согласие спрашивают после факта"
   }
  ]
 }

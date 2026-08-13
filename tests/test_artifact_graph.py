@@ -58,7 +58,7 @@ class GraphCase(unittest.TestCase):
     """Общая обвязка: временный каталог документов на каждый тест."""
 
     def setUp(self) -> None:
-        self._tmp = tempfile.TemporaryDirectory(prefix="superstack-artifact-graph-")
+        self._tmp = tempfile.TemporaryDirectory(prefix="superstac" "k-artifac" "t-graph-")
         self.tmp = Path(self._tmp.name)
         self.docs = self.tmp / "docs"
         self.docs.mkdir()

@@ -206,6 +206,84 @@ def act_set_default_mode(dry: bool) -> dict:
             "before": before, "after": "plan"}
 
 
+def act_base_item(item: dict, dry: bool) -> dict:
+    """Применить ОДИН пункт базового набора.
+
+    Зачем это существует. Диагностика без применения оставляет человека ровно
+    там, где нашла: со списком проблем и без единого решения. Ради этого списка
+    ничего не строилось — а до появления этой функции набор именно им и был,
+    и улика в карте плана засчитывала наличие ТАБЛИЦЫ за наличие механизма.
+
+    Граница проходит по полю `touches`, а не по классу:
+
+      · «settings» — правка файлов настроек. Инструмент имеет на это право:
+        файл его, копия сделана до правки, откат существует.
+      · «machine» — установка чужого софта. Инструмент НЕ ставит это сам
+        никогда, даже с подтверждения: он готовит точную команду и отдаёт её
+        человеку. Установщик, ставящий пакеты молча, — это тот же захват, что
+        и хук, запускающий проверку без спроса.
+
+    Возвращает то же, что остальные действия: что изменилось и почему нет,
+    если нет.
+    """
+    if item["touches"] == "machine":
+        return {"changed": False, "human_only": True,
+                "why": "ставит софт на машину — команду готовлю, запускаешь ты",
+                "command": item.get("command", "команда не описана")}
+    fn = _BASE_ACTIONS.get(item["id"])
+    if fn is None:
+        return {"changed": False, "why": "автоматического действия не описано"}
+    return fn(dry)
+
+
+def act_set_statusline(dry: bool) -> dict:
+    """Показать расход в строке состояния.
+
+    Без него бюджетные пороги считаются от самооценки модели, которую никто
+    не сверял: человек не видит цену собственной сессии.
+    """
+    return _set_setting("statusLine", {"type": "command",
+                                       "command": "npx -y ccusage statusline"}, dry)
+
+
+def act_wire_stop_gate(dry: bool) -> dict:
+    """Подключить Stop-гейт в пользовательские настройки.
+
+    Плагин приносит свой hooks.json, но человек мог поставить пакеты выборочно.
+    Явная запись в settings.json переживает выборочную установку.
+    """
+    return _set_setting("_superstackStopGate", True, dry)
+
+
+def _set_setting(key: str, value, dry: bool) -> dict:
+    """Одна правка settings.json: атомарная запись, ничего не затирающая.
+
+    Существующее значение НЕ перезаписывается: человек мог настроить своё,
+    и «поставлю как лучше» здесь означает потерю его решения.
+    """
+    path = CLAUDE / "settings.json"
+    data = json.loads(path.read_text(encoding="utf-8-sig")) if path.is_file() else {}
+    before = data.get(key)
+    if before is not None:
+        return {"changed": False, "why": f"уже задано: {key}"}
+    if not dry:
+        data[key] = value
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = path.with_suffix(".json.tmp")
+        tmp.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+        os.replace(tmp, path)
+    return {"changed": True, "field": key, "before": before, "after": value}
+
+
+_BASE_ACTIONS = {
+    "base.plan-mode": act_set_default_mode,
+    "base.cost-visible": act_set_statusline,
+    "base.stop-gate": act_wire_stop_gate,
+    # base.kill-switch приносит сам пакет (tools/pause.sh) — ставить нечего,
+    # поэтому действия нет и «применение» для него означало бы ложную работу.
+}
+
+
 #: реестр действий. Ключ — id правила. Всё, чего здесь нет, человек делает сам.
 ACTIONS: dict[str, dict] = {
     "ctx.default-mode-unset": {
@@ -244,6 +322,7 @@ BASE_KIT: tuple = (
     },
     {
         "id": "base.tdd-gate",
+        "command": 'npx -y @nizos/probity install',
         "touches": "machine",
         "what": "PreToolUse-гейт TDD (probity)",
         "why": "единственный гейт, срабатывающий РАНЬШЕ проверки прав: "
@@ -262,6 +341,7 @@ BASE_KIT: tuple = (
     },
     {
         "id": "base.secret-scan",
+        "command": 'brew install gitleaks && gitleaks protect --staged',
         "touches": "machine",
         "what": "офлайн-сканер секретов до коммита",
         "why": "дешевле любого ревью моделью: секунды, ноль токенов, жёсткий блок",
@@ -270,6 +350,7 @@ BASE_KIT: tuple = (
     },
     {
         "id": "base.oracle",
+        "command": 'npx -y playwright install --with-deps chromium',
         "touches": "machine",
         "what": "браузерный оракул для проверок интерфейса",
         "why": "единственный источник ДОКАЗАТЕЛЬСТВА вместо утверждения: "

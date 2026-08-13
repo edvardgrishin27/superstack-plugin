@@ -380,3 +380,74 @@ class TestBaseKit(unittest.TestCase):
         self.assertIn(r.returncode, (0, 1))
         self.assertIn("базов", r.stdout.lower() + r.stderr.lower() + "базовый")
         self.assertEqual(before, sorted(p.name for p in (plug("superstack-install") / "tools").glob("*")))
+
+
+class TestBaseKitIsApplied(unittest.TestCase):
+    """Диагностика без применения оставляет человека там же, где нашла.
+
+    До появления act_base_item набор был именно списком, а улика в карте плана
+    засчитывала наличие ТАБЛИЦЫ за наличие механизма — единственное место во
+    всей системе, где «58 из 58» говорило неправду.
+    """
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.claude = Path(self.tmp.name) / ".claude"
+        self.claude.mkdir(parents=True)
+        self._orig = apply_mod.CLAUDE
+        apply_mod.CLAUDE = self.claude
+        self.addCleanup(setattr, apply_mod, "CLAUDE", self._orig)
+
+    def _item(self, pid: str) -> dict:
+        return next(i for i in apply_mod.BASE_KIT if i["id"] == pid)
+
+    def _settings(self) -> dict:
+        f = self.claude / "settings.json"
+        return json.loads(f.read_text("utf-8")) if f.is_file() else {}
+
+    def test_settings_item_is_really_written(self):
+        """Позитивный контроль: пункт применяется НА ДИСК, а не в отчёт."""
+        r = apply_mod.act_base_item(self._item("base.plan-mode"), dry=False)
+        self.assertTrue(r["changed"], r)
+        self.assertEqual(self._settings()["permissions"]["defaultMode"], "plan")
+
+    def test_dry_run_changes_nothing_on_disk(self):
+        apply_mod.act_base_item(self._item("base.plan-mode"), dry=True)
+        self.assertFalse((self.claude / "settings.json").exists(),
+                         "сухой прогон записал файл")
+
+    def test_existing_value_is_never_overwritten(self):
+        """«Поставлю как лучше» здесь означает потерю чужого решения."""
+        (self.claude / "settings.json").write_text(
+            json.dumps({"permissions": {"defaultMode": "acceptEdits"}}), encoding="utf-8")
+        r = apply_mod.act_base_item(self._item("base.plan-mode"), dry=False)
+        self.assertFalse(r["changed"])
+        self.assertEqual(self._settings()["permissions"]["defaultMode"], "acceptEdits")
+
+    def test_machine_item_is_never_installed_by_the_tool(self):
+        """Граница проходит по touches, а не по классу: установщик, ставящий
+        чужой софт молча, — тот же захват, что и хук без спроса."""
+        for item in [i for i in apply_mod.BASE_KIT if i["touches"] == "machine"]:
+            with self.subTest(item=item["id"]):
+                r = apply_mod.act_base_item(item, dry=False)
+                self.assertTrue(r["human_only"], r)
+                self.assertFalse(r["changed"])
+                self.assertTrue(r["command"].strip(),
+                                "человеку не дали команду, которую он должен запустить")
+        self.assertFalse((self.claude / "settings.json").exists(),
+                         "машинный пункт тронул настройки")
+
+    def test_every_machine_item_carries_a_real_command(self):
+        """Пункт без команды превращает «спрошу тебя» в тупик: человек согласен,
+        а делать нечего."""
+        for item in [i for i in apply_mod.BASE_KIT if i["touches"] == "machine"]:
+            with self.subTest(item=item["id"]):
+                self.assertIn("command", item, f"{item['id']} без команды")
+                self.assertGreater(len(item["command"]), 5)
+
+    def test_unknown_item_does_not_pretend_to_work(self):
+        r = apply_mod.act_base_item(
+            {"id": "base.нет-такого", "touches": "settings"}, dry=False)
+        self.assertFalse(r["changed"])
+        self.assertIn("не описано", r["why"])
