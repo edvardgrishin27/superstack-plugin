@@ -1,0 +1,21 @@
+{
+  "name": "superstack-install",
+  "version": "0.2.0",
+  "description": "Применение: копия до первой правки, карантин вместо удаления, откат одной командой. Заговаривает первым при первой сессии.",
+  "author": {
+    "name": "Edvard Grishin"
+  },
+  "license": "MIT",
+  "keywords": [
+    "claude-code",
+    "audit",
+    "gates",
+    "security"
+  ],
+  "dependencies": [
+    {
+      "name": "superstack-core",
+      "version": "^0.2.0"
+    }
+  ]
+}

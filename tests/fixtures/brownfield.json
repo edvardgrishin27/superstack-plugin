@@ -1,0 +1,188 @@
+{
+ "cc.allow_count": 40,
+ "cc.default_mode": "plan",
+ "cc.settings_present": true,
+ "cc.settings_valid_json": true,
+ "cc.statusline": true,
+ "disc.agent_scopes_covered": [],
+ "disc.agents_unreadable": [],
+ "disc.all_on_top_tier": false,
+ "disc.kill_switch_present": false,
+ "disc.learned_entries": 0,
+ "disc.model_tiers": {},
+ "disc.paused": false,
+ "disc.verifier_theater": [],
+ "disc.verifiers": [],
+ "ev.budget_ceiling": true,
+ "ev.eval_baseline": 8,
+ "ev.observe_hooks_declared": [
+  "pre:observe",
+  "post:observe"
+ ],
+ "ev.observe_hooks_wired": [
+  "pre:observe",
+  "post:observe"
+ ],
+ "ev.promotion_gate": true,
+ "ev.skills_with_tests": 3,
+ "hooks.dormant": [
+  {
+   "event": "PreToolUse",
+   "id": "h0"
+  },
+  {
+   "event": "PreToolUse",
+   "id": "h1"
+  },
+  {
+   "event": "PreToolUse",
+   "id": "h2"
+  },
+  {
+   "event": "PreToolUse",
+   "id": "h3"
+  },
+  {
+   "event": "PreToolUse",
+   "id": "h4"
+  },
+  {
+   "event": "PreToolUse",
+   "id": "h5"
+  },
+  {
+   "event": "PreToolUse",
+   "id": "h6"
+  },
+  {
+   "event": "PreToolUse",
+   "id": "h7"
+  },
+  {
+   "event": "PreToolUse",
+   "id": "h8"
+  },
+  {
+   "event": "PreToolUse",
+   "id": "h9"
+  },
+  {
+   "event": "PreToolUse",
+   "id": "h10"
+  },
+  {
+   "event": "PreToolUse",
+   "id": "h11"
+  },
+  {
+   "event": "PreToolUse",
+   "id": "h12"
+  },
+  {
+   "event": "PreToolUse",
+   "id": "h13"
+  },
+  {
+   "event": "PreToolUse",
+   "id": "h14"
+  },
+  {
+   "event": "PreToolUse",
+   "id": "h15"
+  },
+  {
+   "event": "PreToolUse",
+   "id": "h16"
+  },
+  {
+   "event": "PreToolUse",
+   "id": "h17"
+  },
+  {
+   "event": "PreToolUse",
+   "id": "h18"
+  },
+  {
+   "event": "PreToolUse",
+   "id": "h19"
+  },
+  {
+   "event": "PreToolUse",
+   "id": "h20"
+  },
+  {
+   "event": "PreToolUse",
+   "id": "h21"
+  },
+  {
+   "event": "PreToolUse",
+   "id": "h22"
+  },
+  {
+   "event": "PreToolUse",
+   "id": "h23"
+  },
+  {
+   "event": "PreToolUse",
+   "id": "h24"
+  }
+ ],
+ "hooks.dormant.count": 25,
+ "hooks.manifest.count": 34,
+ "hooks.manifest.path": null,
+ "hooks.scopes_covered": [],
+ "hooks.scopes_unreadable": [],
+ "hooks.wired.by_scope": [],
+ "hooks.wired.count": 11,
+ "hooks.wired.events": [],
+ "host.gh": true,
+ "host.git": true,
+ "host.node": true,
+ "host.os": null,
+ "host.python3": true,
+ "inv.agents.by_scope": [],
+ "inv.agents.count": 80,
+ "inv.commands.by_scope": [],
+ "inv.commands.count": 79,
+ "inv.marketplaces": [],
+ "inv.skills.biggest": [],
+ "inv.skills.budget_chars": 10000,
+ "inv.skills.by_scope": [],
+ "inv.skills.count": 283,
+ "inv.skills.listing_chars": 61089,
+ "inv.skills.over_budget_ratio": 6.11,
+ "inv.skills.scopes_covered": [],
+ "inv.skills.scopes_unmeasured": [],
+ "mcp.declared": [],
+ "mcp.local_binaries": [],
+ "mem.cost_metrics": true,
+ "mem.index_over_limit": false,
+ "mem.instincts_active": true,
+ "mem.largest_index_bytes": 0,
+ "mem.store_count": 0,
+ "mem.stores": [],
+ "proj.dir": null,
+ "proj.has_tests": false,
+ "proj.is_git": false,
+ "proj.lang": [],
+ "rt.active_version": "2.1.42",
+ "rt.entrypoint": "cli",
+ "rt.subagent_model_routing": false,
+ "rt.version_conflict": false,
+ "rt.versions_installed": {"npm": "2.1.42"},
+ "sec.scan_files": [
+  "user",
+  "user-local"
+ ],
+ "sec.scan_unreadable": [],
+ "sec.secret_matches": [
+  {
+   "confidence": "high",
+   "file": "user",
+   "fingerprint": "0123456789ab",
+   "location": "permissions.allow[1]",
+   "value_len": 64,
+   "why": "пароль прямо в команде"
+  }
+ ]
+}

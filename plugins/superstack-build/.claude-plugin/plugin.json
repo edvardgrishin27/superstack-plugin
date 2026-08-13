@@ -1,0 +1,28 @@
+{
+  "name": "superstack-build",
+  "version": "0.2.0",
+  "description": "Стройка: /go ведёт от фразы до доказанного куска через два блокирующих гейта — план и верификацию.",
+  "author": {
+    "name": "Edvard Grishin"
+  },
+  "license": "MIT",
+  "keywords": [
+    "claude-code",
+    "audit",
+    "gates",
+    "security"
+  ],
+  "dependencies": [
+    {
+      "name": "superstack-spec",
+      "version": "^0.2.0"
+    },
+    {
+      "name": "superstack-guard",
+      "version": "^0.2.0"
+    }
+  ],
+  "skills": [
+    "./skills/"
+  ]
+}

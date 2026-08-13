@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "PreCompact": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh \"${CLAUDE_PLUGIN_ROOT}/hooks/precompact.sh\"",
+            "timeout": 30
+          }
+        ]
+      }
+    ]
+  }
+}

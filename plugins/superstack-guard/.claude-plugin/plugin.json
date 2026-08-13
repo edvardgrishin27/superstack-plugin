@@ -1,0 +1,24 @@
+{
+  "name": "superstack-guard",
+  "version": "0.2.0",
+  "description": "Гейты: верификация решает кодом возврата, доказательство через заблокированную попытку, второе мнение другой моделью.",
+  "author": {
+    "name": "Edvard Grishin"
+  },
+  "license": "MIT",
+  "keywords": [
+    "claude-code",
+    "audit",
+    "gates",
+    "security"
+  ],
+  "dependencies": [
+    {
+      "name": "superstack-core",
+      "version": "^0.2.0"
+    }
+  ],
+  "agents": [
+    "./agents/second-opinion.md"
+  ]
+}

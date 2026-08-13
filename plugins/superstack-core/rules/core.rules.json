@@ -1,0 +1,241 @@
+{
+  "schema": "superstack.rules.v1",
+  "rules": [
+    {
+      "id": "sec.secret-in-settings",
+      "when": "len(sec.secret_matches) > 0",
+      "severity": "critical",
+      "class": "BLOCK",
+      "verdict": "ASK",
+      "number": {
+        "of": "sec.secret_matches",
+        "unit": "мест"
+      },
+      "beginner": {
+        "headline": "В настройках лежит пароль открытым текстом ({n})",
+        "plain": "Файл настроек читает каждая сессия. Всё, что в нём лежит, видит любой скилл, плагин и скрипт.",
+        "why": "Одной подмены текста на веб-странице хватит, чтобы агент выполнил команду с этим паролем."
+      },
+      "expert": {
+        "claim": "совпадение с сигнатурой секрета: {places}. Значение не сохранялось — только место, длина и отпечаток.",
+        "evidence": [
+          "sec.secret_matches",
+          "cc.allow_count",
+          "sec.scan_files",
+          "sec.scan_unreadable"
+        ],
+        "note": "Просмотрены файлы из sec.scan_files. Совпадение по ФОРМЕ значения (confidence high) и по имени поля (low) — разные по силе улики. Непрочитанные конфиги перечислены в sec.scan_unreadable: там не искали."
+      }
+    },
+    {
+      "id": "sec.mcp-local-binary",
+      "when": "len(mcp.local_binaries) > 0",
+      "severity": "high",
+      "class": "GATE",
+      "verdict": "ASK",
+      "number": {
+        "of": "mcp.local_binaries",
+        "unit": "серверов"
+      },
+      "beginner": {
+        "headline": "{n} MCP-серверов запускаются из локальных файлов",
+        "plain": "MCP-сервер — это программа, которая выполняется на твоём компьютере с твоими правами.",
+        "why": "Если у такого сервера пропал автор или репозиторий, обновлений и проверок больше не будет."
+      },
+      "expert": {
+        "claim": "mcpServers[*].command указывает на абсолютный путь: {mcp.local_binaries}",
+        "evidence": [
+          "mcp.declared",
+          "mcp.local_binaries"
+        ]
+      }
+    },
+    {
+      "id": "hooks.dormant-manifest",
+      "when": "hooks.dormant.count > 0",
+      "severity": "high",
+      "class": "GATE",
+      "verdict": "FIX",
+      "number": {
+        "of": "hooks.dormant",
+        "unit": "автопроверок"
+      },
+      "beginner": {
+        "headline": "{n} автопроверок установлены, но выключены",
+        "plain": "Кто-то положил их на компьютер и не включил. Лежат мёртвым грузом.",
+        "why": "Часть из них полезна прямо сейчас: одна не даст обойти тесты при коммите, другая считает стоимость работы."
+      },
+      "expert": {
+        "claim": "hooks.json объявляет {hooks.manifest.count} хуков; по всем скоупам подключено {hooks.wired.count}. Манифест инертен.",
+        "evidence": [
+          "hooks.manifest.path",
+          "hooks.manifest.count",
+          "hooks.wired.count",
+          "hooks.wired.by_scope",
+          "hooks.scopes_covered",
+          "hooks.dormant"
+        ],
+        "note": "Сопоставление ведётся по скоупам из hooks.scopes_covered плюс хуки включённых плагинов. Скоуп, которого нет в этом списке, не проверялся — подключённый там хук выглядел бы спящим. Подсчёт файлов доказывает наличие; работоспособность доказывает только заблокированная попытка."
+      }
+    },
+    {
+      "id": "obs.no-cost-metrics",
+      "when": "mem.cost_metrics == False",
+      "severity": "medium",
+      "class": "GATE",
+      "verdict": "ADD",
+      "beginner": {
+        "headline": "Система не знает, сколько стоит её работа",
+        "plain": "Нет ни одной записи о расходе токенов и денег.",
+        "why": "Без этого нельзя ни отчитаться, ни понять, какая часть системы дорогая."
+      },
+      "expert": {
+        "claim": "~/.claude/metrics/ отсутствует; хук stop:cost-tracker не подключён",
+        "evidence": [
+          "mem.cost_metrics",
+          "hooks.dormant"
+        ]
+      }
+    },
+    {
+      "id": "ctx.skill-listing-over-budget",
+      "when": "inv.skills.over_budget_ratio > 1",
+      "severity": "high",
+      "class": "INFORM",
+      "verdict": "LEAVE",
+      "number": {
+        "of": "inv.skills.count",
+        "unit": "скиллов"
+      },
+      "beginner": {
+        "headline": "Навыков больше, чем помещается в память ({ratio}× сверх бюджета)",
+        "plain": "Описания навыков грузятся в начале каждой сессии. Всё, что не влезло, отбрасывается — начиная с тех, которыми ты пользуешься реже.",
+        "why": "Редкий, но нужный навык может молча перестать срабатывать."
+      },
+      "expert": {
+        "claim": "{inv.skills.count} скиллов = {inv.skills.listing_chars} символов при бюджете ~{inv.skills.budget_chars}; посчитаны скоупы {inv.skills.scopes_covered}",
+        "evidence": [
+          "inv.skills.count",
+          "inv.skills.listing_chars",
+          "inv.skills.biggest",
+          "inv.skills.by_scope",
+          "inv.skills.scopes_covered",
+          "inv.skills.scopes_unmeasured"
+        ],
+        "note": "Считаются пользовательский каталог, каталоги ВКЛЮЧЁННЫХ плагинов (путь берётся из installed_plugins.json, а не из кэша маркетплейса) и проектный каталог текущей директории. Скиллы проектов, где сейчас не находимся, не видны — там число будет выше. Точный бюджет — доля контекстного окна; /doctor даёт оценку, /context — фактический размер. Настраивается skillListingBudgetFraction."
+      }
+    },
+    {
+      "id": "ctx.default-mode-unset",
+      "when": "cc.default_mode == None",
+      "severity": "high",
+      "class": "AUTO",
+      "verdict": "FIX",
+      "beginner": {
+        "headline": "Не задано, с чего начинается сессия",
+        "plain": "Если не выбрать самому, режим по умолчанию однажды сменится без предупреждения.",
+        "why": "Лучше решить это один раз осознанно, чем обнаружить смену поведения в неудачный момент."
+      },
+      "expert": {
+        "claim": "permissions.defaultMode не задан ни в одном скоупе",
+        "evidence": [
+          "cc.default_mode"
+        ]
+      }
+    },
+    {
+      "id": "mem.index-over-limit",
+      "when": "mem.index_over_limit == True",
+      "severity": "high",
+      "class": "GATE",
+      "verdict": "FIX",
+      "beginner": {
+        "headline": "Указатель памяти больше, чем читается за раз",
+        "plain": "Индекс памяти грузится не целиком. Хвост списка молча отбрасывается.",
+        "why": "Часть накопленного знания перестаёт существовать для агента, и об этом никто не сообщает."
+      },
+      "expert": {
+        "claim": "самый большой MEMORY.md = {mem.largest_index_bytes} байт при пороге загрузки ~25600",
+        "evidence": [
+          "mem.largest_index_bytes",
+          "mem.stores"
+        ]
+      }
+    },
+    {
+      "id": "mem.instincts-dormant",
+      "when": "mem.instincts_active == False",
+      "severity": "medium",
+      "class": "GATE",
+      "verdict": "ADD",
+      "beginner": {
+        "headline": "Обучение на твоих сессиях не включено",
+        "plain": "Система умеет замечать, что ты правишь одно и то же, и запоминать это. Сейчас она этого не делает.",
+        "why": "Без этого каждая новая сессия начинается с того же уровня, что и месяц назад."
+      },
+      "expert": {
+        "claim": "~/.claude/homunculus/ отсутствует; хуки наблюдения не подключены",
+        "evidence": [
+          "mem.instincts_active",
+          "hooks.dormant"
+        ]
+      }
+    },
+    {
+      "id": "gap.no-hooks-at-all",
+      "when": "hooks.manifest.count == 0 and hooks.wired.count == 0",
+      "severity": "high",
+      "class": "GATE",
+      "verdict": "ADD",
+      "beginner": {
+        "headline": "Нет ни одной автоматической проверки",
+        "plain": "Ничто не мешает выложить пароль, закоммитить с красными тестами или обойти линтер.",
+        "why": "Просьба в инструкции — это просьба. Проверка в хуке — это гарантия."
+      },
+      "expert": {
+        "claim": "ни объявленных, ни подключённых хуков в скоупах {hooks.scopes_covered}",
+        "evidence": [
+          "hooks.manifest.count",
+          "hooks.wired.count",
+          "hooks.scopes_covered"
+        ]
+      }
+    },
+    {
+      "id": "gap.no-git",
+      "when": "host.git == False",
+      "severity": "critical",
+      "class": "BLOCK",
+      "verdict": "ADD",
+      "beginner": {
+        "headline": "Не установлен git",
+        "plain": "Без него нельзя сохранять версии и откатывать неудачные правки.",
+        "why": "Это фундамент. Без него любая автономная работа опасна."
+      },
+      "expert": {
+        "claim": "which git не нашёл исполняемый файл",
+        "evidence": [
+          "host.git"
+        ]
+      }
+    },
+    {
+      "id": "gap.no-gh",
+      "when": "host.gh == False",
+      "severity": "medium",
+      "class": "INFORM",
+      "verdict": "ADD",
+      "beginner": {
+        "headline": "Не установлен GitHub CLI",
+        "plain": "Без него система не сможет сама открыть пул-реквест.",
+        "why": "Пул-реквест — это то, что ты будешь смотреть с телефона."
+      },
+      "expert": {
+        "claim": "which gh не нашёл исполняемый файл",
+        "evidence": [
+          "host.gh"
+        ]
+      }
+    }
+  ]
+}

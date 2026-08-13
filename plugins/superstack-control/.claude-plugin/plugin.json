@@ -1,0 +1,36 @@
+{
+  "name": "superstack-control",
+  "version": "0.2.0",
+  "description": "Словарь новичка: /what — где я и что дальше, /oops — отменить последнее, /fix — что-то сломалось.",
+  "author": {
+    "name": "Edvard Grishin"
+  },
+  "license": "MIT",
+  "keywords": [
+    "claude-code",
+    "audit",
+    "gates",
+    "security"
+  ],
+  "dependencies": [
+    {
+      "name": "superstack-core",
+      "version": "^0.2.0"
+    },
+    {
+      "name": "superstack-install",
+      "version": "^0.2.0"
+    },
+    {
+      "name": "superstack-spec",
+      "version": "^0.2.0"
+    },
+    {
+      "name": "superstack-guard",
+      "version": "^0.2.0"
+    }
+  ],
+  "skills": [
+    "./skills/"
+  ]
+}

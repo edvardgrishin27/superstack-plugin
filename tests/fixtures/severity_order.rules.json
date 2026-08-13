@@ -1,0 +1,50 @@
+{
+ "_why": "Фикстура ТОЛЬКО для проверки сортировки находок. Правила намеренно объявлены в порядке, обратном тяжести (low, medium, high, high, critical), а идентификаторы подобраны так, чтобы алфавит НЕ совпадал ни с порядком объявления, ни с порядком тяжести. Поэтому правильный ответ невозможно получить ни отсутствием сортировки, ни сортировкой по одному лишь id: ожидаемая последовательность в тесте записана буквой и не выводится из кода решателя. Порядок объявления: bb.low, mm.medium, yy.high, aa.high, zz.critical. Алфавит: aa.high, bb.low, mm.medium, yy.high, zz.critical. Правильный ответ: zz.critical, aa.high, yy.high, mm.medium, bb.low.",
+ "rules": [
+  {
+   "id": "bb.low",
+   "when": "probe.marker == True",
+   "severity": "low",
+   "class": "INFORM",
+   "verdict": "LEAVE",
+   "beginner": {"headline": "младшая находка", "plain": "", "why": ""},
+   "expert": {"claim": "severity=low", "evidence": ["probe.marker"]}
+  },
+  {
+   "id": "mm.medium",
+   "when": "probe.marker == True",
+   "severity": "medium",
+   "class": "INFORM",
+   "verdict": "LEAVE",
+   "beginner": {"headline": "средняя находка", "plain": "", "why": ""},
+   "expert": {"claim": "severity=medium", "evidence": ["probe.marker"]}
+  },
+  {
+   "id": "yy.high",
+   "when": "probe.marker == True",
+   "severity": "high",
+   "class": "GATE",
+   "verdict": "ASK",
+   "beginner": {"headline": "тяжёлая находка, поздняя по алфавиту", "plain": "", "why": ""},
+   "expert": {"claim": "severity=high", "evidence": ["probe.marker"]}
+  },
+  {
+   "id": "aa.high",
+   "when": "probe.marker == True",
+   "severity": "high",
+   "class": "GATE",
+   "verdict": "ASK",
+   "beginner": {"headline": "тяжёлая находка, ранняя по алфавиту", "plain": "", "why": ""},
+   "expert": {"claim": "severity=high", "evidence": ["probe.marker"]}
+  },
+  {
+   "id": "zz.critical",
+   "when": "probe.marker == True",
+   "severity": "critical",
+   "class": "BLOCK",
+   "verdict": "ASK",
+   "beginner": {"headline": "критичная находка", "plain": "", "why": ""},
+   "expert": {"claim": "severity=critical", "evidence": ["probe.marker"]}
+  }
+ ]
+}
