@@ -10,7 +10,7 @@
 > (backup before the first edit, quarantine instead of delete, secrets never
 > copied). Readiness is decided by a script with an exit code — six gates
 > including **hermeticity** (same test count under a different `$HOME`) and
-> **127 registered mutations**, each of which must break the suite. Zero external
+> **132 registered mutations**, each of which must break the suite. Zero external
 > dependencies, system `python3`. MIT.
 
 Смотрит, как настроен твой Claude Code, объясняет каждый вывод и без спроса
@@ -70,7 +70,7 @@ python3 tools/gauntlet.py     # 0 взята · 1 красное · 2 не пр�
 |---|---|
 | набор | тесты зелёные — слабейшие: зелёное можно нарисовать |
 | **герметичность** | то же число тестов при другом `HOME` |
-| **мутации** | 127 зарегистрированных поломок, каждая обязана уронить набор |
+| **мутации** | 132 зарегистрированные поломки, каждая обязана уронить набор |
 | правила | схема, дубли, имена фактов, подстановки |
 | манифест | пакеты ставятся, а не только лежат |
 | план | механизмы из карты на месте, улика ищется в **коде**, не в прозе |
@@ -120,4 +120,4 @@ python3 tools/render.py findings.json why <id>
 Системный `python3` — проверено на 3.9.6. **Ни одной внешней зависимости.**
 Тесты: `pytest`.
 
-736 тестов · 127 мутаций, все ловятся · 58 механизмов. MIT.
+752 теста · 132 мутации, все ловятся · 59 механизмов. MIT.

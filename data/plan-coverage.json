@@ -525,6 +525,15 @@
     "file": "plugins/superstack-guard/hooks/verify-gate.sh",
     "contains": "SUPERSTACK_DISABLE"
    }
+  },
+  {
+   "id": "L5.blind-acceptance",
+   "layer": "L5 гарантии",
+   "mechanism": "слепая приёмка: судья видит исходную просьбу и результат, но не спеку — безупречно сделанное НЕ ТО иначе проходит все ворота",
+   "evidence": {
+    "file": "plugins/superstack-guard/tools/blind_accept.py",
+    "contains": "def is_retelling"
+   }
   }
  ]
 }

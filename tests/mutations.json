@@ -891,6 +891,41 @@
    "find": "    if not dry:\n        data[key] = value",
    "replace": "    if True:\n        data[key] = value",
    "why": "сухой прогон пишет на диск: человек смотрит план, а изменения уже применены — согласие спрашивают после факта"
+  },
+  {
+   "id": "blind.spec-reaches-the-judge",
+   "file": "plugins/superstack-guard/tools/blind_accept.py",
+   "find": "        (hidden if is_retelling(path) else shown).append((path, text))",
+   "replace": "        shown.append((path, text))",
+   "why": "спека и план снова попадают судье: он сверяет пересказ с пересказом и всегда находит совпадение — расхождение «сделали не то» становится невидимым"
+  },
+  {
+   "id": "blind.hidden-not-named",
+   "file": "plugins/superstack-guard/tools/blind_accept.py",
+   "find": "        \"hidden_files\": [{\"path\": p, \"why\": \"пересказ просьбы, а не результат\"}\n                         for p, _ in hidden],",
+   "replace": "        \"hidden_files\": [],",
+   "why": "вырезанное перестаёт называться: вердикт выносится о работе, часть которой судья не видел, и никто об этом не узнает"
+  },
+  {
+   "id": "blind.missing-request-is-pass",
+   "file": "plugins/superstack-guard/tools/blind_accept.py",
+   "find": "    if not packet[\"request\"]:\n        return {**packet, \"status\": \"unknown\",",
+   "replace": "    if False:\n        return {**packet, \"status\": \"unknown\",",
+   "why": "отсутствие исходной просьбы перестаёт блокировать приёмку: судить соответствие нечему, а гейт отвечает «готово»"
+  },
+  {
+   "id": "blind.only-retelling-is-pass",
+   "file": "plugins/superstack-guard/tools/blind_accept.py",
+   "find": "    if not packet[\"shown_files\"]:",
+   "replace": "    if False:",
+   "why": "изменения из одних спек засчитываются за работу: приёмка проходит там, где не написано ни строки результата"
+  },
+  {
+   "id": "blind.judge-gets-more-than-read",
+   "file": "plugins/superstack-guard/agents/blind-acceptance.md",
+   "find": "tools: Read",
+   "replace": "tools: Read, Grep, Glob",
+   "why": "судья получает поиск по дереву и сам достаёт спеку, которую от него скрыли: слепота обходится, а пакет об этом не знает"
   }
  ]
 }
