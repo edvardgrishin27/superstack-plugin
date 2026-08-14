@@ -278,6 +278,60 @@ class TestTheResolverFindsToolsAcrossPlugins(unittest.TestCase):
                         f"{plug.name} зовёт чужие инструменты "
                         f"({', '.join(sorted(foreign)[:4])}) и не имеет резолвера")
 
+    def _cache(self, name, *pairs):
+        """Установленная раскладка: `<пакет>/<версия>/tools/`.
+
+        Искомый `verify.py` кладётся ТОЛЬКО соседям. Первая версия этой фикстуры
+        давала его и своему пакету — тогда `find` возвращала свой файл, путь
+        содержал нужную строку, и тест зеленел, ничего не проверив.
+        """
+        cache = Path(self.tmp.name) / name
+        for plug, ver in pairs:
+            d = cache / f"superstack-{plug}" / ver
+            (d / "tools").mkdir(parents=True)
+            if plug != "build":
+                (d / "tools" / "verify.py").write_text("x = 1\n", encoding="utf-8")
+            (d / ".claude-plugin").mkdir()
+            (d / ".claude-plugin" / "plugin.json").write_text(
+                '{"name": "superstack-%s", "version": "%s"}' % (plug, ver),
+                encoding="utf-8")
+        return cache
+
+    def test_a_stale_version_left_in_the_cache_does_not_win(self):
+        """Обновление плагина не удаляет прежнюю версию из кэша.
+
+        Измерено на живой установке сразу после подъёма семи пакетов до 0.2.1:
+        рядом лежали `superstack-guard/0.2.0/` и `.../0.2.1/`, резолвер брал
+        `sorted(hits)[0]` и возвращал 0.2.0. Скилл свежей версии работал по
+        инструментам прежней — и ничего при этом не падало.
+
+        Это худший вид отказа: правка выглядит не применившейся, и человек идёт
+        искать её у себя.
+        """
+        cache = self._cache("cache", ("build", "0.2.1"), ("guard", "0.2.0"),
+                            ("guard", "0.2.1"))
+        hit = wh.find("verify.py", cache / "superstack-build" / "0.2.1")
+        self.assertIsNotNone(hit)
+        self.assertIn("0.2.1", str(hit),
+                      "резолвер выбрал прежнюю версию соседа — свежий скилл "
+                      "работает по старым инструментам, и это молчит")
+
+    def test_without_a_matching_version_the_newest_wins(self):
+        """Своей версии среди соседей нет — берётся старшая, а не первая по
+        алфавиту. Иначе 0.10.0 проиграет 0.9.0, что верно как строка и неверно
+        как версия."""
+        cache = self._cache("c2", ("build", "0.3.0"), ("guard", "0.9.0"),
+                            ("guard", "0.10.0"))
+        hit = wh.find("verify.py", cache / "superstack-build" / "0.3.0")
+        self.assertIn("0.10.0", str(hit))
+
+    def test_the_repo_layout_without_version_dirs_still_resolves(self):
+        """Обратный контроль: выбор версии не должен ломать раскладку
+        репозитория, где каталога версии нет вовсе."""
+        hit = wh.find("verify.py", self.start)
+        self.assertIsNotNone(hit)
+        self.assertIn("superstack-guard", str(hit))
+
     def test_the_real_repo_resolves_every_tool_the_skills_call(self):
         """Обратный контроль на живом дереве: каждый инструмент, названный в
         скиллах через резолвер, обязан находиться. Иначе проверка выше

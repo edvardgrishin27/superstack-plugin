@@ -208,6 +208,80 @@ class TestMutationGateReallyRunsTheSuite(FakePlugin):
         self.assertEqual(r["status"], "unknown", r)
 
 
+class TestNamedMutationsAreASubsetNotTheBar(FakePlugin):
+    """Проверка поимённо (`--mutation`).
+
+    Заведена после того, как проверка трёх свежих поломок обошлась в прогон
+    всех 241: незнакомый флаг молча игнорировался. Но выборка опаснее длинного
+    прогона — три пойманные мутации выглядят точно как взятая планка, и разница
+    видна только если отчёт назовёт её сам.
+    """
+
+    def _build(self) -> None:
+        self.write("src.py", "A = 1\nB = 2\n")
+        self.write("tests/test_src.py",
+                   "from pathlib import Path\n\n\n"
+                   "def test_a():\n"
+                   "    assert 'A = 1' in (Path(__file__).resolve().parent.parent"
+                   " / 'src.py').read_text()\n\n\n"
+                   "def test_b():\n"
+                   "    assert 'B = 2' in (Path(__file__).resolve().parent.parent"
+                   " / 'src.py').read_text()\n")
+        self.write("tests/mutations.json", json.dumps({"mutations": [
+            {"id": "m.a", "file": "src.py", "find": "A = 1", "replace": "A = 9",
+             "why": "убран механизм A"},
+            {"id": "m.b", "file": "src.py", "find": "B = 2", "replace": "B = 9",
+             "why": "убран механизм B"}]}, ensure_ascii=False))
+
+    def tearDown(self):
+        gt.ONLY_MUTATIONS = set()
+        super().tearDown()
+
+    def test_only_the_named_mutation_runs(self):
+        self._build()
+        gt.ONLY_MUTATIONS = {"m.a"}
+        r = gt.gate_mutations()
+        self.assertEqual(r["status"], "pass", r)
+        self.assertIn("1 из 2", r["detail"])
+
+    def test_a_subset_says_so_in_the_report(self):
+        """Без пометки «проверено 3 из 241» читается как «проверено всё» —
+        ровно то умолчание, против которого написана вся планка."""
+        self._build()
+        gt.ONLY_MUTATIONS = {"m.a"}
+        r = gt.gate_mutations()
+        self.assertTrue(r.get("subset"), r)
+        self.assertIn("остальные не проверялись", r["detail"])
+
+    def test_the_whole_set_is_not_marked_a_subset(self):
+        self._build()
+        r = gt.gate_mutations()
+        self.assertFalse(r.get("subset"), r)
+        self.assertNotIn("ВЫБОРКА", r["detail"])
+
+    def test_an_unknown_id_is_refused_not_silently_empty(self):
+        """Опечатка в имени иначе даёт «все пойманы», не проверив ничего —
+        самый убедительный из возможных зелёных отчётов."""
+        self._build()
+        gt.ONLY_MUTATIONS = {"m.опечатка"}
+        r = gt.gate_mutations()
+        self.assertEqual(r["status"], "unknown", r)
+        self.assertIn("m.опечатка", r["detail"])
+
+
+class TestUnknownFlagsAreRefused(unittest.TestCase):
+    """Незнакомый флаг молча игнорировался: `--only x` не сузил ничего, и
+    прогон трёх мутаций превратился в часовой прогон всех, отчитавшись так же."""
+
+    def test_a_stray_flag_returns_three_not_a_full_run(self):
+        p = subprocess.run(
+            [sys.executable, str(at("tools", "gauntlet.py")), "--выдуманный"],
+            capture_output=True, text=True, timeout=120,
+            env={**os.environ, "SUPERSTACK_IGNORE_PAUSE": "1"})
+        self.assertEqual(p.returncode, 3, p.stderr[-300:])
+        self.assertIn("неизвестный флаг", p.stderr)
+
+
 class TestPlanGateReadsFiles(FakePlugin):
     def _coverage(self, contains: str) -> None:
         self.write("data/plan-coverage.json", json.dumps({"mechanisms": [

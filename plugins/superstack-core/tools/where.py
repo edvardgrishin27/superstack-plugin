@@ -25,6 +25,22 @@
 Не нашли — код 1 и внятное сообщение с тем, где искали. Молчаливый возврат
 пустой строки дал бы `python3 ""`, то есть ещё одну ошибку не по адресу.
 
+ПОЧЕМУ ВЕРСИЯ ВЫБИРАЕТСЯ, А НЕ БЕРЁТСЯ ПЕРВАЯ ПОПАВШАЯСЯ.
+
+Обновление плагина НЕ УДАЛЯЕТ прежнюю версию из кэша: рядом оказываются
+`superstack-guard/0.2.0/` и `superstack-guard/0.2.1/`. Первая версия этого файла
+возвращала `sorted(hits)[0]` — то есть СТАРШУЮ по алфавиту, а значит младшую по
+номеру. Измерено сразу после обновления семи пакетов до 0.2.1: скилл из 0.2.1
+звал `verify.py` из 0.2.0 и делал это молча.
+
+Отказ здесь — худшего сорта: ничего не падает. Свежий скилл работает по старым
+инструментам, поправка выглядит не применившейся, и человек идёт искать её в
+своём коде. Ровно «не вижу изменений при верном коде = смотрит старую сборку».
+
+Поэтому среди кандидатов первым идёт тот, чья версия СОВПАДАЕТ с версией своего
+пакета (скилл 0.2.1 обязан звать инструменты 0.2.1 — они писались вместе), затем
+старшая по номеру, и только потом безверсионная раскладка репозитория.
+
   python3 where.py verify.py          -> абсолютный путь в stdout, код 0
   python3 where.py --all              -> все найденные инструменты, код 0
 
@@ -32,9 +48,15 @@
 """
 from __future__ import annotations
 
+import json
 import os
+import re
 import sys
 from pathlib import Path
+
+#: Каталог версии в установленной раскладке: `<пакет>/<версия>/tools/<файл>`.
+#: В репозитории такого уровня нет, и это законная вторая раскладка.
+_VERSION_DIR = re.compile(r"^\d+(?:\.\d+)*$")
 
 
 #: Какой пакет даёт какой инструмент. Нужна для внятного отказа:
@@ -87,11 +109,41 @@ def roots(start: Path) -> list:
     return out
 
 
+def own_version(start: Path) -> "str | None":
+    """Версия своего пакета — из манифеста, а не из имени каталога.
+
+    Имя каталога совпадает с версией только в установленной раскладке; манифест
+    есть в обеих, и он источник истины для самого движка.
+    """
+    try:
+        v = json.loads(
+            (start / ".claude-plugin" / "plugin.json").read_text("utf-8"))
+    except (OSError, ValueError):
+        return None
+    return v.get("version") if isinstance(v, dict) else None
+
+
+def _rank(p: Path, want: "str | None") -> tuple:
+    """Ключ выбора среди одноимённых: своя версия → старшая → безверсионная."""
+    d = p.parent.parent.name
+    ver = d if _VERSION_DIR.match(d) else None
+    same = 0 if (want is not None and ver == want) else 1
+    # Отрицание делает сортировку по возрастанию сортировкой по УБЫВАНИЮ
+    # номера; безверсионный путь получает положительный ключ и уходит в конец.
+    order = tuple(-int(x) for x in ver.split(".")) if ver else (1,)
+    return (same, order, str(p))
+
+
+def pick(hits: list, want: "str | None") -> Path:
+    return sorted(hits, key=lambda p: _rank(p, want))[0]
+
+
 def find(name: str, start: Path = None) -> "Path | None":
     start = start or Path(__file__).resolve().parent.parent
     own = start / "tools" / name
     if own.is_file():
         return own
+    want = own_version(start)
     seen = set()
     for base in roots(start):
         if base in seen:
@@ -100,9 +152,9 @@ def find(name: str, start: Path = None) -> "Path | None":
         # Сначала прямые соседи, потом произвольная глубина — чтобы одноимённый
         # файл из чужого дерева не обошёл настоящий пакет.
         for pat in (f"*/tools/{name}", f"*/*/tools/{name}"):
-            hits = sorted(base.glob(pat))
+            hits = list(base.glob(pat))
             if hits:
-                return hits[0]
+                return pick(hits, want)
     return None
 
 
@@ -114,12 +166,16 @@ def main() -> int:
 
     start = Path(__file__).resolve().parent.parent
     if argv[0] == "--all":
+        # Оба шаблона: без второго список пуст в установленной раскладке, где
+        # между пакетом и `tools/` стоит каталог версии.
         found = {}
         for base in roots(start):
-            for p in sorted(base.glob("*/tools/*.py")):
-                found.setdefault(p.name, str(p))
-        for n, p in sorted(found.items()):
-            print(f"{n}\t{p}")
+            for pat in ("*/tools/*.py", "*/*/tools/*.py"):
+                for p in base.glob(pat):
+                    found.setdefault(p.name, []).append(p)
+        want = own_version(start)
+        for n in sorted(found):
+            print(f"{n}\t{pick(found[n], want)}")
         return 0
 
     hit = find(argv[0], start)

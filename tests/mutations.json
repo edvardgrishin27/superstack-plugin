@@ -1668,6 +1668,97 @@
    "find": "        if src.is_file():\n            shutil.copy2(src, dst)\n            continue",
    "replace": "        if False:\n            shutil.copy2(src, dst)\n            continue",
    "why": "перенос одиночного файла падает на rmtree/copytree — выкладка рушится целиком, и последнее, что видит человек, это стектрейс вместо витрины"
+  },
+  {
+   "id": "where.stale-version-wins",
+   "file": "plugins/superstack-build/tools/where.py",
+   "find": "                return pick(hits, want)",
+   "replace": "                return sorted(hits)[0]",
+   "why": "резолвер снова берёт первый по алфавиту путь — обновление не удаляет прежнюю версию из кэша, и скилл 0.2.1 молча работает по инструментам 0.2.0: ничего не падает, правка выглядит не применившейся"
+  },
+  {
+   "id": "where.version-compared-as-string",
+   "file": "plugins/superstack-build/tools/where.py",
+   "find": "    order = tuple(-int(x) for x in ver.split(\".\")) if ver else (1,)",
+   "replace": "    order = ver if ver else \"~\"",
+   "why": "версии сравниваются строками — 0.10.0 проигрывает 0.9.0, что верно как текст и неверно как версия; выбирается устаревший инструмент"
+  },
+  {
+   "id": "where.own-version-ignored",
+   "file": "plugins/superstack-build/tools/where.py",
+   "find": "    same = 0 if (want is not None and ver == want) else 1",
+   "replace": "    same = 1",
+   "why": "совпадение версии соседа с версией своего пакета перестаёт учитываться — скилл зовёт инструменты другой версии, хотя писались они вместе"
+  },
+  {
+   "id": "gauntlet.subset-not-marked",
+   "file": "tools/gauntlet.py",
+   "find": "        v[\"subset\"] = True",
+   "replace": "        v[\"subset\"] = False",
+   "why": "выборка мутаций перестаёт помечать себя — «проверено 3 из 241» читается как «проверено всё», и три пойманные поломки выглядят взятой планкой"
+  },
+  {
+   "id": "gauntlet.unknown-mutation-id-silently-empty",
+   "file": "tools/gauntlet.py",
+   "find": "        unknown = sorted(ONLY_MUTATIONS - known)",
+   "replace": "        unknown = []",
+   "why": "опечатка в имени мутации даёт «все пойманы», не проверив ничего — самый убедительный из возможных зелёных отчётов"
+  },
+  {
+   "id": "gauntlet.stray-flag-ignored",
+   "file": "tools/gauntlet.py",
+   "find": "    stray = [a for a in argv if a.startswith(\"--\") and a not in known]",
+   "replace": "    stray = []",
+   "why": "незнакомый флаг снова игнорируется молча — `--only x` не сужает ничего, и прогон трёх мутаций превращается в часовой прогон всех, отчитываясь так же"
+  },
+  {
+   "id": "bump.marketplace-entry-left-behind",
+   "file": "tools/bump.py",
+   "find": "    for entry in m.get(\"plugins\", []):\n        if entry.get(\"version\") != version:\n            entry[\"version\"] = version",
+   "replace": "    for entry in m.get(\"plugins\", []):\n        if False:\n            entry[\"version\"] = version",
+   "why": "версия в записи маркетплейса остаётся прежней — движок сравнивает именно её и решает, что обновлять нечего: выкладка уходит и не доезжает ни до кого"
+  },
+  {
+   "id": "bump.split-set-quietly-aligned",
+   "file": "tools/bump.py",
+   "find": "    return (vals.pop() if len(vals) == 1 else None), seen",
+   "replace": "    return (sorted(vals)[0] if vals else None), seen",
+   "why": "разошедшиеся версии пакетов молча выравниваются — признак того, что набор собран не обычным путём, стирается вместе с расхождением"
+  },
+  {
+   "id": "bump.version-compared-as-string",
+   "file": "tools/bump.py",
+   "find": "    return tuple(int(x) for x in a.split(\".\")) > tuple(int(x) for x in b.split(\".\"))",
+   "replace": "    return a > b",
+   "why": "версии сравниваются строками — 0.10.0 не признаётся новее 0.9.0, подъём отвергается, и починка не доезжает до людей"
+  },
+  {
+   "id": "gauntlet.restore-guesses-the-spot",
+   "file": "tools/gauntlet.py",
+   "find": "        if t.count(m[\"replace\"]) != 1:",
+   "replace": "        if False:",
+   "why": "восстановление снова угадывает место — строка замены, встречающаяся дважды, возвращает код в чужую ветку: файл остаётся валидным и становится неверным, а «вернул 1» выглядит успехом"
+  },
+  {
+   "id": "gauntlet.original-not-stashed",
+   "file": "tools/gauntlet.py",
+   "find": "        stash(m[\"id\"], target, original)",
+   "replace": "        pass",
+   "why": "оригинал перестаёт откладываться перед поломкой — убитый прогон оставляет файл, восстановимый только угадыванием"
+  },
+  {
+   "id": "gauntlet.stash-dropped-before-restore",
+   "file": "tools/gauntlet.py",
+   "find": "            unstash(m[\"id\"])\n        checked += 1",
+   "replace": "        checked += 1",
+   "why": "отложенные копии не снимаются после возврата — следующий прогон восстановит файл из устаревшей копии и затрёт работу, сделанную между прогонами"
+  },
+  {
+   "id": "gauntlet.restore-not-verified-against-original",
+   "file": "tools/gauntlet.py",
+   "find": "                ok = hashlib.sha256(f.read_bytes()).hexdigest() == \\\n                    hashlib.sha256(saved).hexdigest()",
+   "replace": "                ok = True",
+   "why": "возврат объявляется без сверки с оригиналом — «поломки больше нет» верно и для испорченного файла, а это ровно тот случай, что уже случился"
   }
  ]
 }

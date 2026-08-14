@@ -34,6 +34,7 @@
   python3 gauntlet.py --json       -> только JSON
   python3 gauntlet.py --quick      -> без мутаций (быстрая петля строителя)
   python3 gauntlet.py --gate план  -> одни ворота
+  python3 gauntlet.py --gate мутации --mutation a.b,c.d  -> названные поломки
 
 Частичный прогон (--gate, --quick) НИКОГДА не даёт «планка взята»: незапущенные
 ворота остаются в отчёте как skipped и держат код 2. Иначе «планка взята»
@@ -43,6 +44,7 @@
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
@@ -67,6 +69,13 @@ from log import event as _log_event  # noqa: E402
 PLUG = Path(__file__).resolve().parent.parent
 SUITE_TIMEOUT = 900
 MUTATION_TIMEOUT = 600
+
+#: Какие мутации проверять поимённо (`--mutation id,id`). Пусто = все.
+#: Заведено после того, как проверка трёх свежих поломок обошлась в прогон всех
+#: 241: незнакомый флаг молча игнорировался, а разница между «проверил три» и
+#: «проверил всё» — пятнадцать минут против часа. Выборка ОБЯЗАНА помечать себя
+#: в отчёте, иначе три пойманные мутации читаются как взятая планка.
+ONLY_MUTATIONS: set = set()
 
 
 _TRIPLE = re.compile(r'"""[\s\S]*?"""' + r"|'''[\s\S]*?'''")
@@ -318,13 +327,81 @@ def gate_mutations() -> dict:
     except (ValueError, KeyError) as e:
         return {"status": "unknown", "detail": f"набор мутаций не разобран: {e}"}
 
+    total = len(muts)
+    picked = None
+    if ONLY_MUTATIONS:
+        known = {m["id"] for m in muts}
+        unknown = sorted(ONLY_MUTATIONS - known)
+        if unknown:
+            # Опечатка в имени иначе даёт «все пойманы», не проверив ничего —
+            # то есть самый убедительный из возможных зелёных отчётов.
+            return {"status": "unknown",
+                    "detail": "нет таких мутаций: " + ", ".join(unknown)}
+        picked = [m for m in muts if m["id"] in ONLY_MUTATIONS]
+        muts = picked
+
     held = acquire_lock()
     if held:
         return {"status": "unknown", "detail": held}
     try:
-        return _mutate_all(muts)
+        v = _mutate_all(muts)
     finally:
         release_lock()
+
+    if picked is not None:
+        # Подмножество не имеет права выглядеть взятой планкой: «проверено 3»
+        # и «проверены все» — разные утверждения, и второе тут не доказано.
+        v["subset"] = True
+        v["detail"] = (f"{v['detail']} — ВЫБОРКА {len(picked)} из {total}, "
+                       "остальные не проверялись")
+    return v
+
+
+def _backup_dir() -> Path:
+    return PLUG / ".mutation-backup"
+
+
+def stash(mid: str, target: Path, original: bytes) -> None:
+    """Отложить оригинал ДО внесения поломки.
+
+    Восстановление обратной заменой — угадывание, и оно уже испортило файл:
+    поломка `crew.missing-stamps-read-as-clean` заменяла блок на строку
+    `continue`, а такая строка в файле не одна. Обратная замена вернула блок в
+    ПЕРВОЕ вхождение — в другую ветку. Файл остался синтаксически валидным и
+    стал семантически неверным, `--unstick` отчитался «вернул 1», и увидели это
+    только десять упавших тестов.
+
+    Байты, отложенные заранее, снимают вопрос целиком: возвращать нечего
+    искать. Живёт рядом с замком и переживает убийство процесса — ровно тот
+    случай, ради которого всё это и нужно.
+    """
+    d = _backup_dir()
+    d.mkdir(parents=True, exist_ok=True)
+    safe = re.sub(r"[^\w.-]", "_", mid)
+    (d / f"{safe}.bak").write_bytes(original)
+    (d / f"{safe}.json").write_text(json.dumps(
+        {"id": mid, "file": str(target.relative_to(PLUG)),
+         "sha256": hashlib.sha256(original).hexdigest()}, ensure_ascii=False),
+        encoding="utf-8")
+
+
+def _stashed(mid: str) -> "bytes | None":
+    """Отложенный оригинал этой поломки, если он есть."""
+    safe = re.sub(r"[^\w.-]", "_", mid)
+    p = _backup_dir() / f"{safe}.bak"
+    try:
+        return p.read_bytes()
+    except OSError:
+        return None
+
+
+def unstash(mid: str) -> None:
+    safe = re.sub(r"[^\w.-]", "_", mid)
+    for suf in (".bak", ".json"):
+        try:
+            (_backup_dir() / f"{safe}{suf}").unlink()
+        except OSError:
+            pass
 
 
 def _mutate_all(muts: list) -> dict:
@@ -339,6 +416,7 @@ def _mutate_all(muts: list) -> dict:
         if m["find"] not in text:
             broken.append(f"{m['id']}: якорь не найден в {m['file']}")
             continue
+        stash(m["id"], target, original)
         try:
             target.write_text(text.replace(m["find"], m["replace"], 1), encoding="utf-8")
             # Кэш байткода сносится ПЕРЕД каждым прогоном, а не один раз на
@@ -363,6 +441,9 @@ def _mutate_all(muts: list) -> dict:
             # Восстановление байт-в-байт и ДО любой другой работы: мутация,
             # пережившая прогон в файле, отравит все следующие ворота.
             target.write_bytes(original)
+            # Отложенное снимается только ПОСЛЕ удачного возврата: пока файл не
+            # восстановлен, единственная целая копия — эта.
+            unstash(m["id"])
         checked += 1
         if not caught:
             survived.append({"id": m["id"], "why": m["why"]})
@@ -751,12 +832,25 @@ def restore_stuck() -> dict:
     и предназначены, рабочее дерево обычно грязное, и откат файла целиком
     снёс бы вместе с мутацией живую работу человека.
 
-    Поэтому здесь ровно обратная замена: `replace` → `find`, один раз, в том
-    же файле. Она не трогает ничего, кроме самой поломки.
+    Порядок такой:
+
+      1. ОТЛОЖЕННЫЕ БАЙТЫ — оригинал, сохранённый перед внесением поломки.
+         Возврат точный, искать нечего.
+      2. Бэкапа нет (поломка внесена прежней версией планки) — обратная замена,
+         но ТОЛЬКО если она однозначна: заменяющая строка встречается в файле
+         ровно один раз.
+      3. Неоднозначно — отказ с названием файла, а не угадывание.
+
+    Пункт 3 написан кровью. Обратная замена вслепую уже испортила исходник:
+    поломка `crew.missing-stamps-read-as-clean` заменяла блок на строку
+    `continue`, такая строка в файле не одна, и блок вернулся в ПЕРВОЕ
+    вхождение — в чужую ветку. Файл остался валидным и стал неверным,
+    `--unstick` отчитался «вернул 1», проверка «мутации больше нет» прошла, и
+    увидели это только десять упавших тестов часом позже.
 
     Восстановление ПРОВЕРЯЕТСЯ, а не объявляется: после записи файл читается
-    заново и мутация ищется снова. «Починил» без перечитывания — то же самое
-    «агент сказал», против которого написана вся система.
+    заново. Из бэкапа сверяется отпечаток — это доказывает возврат к оригиналу,
+    а не просто отсутствие поломки, которое верно и для испорченного файла.
     """
     # Починка поверх ИДУЩЕЙ проверки вырывает файл у неё из-под рук: её
     # измерение становится враньём, а моё — тем более. Ровно так я и сделал,
@@ -794,6 +888,33 @@ def restore_stuck() -> dict:
             continue
         if not _looks_applied(t, m["find"], m["replace"]):
             continue
+
+        saved = _stashed(m["id"])
+        if saved is not None:
+            try:
+                f.write_bytes(saved)
+                ok = hashlib.sha256(f.read_bytes()).hexdigest() == \
+                    hashlib.sha256(saved).hexdigest()
+            except OSError as e:
+                failed.append({"id": m["id"], "file": m["file"], "why": str(e)})
+                continue
+            if ok:
+                unstash(m["id"])
+                restored.append({"id": m["id"], "file": m["file"],
+                                 "how": "из отложенных байт"})
+            else:
+                failed.append({"id": m["id"], "file": m["file"],
+                               "why": "запись не совпала с оригиналом"})
+            continue
+
+        # Бэкапа нет. Угадывать место можно только там, где угадывать нечего.
+        if t.count(m["replace"]) != 1:
+            failed.append({
+                "id": m["id"], "file": m["file"],
+                "why": f"строка замены встречается {t.count(m['replace'])} раз "
+                       "— вернуть её вслепую значит вставить код в чужую ветку; "
+                       "верните файл из git и прогоните набор"})
+            continue
         try:
             f.write_text(t.replace(m["replace"], m["find"], 1), encoding="utf-8")
             back = f.read_text("utf-8", errors="replace")
@@ -804,7 +925,8 @@ def restore_stuck() -> dict:
             failed.append({"id": m["id"], "file": m["file"],
                            "why": "обратная замена не сняла поломку — чинить руками"})
         else:
-            restored.append({"id": m["id"], "file": m["file"]})
+            restored.append({"id": m["id"], "file": m["file"],
+                             "how": "обратной заменой (единственное вхождение)"})
 
     # Байткод сносится и здесь: восстановленный исходник той же длины в ту же
     # секунду неотличим для инвалидации, и следующий прогон пошёл бы по .pyc
@@ -914,6 +1036,24 @@ def main() -> int:
     argv = sys.argv[1:]
     quick = "--quick" in argv
     quiet = "--json" in argv
+
+    # Незнакомый флаг здесь опаснее ошибки вызова: он молча игнорируется, и
+    # `--mutation где-то.там` превращается в часовой прогон всего набора,
+    # отчитывающийся так же, как выборка из трёх.
+    known = {"--json", "--quick", "--unstick", "--gate", "--mutation"}
+    stray = [a for a in argv if a.startswith("--") and a not in known]
+    if stray:
+        print(f"НЕ УДАЛОСЬ: неизвестный флаг {', '.join(stray)}. Есть: "
+              + ", ".join(sorted(known)), file=sys.stderr)
+        return 3
+    if "--mutation" in argv:
+        i = argv.index("--mutation")
+        if i + 1 >= len(argv):
+            print("вызов: gauntlet.py --gate мутации --mutation id[,id]",
+                  file=sys.stderr)
+            return 3
+        globals()["ONLY_MUTATIONS"] = {
+            s.strip() for s in argv[i + 1].split(",") if s.strip()}
 
     # Починка идёт ДО всего: планка с застрявшей поломкой отказывается стартовать,
     # поэтому «сначала прогнать, потом чинить» здесь невозможно в принципе.

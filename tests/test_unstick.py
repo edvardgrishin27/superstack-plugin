@@ -89,13 +89,56 @@ class TestRestorePutsTheCodeBack(unittest.TestCase):
         self.assertEqual(r["status"], "pass")
         self.assertEqual((self.plug / "tools" / "t.py").read_text("utf-8"), "x = GOOD\n")
 
-    def test_only_the_first_occurrence_is_reverted(self):
-        """Обратная замена — ОДНА, как и прямая. Заменив все вхождения, починка
-        затронула бы места, которых мутация не касалась."""
+    def test_an_ambiguous_revert_is_refused_not_guessed(self):
+        """Несколько вхождений строки замены — угадывать место НЕЛЬЗЯ.
+
+        Прежняя версия возвращала код в первое вхождение и была заперта тестом
+        на это. Оно и сломало исходник: поломка заменяла блок на строку
+        `continue`, такая строка в файле не одна, и блок вернулся в чужую
+        ветку. Файл остался валидным, `--unstick` отчитался «вернул 1», а
+        десять тестов упали часом позже — уже как «непонятный регресс».
+
+        Отказ здесь стоит одной ручной правки. Угадывание стоило часа поиска
+        дефекта, которого не было.
+        """
         self._write("x = BROKEN\n# слово BROKEN в комментарии\n")
+        before = (self.plug / "tools" / "t.py").read_text("utf-8")
+        r = gt.restore_stuck()
+        self.assertEqual(r["status"], "fail", r)
+        self.assertEqual((self.plug / "tools" / "t.py").read_text("utf-8"), before,
+                         "файл тронут при неоднозначном возврате")
+        self.assertIn("2 раз", r["failed"][0]["why"])
+
+    def test_stashed_bytes_restore_exactly_even_when_ambiguous(self):
+        """С отложенными байтами неоднозначность перестаёт существовать: искать
+        нечего, возвращается ровно то, что было."""
+        before = "if a:\n    continue\nif b:\n    БЛОК\n    continue\n"
+        (self.plug / "tools" / "t.py").write_text(before, encoding="utf-8")
+        (self.plug / "tests" / "mutations.json").write_text(json.dumps(
+            {"mutations": [{"id": "m.block", "file": "tools/t.py",
+                            "find": "    БЛОК\n    continue",
+                            "replace": "    continue", "why": "убран блок"}]},
+            ensure_ascii=False), encoding="utf-8")
+        gt.stash("m.block", self.plug / "tools" / "t.py", before.encode("utf-8"))
+        (self.plug / "tools" / "t.py").write_text(
+            before.replace("    БЛОК\n    continue", "    continue", 1),
+            encoding="utf-8")
+        r = gt.restore_stuck()
+        self.assertEqual(r["status"], "pass", r)
+        self.assertEqual((self.plug / "tools" / "t.py").read_text("utf-8"), before)
+
+    def test_the_stash_is_dropped_only_after_a_verified_restore(self):
+        """Пока файл не восстановлен, отложенная копия — единственная целая."""
+        before = "x = GOOD\n"
+        (self.plug / "tools" / "t.py").write_text("x = BROKEN\n", encoding="utf-8")
+        (self.plug / "tests" / "mutations.json").write_text(json.dumps(
+            {"mutations": [{"id": "m1", "file": "tools/t.py", "find": "GOOD",
+                            "replace": "BROKEN", "why": "поломка"}]},
+            ensure_ascii=False), encoding="utf-8")
+        gt.stash("m1", self.plug / "tools" / "t.py", before.encode("utf-8"))
+        self.assertIsNotNone(gt._stashed("m1"))
         gt.restore_stuck()
-        t = (self.plug / "tools" / "t.py").read_text("utf-8")
-        self.assertEqual(t, "x = GOOD\n# слово BROKEN в комментарии\n")
+        self.assertIsNone(gt._stashed("m1"), "копия снята, а файл не проверен")
 
     def test_unwritable_file_is_reported_not_swallowed(self):
         """Починка, которая не смогла записать, ОБЯЗАНА быть провалом.
