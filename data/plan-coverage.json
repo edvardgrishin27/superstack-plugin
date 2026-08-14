@@ -948,6 +948,15 @@
     "file": "plugins/superstack-build/tools/where.py",
     "contains": "OWNER.get(argv[0])"
    }
+  },
+  {
+   "id": "DIST.readme-ships",
+   "layer": "L0 рантайм",
+   "mechanism": "витрина выкладывается вместе с кодом и не отстаёт от него",
+   "evidence": {
+    "file": "tools/sync_public.py",
+    "contains": "\"README.md\")"
+   }
   }
  ]
 }

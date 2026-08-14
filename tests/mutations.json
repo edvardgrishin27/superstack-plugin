@@ -1654,6 +1654,20 @@
    "find": "        who = OWNER.get(argv[0])",
    "replace": "        who = None",
    "why": "отказ перестаёт называть пакет, которого не хватает — движок не тянет зависимости, человек ставит часть набора, и «нет такого файла» читается как поломка продукта вместо «доставь пакет»"
+  },
+  {
+   "id": "sync.readme-stays-behind",
+   "file": "tools/sync_public.py",
+   "find": "CARRY = (\"plugins\", \"tests\", \"tools\", \"data\", \".claude-plugin\", \"README.md\")",
+   "replace": "CARRY = (\"plugins\", \"tests\", \"tools\", \"data\", \".claude-plugin\")",
+   "why": "README перестаёт переноситься — витрина отстаёт от кода и продолжает велеть то, что уже не работает; так публичный файл несколько заходов советовал `/plugin install`, которого на десктопе нет"
+  },
+  {
+   "id": "sync.file-entry-crashes-carry",
+   "file": "tools/sync_public.py",
+   "find": "        if src.is_file():\n            shutil.copy2(src, dst)\n            continue",
+   "replace": "        if False:\n            shutil.copy2(src, dst)\n            continue",
+   "why": "перенос одиночного файла падает на rmtree/copytree — выкладка рушится целиком, и последнее, что видит человек, это стектрейс вместо витрины"
   }
  ]
 }

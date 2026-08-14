@@ -43,7 +43,12 @@ REPO = Path(__file__).resolve().parent.parent
 
 #: Что переносится в публичное дерево. Всё остальное остаётся приватным —
 #: список ЯВНЫЙ, потому что «перенести всё, кроме» однажды пропустит новое.
-CARRY = ("plugins", "tests", "tools", "data", ".claude-plugin")
+#: README переносится ВМЕСТЕ с кодом. Раньше не переносился, и витрина отстала:
+#: публичный файл продолжал велеть `/plugin install` — команду, которой на
+#: десктопе нет, — и предлагать три пакета из семи, что даёт рабочий на вид
+#: `/go`, падающий на первом гейте. Правки входа жили в приватном и не доезжали
+#: до тех, кто по ним ставит.
+CARRY = ("plugins", "tests", "tools", "data", ".claude-plugin", "README.md")
 
 #: Длина, с которой строка начинает выглядеть как ключ для чужого сканера.
 LITERAL_LIMIT = 24
@@ -189,6 +194,12 @@ def carry(pub: Path) -> None:
         if not src.exists():
             continue
         dst = pub / name
+        # В списке есть и каталоги, и отдельные файлы (README). `rmtree` и
+        # `copytree` работают только с каталогами и на файле падают — первая же
+        # попытка перенести README уронила бы выкладку целиком.
+        if src.is_file():
+            shutil.copy2(src, dst)
+            continue
         if dst.exists():
             shutil.rmtree(dst)
         shutil.copytree(src, dst, ignore=shutil.ignore_patterns(
