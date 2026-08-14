@@ -38,6 +38,10 @@ argument-hint: "[scan|plan|why <id>|more|doctor]"
 # плагин, а не то, над чем работает человек.
 W=~/.claude/superstack/run
 rm -rf "$W" && mkdir -p "$W" && chmod 700 "$W"
+# Отметка «здесь SUPERSTACK позвали». Плагины стоят глобально, и без неё хуки
+# системы молчат в этом проекте — а без самого механизма отметки они работали
+# бы во всех чужих проектах на машине, включая те, где человек пишет своё.
+python3 "$CLAUDE_PLUGIN_ROOT/tools/enable.py" .
 SUPERSTACK_PROJECT_DIR="$PWD" python3 "$CLAUDE_PLUGIN_ROOT/tools/probe/collect.py" > "$W/facts.json"
 ```
 

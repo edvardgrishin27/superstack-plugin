@@ -569,6 +569,21 @@ class TestVerifyGateHook(unittest.TestCase):
         env.pop("SUPERSTACK_GATE_TIMEOUT", None)
         if env_extra:
             env.update(env_extra)
+        # Проект заводится ПОСЛЕ env_extra: часть тестов подменяет каталог
+        # состояния, и отметка должна лечь в тот, который увидит хук.
+        # Без отметки хук молчит — он работает только там, где SUPERSTACK
+        # позвали, — и все эти тесты доказывали бы одну лишь немоту. Сам гейт
+        # области проверяется отдельно, в test_project_scope.py.
+        # Отдельный тест делает каталог состояния нечитаемым для записи и сам
+        # готовит реестр заранее — там отметка уже лежит, и падать на ней
+        # нельзя: упавшая фикстура выглядела бы дефектом продукта.
+        try:
+            state_dir = Path(env["SUPERSTACK_STATE_DIR"])
+            state_dir.mkdir(parents=True, exist_ok=True)
+            (state_dir / "projects").write_text(
+                str(project or self.project) + "\n", encoding="utf-8")
+        except OSError:
+            pass
         return subprocess.run(["sh", str(script or self.script)],
                               input=self.stdin_for() if stdin is None else stdin,
                               capture_output=True, text=True, timeout=timeout,
@@ -709,14 +724,21 @@ class TestVerifyGateHook(unittest.TestCase):
         удаётся отметить, будет повторяться каждый ход до конца времён.
         Не сказать ни разу — меньшее зло, чем говорить бесконечно.
         """
+        # Каталог состояния СУЩЕСТВУЕТ и содержит реестр — проект заведён,
+        # хук обязан работать. Нельзя только записать в него отметку. Иначе
+        # хук замолчал бы из-за незаведённого проекта, и тест зеленел бы по
+        # причине, которую не проверяет.
         blocked = Path(self.tmp.name) / "ro"
-        blocked.mkdir()
-        os.chmod(blocked, 0o500)
+        state = blocked / "state"
+        state.mkdir(parents=True)
+        (state / "projects").write_text(str(self.project) + "\n",
+                                        encoding="utf-8")
+        os.chmod(state, 0o500)
         self.stub(2)
         try:
-            r = self.gate(env_extra={"SUPERSTACK_STATE_DIR": str(blocked / "state")})
+            r = self.gate(env_extra={"SUPERSTACK_STATE_DIR": str(state)})
         finally:
-            os.chmod(blocked, 0o700)
+            os.chmod(state, 0o700)
         self.assertIsNone(self.decision(r),
                           "отметку не записать, а предупреждение всё равно вышло")
 

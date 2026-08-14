@@ -14,6 +14,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
 
@@ -25,6 +26,11 @@ LEARN = plug("superstack-brain") / "tools" / "learn.py"
 
 
 def run(state: Path, script: Path = HOOK, disable: str = "") -> subprocess.CompletedProcess:
+    # Проект заводится, иначе хук молчит: он работает только там, где SUPERSTACK
+    # позвали. Здесь проверяется САМ вопрос про урок — гейт области проверяется
+    # отдельно, в test_project_scope.py.
+    state.mkdir(parents=True, exist_ok=True)
+    (state / "projects").write_text(os.getcwd() + "\n", encoding="utf-8")
     env = {**os.environ, "SUPERSTACK_STATE_DIR": str(state)}
     env.pop("SUPERSTACK_DISABLE", None)
     # Пауза проверяется только когда её не отключили извне. Набор гоняется с
@@ -109,6 +115,61 @@ class TestTheQuestionIsAsked(unittest.TestCase):
         out = run(self.state, script=d / "hooks" / "session-lesson.sh").stdout
         c = json.loads(out)["hookSpecificOutput"]["additionalContext"]
         self.assertIn("каталог с пробелом", c)
+
+
+class TestAQuietTurnIsNotAsked(unittest.TestCase):
+    """Ход, в котором ничего не изменилось, не может содержать урок.
+
+    Планка требует пройденную проверку — проверять нечего. Но вопрос стоит
+    ровно один лишний ход: агент обязан ответить, ответ порождает новый Stop,
+    и разговор встаёт в петлю коротких реплик. Наблюдалось живьём: четыре хода
+    подряд вида «готово к перезапуску», каждый вызванный предыдущим.
+    """
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.state = Path(self.tmp.name) / "state"
+        self.state.mkdir()
+        self.work = Path(self.tmp.name) / "work"
+        self.work.mkdir()
+        (self.work / "файл.txt").write_text("до", encoding="utf-8")
+
+    def _run(self):
+        (self.state / "projects").write_text(str(self.work) + "\n",
+                                             encoding="utf-8")
+        env = {**os.environ, "SUPERSTACK_STATE_DIR": str(self.state),
+               "SUPERSTACK_PROJECT_DIR": str(self.work)}
+        env.pop("SUPERSTACK_DISABLE", None)
+        env.pop("SUPERSTACK_IGNORE_PAUSE", None)
+        return subprocess.run(["sh", str(HOOK)], capture_output=True, text=True,
+                              timeout=30, env=env, cwd=str(self.work))
+
+    def test_the_first_turn_is_always_asked(self):
+        self.assertIn("hookSpecificOutput", self._run().stdout)
+
+    def test_a_turn_that_changed_nothing_is_silent(self):
+        self.assertIn("hookSpecificOutput", self._run().stdout)
+        self.assertEqual(self._run().stdout.strip(), "",
+                         "вопрос задан на ходу без единого изменения — "
+                         "агент обязан ответить, и разговор уходит в петлю")
+
+    def test_a_turn_that_changed_a_file_is_asked_again(self):
+        self._run()
+        time.sleep(1.1)  # разрешение mtime на некоторых ФС — секунда
+        (self.work / "файл.txt").write_text("после", encoding="utf-8")
+        self.assertIn("hookSpecificOutput", self._run().stdout,
+                      "работа сделана, а урок не спросили — журнал снова "
+                      "останется пустым")
+
+    def test_a_disabled_hook_does_not_move_the_mark(self):
+        """Иначе выключенный или приостановленный хук сдвигал бы отсчёт и
+        терял работу, сделанную за это время."""
+        env = {**os.environ, "SUPERSTACK_STATE_DIR": str(self.state),
+               "SUPERSTACK_DISABLE": "1"}
+        subprocess.run(["sh", str(HOOK)], capture_output=True, text=True,
+                       timeout=30, env=env, cwd=str(self.work))
+        self.assertFalse((self.state / "last-lesson-ask").exists())
 
 
 class TestHookIsWired(unittest.TestCase):

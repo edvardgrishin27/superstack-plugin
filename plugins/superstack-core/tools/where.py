@@ -73,6 +73,7 @@ OWNER = {
     "contract.py": "superstack-build",
     "crew.py": "superstack-build",
     "doctor.py": "superstack-brain",
+    "enable.py": "superstack-core",
     "fix.py": "superstack-control",
     "gates.py": "superstack-spec",
     "handoff.py": "superstack-build",

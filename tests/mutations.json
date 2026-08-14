@@ -1759,6 +1759,62 @@
    "find": "                ok = hashlib.sha256(f.read_bytes()).hexdigest() == \\\n                    hashlib.sha256(saved).hexdigest()",
    "replace": "                ok = True",
    "why": "возврат объявляется без сверки с оригиналом — «поломки больше нет» верно и для испорченного файла, а это ровно тот случай, что уже случился"
+  },
+  {
+   "id": "lesson.asks-on-every-turn",
+   "file": "plugins/superstack-brain/hooks/session-lesson.sh",
+   "find": "  if [ -z \"$CHANGED\" ]; then\n    exit 0\n  fi",
+   "replace": "  if [ -z \"$CHANGED\" ]; then\n    :\n  fi",
+   "why": "вопрос про урок снова задаётся на ходу без единого изменения — агент обязан ответить, ответ порождает новый Stop, и разговор встаёт в петлю коротких реплик"
+  },
+  {
+   "id": "lesson.mark-never-set",
+   "file": "plugins/superstack-brain/hooks/session-lesson.sh",
+   "find": ": > \"$STAMP\" 2>/dev/null || true",
+   "replace": "true",
+   "why": "отметка времени не ставится — точки отсчёта нет, и хук навсегда остаётся в режиме «спрашивать каждый ход»"
+  },
+  {
+   "id": "lesson.disabled-hook-moves-the-mark",
+   "file": "plugins/superstack-brain/hooks/session-lesson.sh",
+   "find": "if [ \"${SUPERSTACK_DISABLE:-}\" = \"1\" ]; then\n  exit 0\nfi",
+   "replace": "if [ \"${SUPERSTACK_DISABLE:-}\" = \"1\" ]; then\n  mkdir -p \"${SUPERSTACK_STATE_DIR:-$HOME/.claude/superstack}\" 2>/dev/null || true\n  : > \"${SUPERSTACK_STATE_DIR:-$HOME/.claude/superstack}/last-lesson-ask\" 2>/dev/null || true\n  exit 0\nfi",
+   "why": "выключенный хук сдвигает точку отсчёта — вся работа, сделанная при выключенном хуке, перестаёт считаться изменением, и первый же урок после включения теряется"
+  },
+  {
+   "id": "scope.lesson-hook-runs-everywhere",
+   "file": "plugins/superstack-brain/hooks/session-lesson.sh",
+   "find": "enabled_here || exit 0",
+   "replace": "enabled_here || true",
+   "why": "хук урока снова срабатывает в КАЖДОМ проекте на машине — плагины стоят глобально, и человек, пишущий в соседнем каталоге что-то своё, получает вопросы от системы, которую там не звал"
+  },
+  {
+   "id": "scope.verify-gate-runs-everywhere",
+   "file": "plugins/superstack-guard/hooks/verify-gate.sh",
+   "find": "enabled_here || exit 0",
+   "replace": "enabled_here || true",
+   "why": "гейт верификации снова работает в чужих проектах — самый дорогой случай: он может НЕ ДАТЬ ЗАКРЫТЬ ХОД там, где нет ни тестов, ни плана"
+  },
+  {
+   "id": "scope.precompact-runs-everywhere",
+   "file": "plugins/superstack-brain/hooks/precompact.sh",
+   "find": "enabled_here || exit 0",
+   "replace": "enabled_here || true",
+   "why": "снимки транскриптов снова сохраняются из любого проекта на машине, включая те, где систему не звали"
+  },
+  {
+   "id": "scope.prefix-match-catches-siblings",
+   "file": "plugins/superstack-core/tools/enable.py",
+   "find": "        if p == e or e in p.parents:",
+   "replace": "        if str(p).startswith(entry):",
+   "why": "совпадение считается по строке, а не по сегментам пути: соседний каталог «проект-обучение» заводится записью «проект» — то есть ровно тот случай, ради которого гейт и появился"
+  },
+  {
+   "id": "scope.starting-skill-does-not-mark",
+   "file": "plugins/superstack-build/skills/go/SKILL.md",
+   "find": "python3 \"$(T enable.py)\" .",
+   "replace": "true",
+   "why": "скилл перестаёт отмечать проект — хуки молчат там, где систему как раз позвали, и гейт верификации не срабатывает вовсе"
   }
  ]
 }

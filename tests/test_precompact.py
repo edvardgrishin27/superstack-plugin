@@ -64,11 +64,22 @@ class PrecompactFixture(unittest.TestCase):
     def run_hook(self, payload: dict | None, env: dict | None = None,
                  stdin: bool = True) -> subprocess.CompletedProcess:
         input_text = json.dumps(payload) if (payload is not None and stdin) else None
+        use = env if env is not None else self.env
+        # Проект заводится, иначе хук молчит: он работает только там, где
+        # SUPERSTACK позвали. Здесь проверяется поведение ВНУТРИ проекта —
+        # сам гейт области живёт в test_project_scope.py.
+        # Но НЕ при выключателе: отдельный тест доказывает, что с
+        # SUPERSTACK_DISABLE=1 хук не трогает диск вовсе, и созданный здесь
+        # каталог состояния сломал бы именно это утверждение.
+        if use.get("SUPERSTACK_DISABLE") != "1":
+            st = Path(use.get("SUPERSTACK_STATE_DIR", str(self.state)))
+            st.mkdir(parents=True, exist_ok=True)
+            (st / "projects").write_text(os.getcwd() + "\n", encoding="utf-8")
         return subprocess.run(
             ["sh", str(HOOK)],
             input=input_text,
             capture_output=True, text=True, timeout=30,
-            env=env if env is not None else self.env,
+            env=use,
         )
 
     @property

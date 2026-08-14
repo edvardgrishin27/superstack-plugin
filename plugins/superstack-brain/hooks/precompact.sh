@@ -54,6 +54,23 @@ if [ "${SUPERSTACK_DISABLE:-}" = "1" ]; then
 fi
 
 STATE="${SUPERSTACK_STATE_DIR:-${HOME:-/nonexistent}/.claude/superstack}"
+
+# SUPERSTACK работает ТОЛЬКО там, где его позвали. Плагины ставятся глобально
+# (Scope: user), их хуки объявлены без привязки к проекту — и без этого гейта
+# хук срабатывает в КАЖДОМ проекте на машине, сохраняя чужие транскрипты.
+# Отметку ставит явный вызов скилла: /go, /superstack, /what, /fix, /oops.
+PROJECT="${SUPERSTACK_PROJECT_DIR:-${CLAUDE_PROJECT_DIR:-$PWD}}"
+enabled_here() {
+  [ -f "$STATE/projects" ] || return 1
+  while IFS= read -r line; do
+    [ -n "$line" ] || continue
+    # Совпадение по сегментам пути: /a/bc не заводится записью /a/b.
+    case "$PROJECT/" in "$line"/*) return 0 ;; esac
+  done < "$STATE/projects"
+  return 1
+}
+enabled_here || exit 0
+
 DIR="$STATE/precompact"
 LOG="$DIR/log"
 
