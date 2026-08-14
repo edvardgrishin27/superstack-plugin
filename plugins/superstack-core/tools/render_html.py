@@ -67,6 +67,59 @@ CSS = """
   --step-2: clamp(1.5rem, 1.1rem + 1.6vw, 2.4rem);
   --step-hero: clamp(2.5rem, 1.2rem + 5vw, 5rem);
 }
+/* --- ход стройки -------------------------------------------------------- */
+/* Состояние передаётся ВЕСОМ и ПРОЗРАЧНОСТЬЮ, а не цветом: в системе цветных
+   акцентов не бывает вовсе. Здесь это не ограничение, а помощь — монохром
+   заставляет честно разделить «доказано» и «заявлено» вместо того, чтобы
+   покрасить и то и другое зелёным. */
+.bar { position: relative; height: 2rem; border-radius: .5rem; overflow: hidden;
+       background: rgba(255,255,255,.04); border: 1px solid var(--border-subtle); }
+.bar span { position: absolute; inset: 0; display: flex; align-items: center;
+            padding: 0 .75rem; font-size: var(--step--1); }
+.bar.proven { background: #fff; border-color: #fff; }
+.bar.proven span { color: #000; font-weight: 600; }
+.bar.claimed { background: rgba(255,255,255,.10);
+               border: 1px dashed rgba(255,255,255,.45); }
+.bar.claimed span { color: var(--secondary); }
+.bar.running { background: linear-gradient(90deg,
+               rgba(255,255,255,.55) var(--fill,40%), rgba(255,255,255,.05) 0); }
+.bar.running span { color: var(--primary); }
+.bar.waiting span { color: var(--faint); }
+.wave { font-family: var(--font-mono); font-size: .7rem; letter-spacing: .18em;
+        text-transform: uppercase; color: var(--muted); margin: 1.25rem 0 .5rem; }
+.trow { display: grid; grid-template-columns: 2.5rem 1fr auto; gap: .75rem;
+        align-items: center; margin-bottom: .4rem; }
+.trow b { font-family: var(--font-mono); font-size: .75rem; color: var(--muted);
+          font-weight: 400; }
+.proof { font-family: var(--font-mono); font-size: .68rem; color: var(--muted);
+         white-space: nowrap; }
+.metrics { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+           margin: 1.5rem 0; }
+.metric { border: 1px solid var(--border-subtle); background: rgba(255,255,255,.02);
+          border-radius: 1rem; padding: 1.1rem 1.2rem; }
+.metric .rub { font-family: var(--font-mono); font-size: .65rem; letter-spacing: .18em;
+               text-transform: uppercase; color: var(--muted); }
+.metric .num { font-size: 2.1rem; font-weight: 700; line-height: 1.1; margin-top: .5rem;
+               background: linear-gradient(180deg, #fff 0%, #fff 45%, rgba(255,255,255,.55) 100%);
+               -webkit-background-clip: text; background-clip: text;
+               -webkit-text-fill-color: transparent; }
+.metric .sub { font-size: .75rem; color: var(--muted); margin-top: .35rem; line-height: 1.45; }
+.debt li { margin-bottom: .35rem; color: var(--secondary); font-size: var(--step--1); }
+.debt .rub { font-family: var(--font-mono); font-size: .65rem; letter-spacing: .18em;
+             text-transform: uppercase; color: var(--muted); margin-top: .9rem; }
+
+.asks { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr)); }
+.ask { border: 1px solid var(--border-subtle); background: rgba(255,255,255,.02);
+       border-radius: 1rem; padding: 1.1rem 1.2rem; }
+.ask .rub { font-family: var(--font-mono); font-size: .65rem; letter-spacing: .16em;
+            text-transform: uppercase; color: var(--muted); line-height: 1.6;
+            margin-bottom: .7rem; }
+.ask .clean { color: var(--muted); font-size: var(--step--1); margin: 0; }
+/* «Никто не смотрел» выделено сильнее, чем «чисто»: это не результат
+   проверки, а её отсутствие, и спутать их дороже. */
+.ask .unchecked { color: var(--secondary); font-size: var(--step--1); margin: 0;
+                  border-left: 2px solid rgba(255,255,255,.35); padding-left: .6rem; }
+
 * { box-sizing: border-box; }
 .glass-filter { position: absolute; width: 0; height: 0; }
 html { color-scheme: dark; }
@@ -541,6 +594,134 @@ def build(data: dict, title: str = "Что я нашёл на твоём ком�
 </body></html>"""
 
 
+# --------------------------------------------------------------------------
+# ход стройки
+# --------------------------------------------------------------------------
+#: Как состояние выглядит на экране. Словарь ЕДИНСТВЕННЫЙ: пока подпись
+#: и начертание задавались в двух местах, «заявлено» однажды нарисовалось
+#: сплошной полосой — то есть неотличимо от доказанного.
+TASK_LOOK = {
+    "proven":  ("доказано", "гейт вернул 0"),
+    "claimed": ("заявлено", "со слов, гейт не запускался"),
+    "running": ("в работе", ""),
+    "waiting": ("ждёт", ""),
+}
+
+
+def _task_row(t: dict) -> str:
+    state = t.get("status", "waiting")
+    label, proof = TASK_LOOK.get(state, TASK_LOOK["waiting"])
+    code = t.get("exit_code")
+    if state == "proven" and code is not None:
+        proof = f"гейт вернул {code}"
+    return (f'<div class="trow"><b>{esc(t.get("id", ""))}</b>'
+            f'<div class="bar {esc(state)}"><span>{esc(t.get("name", ""))}</span></div>'
+            f'<div class="proof">{esc(proof or label)}</div></div>')
+
+
+def build_progress(data: dict, title: str = "Ход стройки") -> str:
+    """Страница хода работ.
+
+    Главное правило этой страницы: доля прогресса считается ТОЛЬКО от
+    доказанного. Заявленное показывается — но не двигает шкалу. Иначе полоса
+    растёт от слов, и человек видит движение там, где его нет.
+    """
+    s = data.get("summary") or {}
+    waves = data.get("waves") or {}
+    debt = data.get("debt") or {}
+    req = (data.get("requirements") or {})
+
+    body = []
+    for w in sorted(waves, key=lambda x: int(x) if str(x).isdigit() else 0):
+        tasks = waves[w]
+        par = " — параллельно" if len(tasks) > 1 else ""
+        body.append(f'<div class="wave">волна {esc(w)}{par}</div>')
+        body += [_task_row(t) for t in tasks]
+
+    by = s.get("by_status") or {}
+    prog = s.get("progress")
+    cov = (f'{req.get("covered")} из {req.get("total")}'
+           if req.get("total") is not None and req.get("covered") is not None
+           else "не измерено")
+
+    # Блок отвечает на вопрос «что нужно ОТ МЕНЯ», а не «сколько долга».
+    # Счётчик — отчёт, список действий — работа; смотрят ради второго.
+    ASKS = {"stub": "заглушки — нужны твои данные",
+            "assumption": "решения, принятые за тебя",
+            "env": "переменные окружения — нужны твои значения"}
+    unreviewed = set(s.get("debt_unreviewed") or [])
+    cards = []
+    for kind, ask in ASKS.items():
+        items = debt.get(kind) or []
+        if items:
+            inner = "<ul class='debt'>" + "".join(f"<li>{esc(x)}</li>" for x in items) + "</ul>"
+        elif kind in unreviewed:
+            # «Никто не смотрел» и «смотрели, чисто» — разные утверждения.
+            # Показать их одинаковым словом «пусто» значит выдать неведение
+            # за порядок: человек прочитает отсутствие проверки как её результат.
+            inner = "<p class='unchecked'>никто не проверял</p>"
+        else:
+            inner = "<p class='clean'>проверено, закрывать нечего</p>"
+        cards.append(f"<div class='ask'><div class='rub'>{esc(ask)}</div>{inner}</div>")
+    debt_html = ["<div class='asks'>" + "".join(cards) + "</div>"]
+
+    gaps = s.get("unmeasured") or []
+    warn = ""
+    if gaps:
+        warn = ('<section class="warn"><h2>Эта картина неполная</h2><ul>'
+                + "".join(f"<li>{esc(g)}</li>" for g in gaps)
+                + "</ul><p>Числа ниже верны для того, что измерено. "
+                  "Неназванное сюда не попало.</p></section>")
+
+    return f"""<!doctype html>
+<html lang="ru"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>{esc(title)} — {esc(BRAND)}</title>
+<style>{CSS}</style></head>
+<body>
+<div class="wrap">
+<header>
+  <p class="eyebrow">{esc(BRAND)} · Superstack</p>
+  <h1>{esc(data.get("project") or title)}</h1>
+  <p class="sub">Сплошная полоса — <b>доказано</b>: гейт вернул ноль.
+  Пунктирная — <b>заявлено</b>: агент сказал «готово», проверка не запускалась.
+  Шкалу двигает только доказанное.</p>
+</header>
+{warn}
+<div class="metrics">
+  <div class="metric"><div class="rub">доказано</div>
+    <div class="num">{prog if prog is not None else "—"}<span style="font-size:1rem">%</span></div>
+    <div class="sub">{by.get("proven", 0)} из {s.get("tasks_total", 0)} задач ·
+    заявлено ещё {by.get("claimed", 0)}</div></div>
+  <div class="metric"><div class="rub">покрытие требований</div>
+    <div class="num">{esc(str(req.get("covered", "—")))}</div>
+    <div class="sub">{esc(cov)} · снято {req.get("dropped", 0)} ·
+    отложено {req.get("deferred", 0)}</div></div>
+  <div class="metric"><div class="rub">долг</div>
+    <div class="num">{s.get("debt_total", 0)}</div>
+    <div class="sub">то, что копится молча и всплывает через неделю</div></div>
+  <div class="metric"><div class="rub">в работе</div>
+    <div class="num">{by.get("running", 0)}</div>
+    <div class="sub">ждут своей очереди {by.get("waiting", 0)}</div></div>
+</div>
+<main>
+  <h2 class="section">Задачи по волнам</h2>
+  {"".join(body) or '<p class="empty">Задач пока нет.</p>'}
+  <h2 class="section">Что осталось закрыть</h2>
+  {"".join(debt_html)}
+</main>
+<footer>
+  <p>Доля считается только от доказанного: полоса, растущая от слов, показывает
+  движение там, где его нет.</p>
+  <p class="rules">обновлено: {esc(data.get("updated") or "отметки времени нет — панель могла устареть")}</p>
+  {f'<p class="rules">требования и задачи — в {esc(data["source"])}</p>' if data.get("source") else ""}
+</footer>
+</div>
+<aside class="brand-mark" aria-label="{esc(BRAND)}"><span class="dot"></span>{esc(BRAND)}</aside>
+</body></html>"""
+
+
 def halt_if_paused() -> None:
     if os.environ.get("SUPERSTACK_IGNORE_PAUSE") == "1":
         return
@@ -565,8 +746,12 @@ def main() -> int:
     except Exception as e:
         print(f"файл находок не разбирается как JSON: {e}", file=sys.stderr)
         return 2
+    if isinstance(data, dict) and data.get("schema") == "superstack.progress.v1":
+        sys.stdout.write(build_progress(data))
+        return 0
     if not isinstance(data, dict) or "findings" not in data:
-        print(f"это не файл находок: в {src} нет поля findings", file=sys.stderr)
+        print(f"это не файл находок и не файл хода стройки: в {src} нет ни "
+              f"findings, ни schema superstack.progress.v1", file=sys.stderr)
         return 2
     sys.stdout.write(build(data))
     return 0

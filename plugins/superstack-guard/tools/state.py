@@ -216,11 +216,35 @@ def mark_proven_local(evidence: Optional[dict] = None) -> dict:
 # --------------------------------------------------------------------------
 # proven-local -> proven
 # --------------------------------------------------------------------------
+def _find_gauntlet() -> "Path | None":
+    """Где планка. Вверх до корня репозитория, а не рядом с собой."""
+    here = Path(__file__).resolve()
+    for up in here.parents:
+        cand = up / "tools" / "gauntlet.py"
+        if cand.is_file() and cand != here:
+            return cand
+    return None
+
+
 def _run_gauntlet() -> dict:
     """Планка запускается ОТСЮДА, а не читается из чужого отчёта. Отчёт,
     который принёс вызывающий, — это именно то, от чего защищается
     негативный контроль №2: самоодобрение по своему же тексту."""
-    gauntlet_py = Path(__file__).resolve().parent / "gauntlet.py"
+    # Планка живёт в КОРНЕ репозитория (`tools/gauntlet.py`) и не входит ни в
+    # один плагин — значит на машине человека её нет и не будет. Прежний путь
+    # (`.../superstack-guard/tools/gauntlet.py`) не существовал нигде и никогда:
+    # переход в `proven` не мог произойти ни у кого, а тесты этого не видели,
+    # потому что подставляли `runner=`.
+    #
+    # Ищем по имени тем же резолвером, что и скиллы; не нашли — говорим прямо.
+    gauntlet_py = _find_gauntlet()
+    if gauntlet_py is None:
+        raise Rejected(
+            "планки нет на этой машине: `tools/gauntlet.py` живёт в корне "
+            "репозитория разработки и не входит ни в один плагин. Ступень "
+            "`proven` — состояние дерева разработки, а не установки; на "
+            "машине человека доказательством служит `prove.py` с негативными "
+            "контролями, и она даёт `proven-local`")
     p = subprocess.run([sys.executable, str(gauntlet_py), "--json"],
                        capture_output=True, text=True, timeout=1200,
                        cwd=str(gauntlet_py.parent.parent),
@@ -231,6 +255,20 @@ def _run_gauntlet() -> dict:
         raise Rejected(f"планка не вернула разбираемый JSON: {e}") from e
 
 
+def _expected_gates() -> int:
+    """Сколько ворот у планки СЕЙЧАС. Число, продублированное руками, устаревает
+    молча: так уже случилось, когда ворот стало семь."""
+    g = _find_gauntlet()
+    if g is None:
+        return 6
+    try:
+        import re
+        m = re.search(r"^GATES = \[(.*?)^\]", g.read_text("utf-8"), re.S | re.M)
+        return max(6, len(re.findall(r'\("', m.group(1)))) if m else 6
+    except OSError:
+        return 6
+
+
 def mark_proven(*, runner=None) -> dict:
     """runner — только для тестов (подставной прогон планки без реального
     pytest на весь репозиторий, который занимает минуты). В проде параметр
@@ -239,9 +277,12 @@ def mark_proven(*, runner=None) -> dict:
     _require_state(cur, "proven-local")
     result = (runner or _run_gauntlet)()
     gates = result.get("gates") or []
-    if len(gates) < 6:
-        raise Rejected(f"планка вернула {len(gates)} ворот вместо 6 — "
-                        f"это не полный прогон")
+    # Порог читается из САМОЙ планки, а не переписывается здесь: он уже
+    # устарел однажды (ворот стало семь, а тут стояло шесть), и это тот
+    # случай, когда число в двух местах расходится молча.
+    if len(gates) < _expected_gates():
+        raise Rejected(f"планка вернула {len(gates)} ворот вместо "
+                       f"{_expected_gates()} — это не полный прогон")
     bad = [g["gate"] for g in gates if g.get("status") != "pass"]
     if bad or not result.get("done"):
         # «Закрыть ход с красными тестами» — третий негативный контроль.

@@ -452,7 +452,29 @@ class TestSkillContract(unittest.TestCase):
         self.text = (at("skills", "go", "SKILL.md")).read_text("utf-8")
 
     def test_skill_calls_the_gate(self):
-        self.assertIn("tools/verify.py", self.text)
+        """Проверяется ВЫЗОВ, а не буквальная строка пути.
+
+        Прежняя версия требовала `tools/verify.py` — и тем закрепляла ровно
+        сломанный путь: скилл живёт в superstack-build, а verify.py лежит в
+        superstack-guard, так что `$CLAUDE_PLUGIN_ROOT/tools/verify.py`
+        указывал в пустоту. Тест был зелёным всё это время.
+        """
+        self.assertRegex(self.text, r"\$\(T verify\.py\)")
+
+    def test_skill_does_not_build_sibling_paths_from_its_own_root(self):
+        """Единственная форма, которой здесь быть не должно: она выглядит
+        подключённой и падает «нет такого файла» — то есть как поломка
+        окружения, и человек идёт чинить установку."""
+        import re
+        own = {p.name for p in
+               (at("skills", "go", "SKILL.md").parent.parent.parent
+                / "tools").glob("*.py")}
+        for m in re.finditer(r"\$\{?CLAUDE_PLUGIN_ROOT\}?/tools/([\w.]+\.py)",
+                             self.text):
+            with self.subTest(tool=m.group(1)):
+                self.assertIn(m.group(1), own,
+                              f"{m.group(1)} нет в этом пакете — звать надо "
+                              "через резолвер")
 
     def test_skill_names_every_exit_code(self):
         for code in ("0", "1", "2"):
@@ -460,7 +482,7 @@ class TestSkillContract(unittest.TestCase):
 
     def test_skill_forbids_treating_absent_as_success(self):
         flat = " ".join(self.text.split())
-        self.assertIn("Отсутствие тестов — не зелёный", flat)
+        self.assertIn("это НЕ успех", flat)
 
     def test_skill_forbids_editing_the_test_to_go_green(self):
         self.assertIn("Чинится код", " ".join(self.text.split()))

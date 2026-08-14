@@ -37,22 +37,27 @@ from pathlib import Path
 # перечисляются здесь вторым списком: два списка расходятся молча, и расхождение
 # всплывает импортом, упавшим у пользователя, а не у нас.
 def _wire_siblings(here: Path) -> None:
-    import json
-    if str(here) not in sys.path:
-        sys.path.insert(0, str(here))
+    """Положить в sys.path каталоги tools соседних пакетов.
+
+    Раньше соседи брались из поля `dependencies` собственного манифеста. Поле
+    пришлось убрать: движок Claude Code 2.1.42 отвергает его как неизвестный
+    ключ, и с ним НИ ОДИН пакет не проходил валидацию, то есть продукт не
+    ставился вовсе. Как только поле исчезло, вместе с ним исчезла и проводка —
+    инструменты перестали находить друг друга.
+
+    Теперь соседи ищутся по раскладке, а не по манифесту. Два уровня, потому
+    что установленный плагин лежит не так, как репозиторий: между корнем
+    маркетплейса и корнем пакета появляется каталог версии
+    (`cache/<маркетплейс>/<плагин>/<версия>/tools`).
+    """
     plug_root = here.parent
-    manifest = plug_root / ".claude-plugin" / "plugin.json"
-    repo_plugins = plug_root.parent
-    try:
-        deps = json.loads(manifest.read_text("utf-8")).get("dependencies", [])
-    except (OSError, ValueError):
-        deps = []
-    for dep in deps:
-        d = repo_plugins / dep["name"] / "tools"
-        if d.is_dir() and str(d) not in sys.path:
-            sys.path.insert(0, str(d))
-
-
+    for base in (plug_root.parent, plug_root.parent.parent):
+        if not base.is_dir():
+            continue
+        for pat in ("*/tools", "*/*/tools"):
+            for d in sorted(base.glob(pat)):
+                if d.is_dir() and d != here and str(d) not in sys.path:
+                    sys.path.append(str(d))
 _wire_siblings(Path(__file__).resolve().parent)
 
 

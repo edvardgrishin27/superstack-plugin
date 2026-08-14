@@ -54,15 +54,28 @@ GOOD_EVIDENCE = {
     ]},
 }
 
+def _gate_names() -> tuple:
+    """Имена ворот берутся ИЗ ПЛАНКИ, а не переписываются сюда.
+
+    Список, продублированный в фикстуре, устаревает молча: ворот стало семь,
+    а здесь и в `state.py` оставалось шесть, и «полный прогон» проходил
+    неполным. Тот же класс, что и порог в `state.py`, — число в двух местах.
+    """
+    import importlib.util
+    from paths import REPO
+    sp = importlib.util.spec_from_file_location("_gt_names", REPO / "tools" / "gauntlet.py")
+    m = importlib.util.module_from_spec(sp)
+    sp.loader.exec_module(m)
+    return tuple(n for n, _ in m.GATES)
+
+
 GREEN_GAUNTLET = {"done": True, "gates": [
-    {"gate": n, "status": "pass"} for n in
-    ("набор", "герметичность", "мутации", "правила", "манифест", "план")
+    {"gate": n, "status": "pass"} for n in _gate_names()
 ]}
 
 
 def _red_gauntlet(bad_gate: str = "набор") -> dict:
-    gates = [{"gate": n, "status": "pass"} for n in
-             ("набор", "герметичность", "мутации", "правила", "манифест", "план")]
+    gates = [{"gate": n, "status": "pass"} for n in _gate_names()]
     for g in gates:
         if g["gate"] == bad_gate:
             g["status"] = "fail"

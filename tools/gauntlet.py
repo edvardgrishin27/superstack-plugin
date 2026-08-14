@@ -9,7 +9,7 @@
 тем, что агент СКАЗАЛ, будто исправлены. Планка, которую можно пройти словами,
 не планка.
 
-Здесь останов считает код. Шесть ворот, каждые со своим способом соврать:
+Здесь останов считает код. Семь ворот, каждые со своим способом соврать:
 
   · набор       — тесты зелёные. Слабейшее из ворот: зелёное можно нарисовать.
   · герметичность — то же число тестов при другом HOME. Ловит «зелено, потому
@@ -17,6 +17,11 @@
                    282 теста на неизменном коде.
   · мутации     — зарегистрированные поломки обязаны ронять набор. Единственные
                    ворота, доказывающие, что тесты вообще что-то держат.
+  · проводка    — до инструмента дотягивается хоть одна точка входа. Ворота,
+                   которых не хватало: 14 инструментов из 29 были недостижимы,
+                   а оба вызова сборочного скилла указывали в пустоту — и набор
+                   при этом был зелёным, потому что файлы на месте и функции
+                   работают. «Есть файл» и «подключено» — разные утверждения.
   · правила     — схема, дубли, имена фактов, подстановки.
   · манифест    — плагин ставится, а не только лежит.
   · план        — механизмы из плана присутствуют. Превращает 928 строк прозы
@@ -182,6 +187,60 @@ def purge_bytecode() -> int:
     return killed
 
 
+def _lock() -> Path:
+    return PLUG / ".mutation-lock"
+
+
+def _alive(pid: int) -> bool:
+    """Жив ли процесс. Сомнение решается в сторону «жив».
+
+    Ошибиться в эту сторону стоит одного отказа мерить; в обратную — двух
+    харнессов, мутирующих одно дерево, и это уже было трижды.
+    """
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except (PermissionError, OSError):
+        return True
+    return True
+
+
+def acquire_lock() -> "str | None":
+    """Занять исключительное право мутировать дерево. Беда либо None.
+
+    Зачем замок. Два процесса, мутирующих одно дерево, портят измерения друг
+    друга молча: каждый видит чужую поломку и относит её на счёт своей. За одну
+    сессию это случилось трижды, и в третий раз — когда я сам запустил починку
+    поверх идущей проверки. Механизм без замка не защищает даже от автора.
+
+    Мёртвый замок снимается сам: процесс, убитый по SIGKILL, файл за собой не
+    уберёт, и вечная блокировка от прошлого прогона — это отказ мерить навсегда.
+    """
+    p = _lock()
+    if p.is_file():
+        try:
+            pid = int(p.read_text("utf-8").split()[0])
+        except (OSError, ValueError, IndexError):
+            pid = None
+        if pid and pid != os.getpid() and _alive(pid):
+            return (f"дерево уже мутирует процесс {pid} — второй харнесс увидит "
+                    "чужую поломку и отнесёт её на свой счёт; дождись первого "
+                    f"или сними {p}")
+    try:
+        p.write_text(f"{os.getpid()}\n", encoding="utf-8")
+    except OSError as e:
+        return f"замок не поставлен ({e}) — мутировать вслепую нельзя"
+    return None
+
+
+def release_lock() -> None:
+    try:
+        _lock().unlink()
+    except OSError:
+        pass
+
+
 def _sh(cmd: list, timeout: int, env: dict = None, cwd: Path = None) -> tuple:
     try:
         p = subprocess.run(cmd, cwd=str(cwd or PLUG), capture_output=True,
@@ -259,6 +318,16 @@ def gate_mutations() -> dict:
     except (ValueError, KeyError) as e:
         return {"status": "unknown", "detail": f"набор мутаций не разобран: {e}"}
 
+    held = acquire_lock()
+    if held:
+        return {"status": "unknown", "detail": held}
+    try:
+        return _mutate_all(muts)
+    finally:
+        release_lock()
+
+
+def _mutate_all(muts: list) -> dict:
     survived, checked, broken = [], 0, []
     for m in muts:
         target = PLUG / m["file"]
@@ -281,7 +350,14 @@ def gate_mutations() -> dict:
             # конца на заведомо сломанном коде — платить минутами за то, что
             # уже известно.
             code, _ = _sh([sys.executable, "-m", "pytest", "tests/", "-q", "-x"],
-                          MUTATION_TIMEOUT)
+                          MUTATION_TIMEOUT,
+                          # Сторож в conftest обязан молчать ИМЕННО здесь. Он
+                          # обрывает набор, увидев мутацию в дереве, — а тут она
+                          # применена намеренно. Без этого флага pytest вышел бы
+                          # с ненулевым кодом до единого теста, ворота прочли бы
+                          # это как «мутация поймана», и весь набор мутаций
+                          # отчитался бы пойманным, не проверив ни одной.
+                          env={"SUPERSTACK_MUTATION_RUN": "1"})
             caught = code != 0
         finally:
             # Восстановление байт-в-байт и ДО любой другой работы: мутация,
@@ -317,9 +393,105 @@ def gate_rules() -> dict:
     return {"status": "fail", "detail": out.strip()[-500:]}
 
 
+def marketplace_crosscheck() -> dict:
+    """Объявленное против существующего — в обе стороны, без подпроцессов.
+
+    Ворота подписались строкой «плагин ставится, а не только лежит», а
+    проверяли один файл из восьми: `claude plugin validate .` валидирует
+    ТОЛЬКО `marketplace.json` и молчит о том, существует ли каталог из
+    `source`. Живой случай: манифест объявлял `./plugins/superstack`, каталога
+    не было, семь настоящих пакетов не были объявлены вовсе — и ворота были
+    зелёными. Продукт не устанавливался с момента разделения на семь, и
+    заметить это было нечем.
+
+    Проверка нарочно НЕ зовёт `claude`: на машине без него сильная половина
+    ворот иначе исчезала бы молча.
+
+    Третье множество — сирота — обязательно. Каталог, потерявший свой
+    `plugin.json`, выпадает из обеих разностей сразу, и проверка зеленеет на
+    пустоте.
+    """
+    mk = PLUG / ".claude-plugin" / "marketplace.json"
+    if not mk.is_file():
+        return {"status": "unknown", "detail": f"нет манифеста маркетплейса: {mk}"}
+    try:
+        entries = json.loads(mk.read_text("utf-8"))["plugins"]
+    except (ValueError, KeyError) as e:
+        return {"status": "unknown", "detail": f"манифест не разобран: {e}"}
+
+    pkgs, orphans = {}, []
+    for d in sorted((PLUG / "plugins").glob("*")):
+        if not d.is_dir():
+            continue
+        pj = d / ".claude-plugin" / "plugin.json"
+        if not pj.is_file():
+            orphans.append(d.name)
+            continue
+        try:
+            pkgs[d.name] = json.loads(pj.read_text("utf-8"))
+        except ValueError as e:
+            orphans.append(f"{d.name} (манифест не разобран: {e})")
+
+    bad, seen = [], set()
+    for e in entries:
+        name, src = e.get("name", ""), (e.get("source") or "")
+        if name in seen:
+            bad.append(f"{name}: объявлен дважды — ключ установки перестаёт "
+                       "указывать на одно")
+        seen.add(name)
+        d = PLUG / src.lstrip("./") if isinstance(src, str) else None
+        if d is None or not d.is_dir():
+            bad.append(f"{name}: source `{src}` не существует — запись в пустоту")
+            continue
+        pj = d / ".claude-plugin" / "plugin.json"
+        if not pj.is_file():
+            bad.append(f"{name}: в `{src}` нет .claude-plugin/plugin.json")
+            continue
+        p = pkgs.get(d.name, {})
+        if p.get("name") != name:
+            bad.append(f"{name}: пакет представляется как «{p.get('name')}» — "
+                       "ключ установки указывал бы не на тот пакет")
+        if e.get("version") != p.get("version"):
+            bad.append(f"{name}: версия записи {e.get('version')} ≠ версии "
+                       f"пакета {p.get('version')} — semver удовлетворяется "
+                       "не тем кодом, а имя каталога установки берётся отсюда")
+
+    for n in sorted(set(pkgs) - seen):
+        bad.append(f"{n}: пакет есть, записи в маркетплейсе нет — не поставится")
+
+    # Объявленное поле ГАСИТ каталог: движок берёт дефолтный каталог только
+    # когда поля нет. Файл, лежащий рядом и не названный, не грузится никогда,
+    # и ошибки при этом нет. Так уже потерялся агент слепой приёмки.
+    for n, p in sorted(pkgs.items()):
+        for field, sub in (("agents", "agents"), ("skills", "skills"),
+                           ("commands", "commands")):
+            declared = p.get(field)
+            if not isinstance(declared, list):
+                continue
+            named = {Path(x).name for x in declared if isinstance(x, str)}
+            on_disk = {f.name for f in (PLUG / "plugins" / n / sub).glob("*.md")}
+            missed = sorted(on_disk - named)
+            if missed and not any(str(x).rstrip("/").endswith(sub) for x in declared):
+                bad.append(f"{n}: в `{sub}/` лежит незаявленное — {', '.join(missed[:3])}; "
+                           "объявленное поле гасит каталог, и это не грузится молча")
+
+    if bad:
+        return {"status": "fail", "detail": f"{len(bad)} расхождений: {bad[0]}",
+                "mismatches": bad}
+    if orphans:
+        return {"status": "unknown",
+                "detail": "каталоги без манифеста: " + ", ".join(orphans[:5])}
+    return {"status": "pass",
+            "detail": f"{len(entries)} записей = {len(pkgs)} пакетов, версии сходятся"}
+
+
 def gate_manifest() -> dict:
+    cross = marketplace_crosscheck()
+    if cross["status"] == "fail":
+        return cross
     if not shutil.which("claude"):
-        return {"status": "unknown", "detail": "нечем проверить: claude не найден"}
+        return {"status": "unknown",
+                "detail": "сверка прошла, но схему проверить нечем: claude не найден"}
     env = {k: v for k, v in os.environ.items()
            if k not in ("CLAUDECODE", "CLAUDE_CODE_ENTRYPOINT")}
     try:
@@ -328,9 +500,30 @@ def gate_manifest() -> dict:
                            text=True, timeout=180, env=env)
     except (OSError, subprocess.TimeoutExpired) as e:
         return {"status": "unknown", "detail": str(e)[:200]}
-    if p.returncode == 0:
-        return {"status": "pass", "detail": "манифест валиден"}
-    return {"status": "fail", "detail": ((p.stdout or "") + (p.stderr or ""))[-400:]}
+    if p.returncode != 0:
+        return {"status": "fail",
+                "detail": "корневой манифест: "
+                          + ((p.stdout or "") + (p.stderr or ""))[-300:]}
+
+    # Каждый пакет — отдельно. Раньше валидировался только корень, и шесть
+    # манифестов из семи были невалидны при зелёных воротах: движок 2.1.42
+    # отвергает ключ `dependencies`, а узнать об этом было неоткуда.
+    broken = []
+    for d in sorted((PLUG / "plugins").glob("*")):
+        if not (d / ".claude-plugin" / "plugin.json").is_file():
+            continue
+        r = subprocess.run(["claude", "plugin", "validate", str(d)],
+                           cwd=str(PLUG), capture_output=True, text=True,
+                           timeout=180, env=env)
+        if r.returncode != 0:
+            tail = ((r.stdout or "") + (r.stderr or "")).strip().splitlines()
+            broken.append(f"{d.name}: {tail[-1][:120] if tail else 'провал'}")
+    if broken:
+        return {"status": "fail",
+                "detail": f"невалидных пакетов {len(broken)}: {broken[0]}",
+                "packages": broken}
+    return {"status": "pass",
+            "detail": f"{cross['detail']}; схема валидна у корня и всех пакетов"}
 
 
 def gate_plan() -> dict:
@@ -392,10 +585,119 @@ def gate_plan() -> dict:
     return {"status": "pass", **out}
 
 
+#: Точки, из которых Claude Code вообще что-либо запускает. Всё остальное —
+#: библиотеки, до которых надо дотянуться отсюда.
+ENTRY_GLOBS = ("*/skills/**/*.md", "*/hooks/*.sh", "*/hooks/*.json",
+               "*/agents/*.md", "*/commands/*.md")
+
+
+def gate_wiring() -> dict:
+    """Инструмент обязан быть ДОСТИЖИМ, а не просто существовать.
+
+    Единственные ворота, которые ловят болезнь этого проекта в его собственном
+    исходнике. Она уже случалась трижды, и каждый раз выглядела построенной
+    системой: `hooks.json` объявлял 34 хука при девяти подключённых; `learn.py`
+    был написан целиком — планка из трёх условий, маршрутизация, слияние — и не
+    вызывался НИКЕМ; в один заход сюда добавилось шесть инструментов, до
+    которых не дотягивался ни один скилл.
+
+    Механизм, который не с чего запустить, неотличим от отсутствующего — и хуже
+    его, потому что занимает место в отчёте и в голове. Тесты его не ловят:
+    файл на месте, функции работают, набор зелёный.
+
+    Достижимость считается транзитивно от точек входа: скилл зовёт инструмент,
+    тот зовёт следующий. Инструмент, который человек запускает сам, — законный
+    случай, но он обязан быть НАЗВАН в `data/entrypoints.json` вместе с
+    причиной. Разница между «решили так» и «забыли» должна быть записана, иначе
+    через месяц её не отличить.
+    """
+    tools = sorted(PLUG.glob("plugins/*/tools/*.py"))
+    if not tools:
+        return {"status": "unknown", "detail": "инструментов не найдено"}
+
+    entries = []
+    for g in ENTRY_GLOBS:
+        entries += list(PLUG.glob("plugins/" + g))
+
+    declared, why = set(), {}
+    ep = PLUG / "data" / "entrypoints.json"
+    if ep.is_file():
+        try:
+            for e in json.loads(ep.read_text("utf-8"))["entrypoints"]:
+                declared.add(e["tool"])
+                why[e["tool"]] = e.get("why", "")
+        except (ValueError, KeyError, TypeError) as e:
+            return {"status": "unknown",
+                    "detail": f"список точек входа не разобран: {e}"}
+
+    text = {}
+    for f in entries + tools:
+        try:
+            text[f] = f.read_text("utf-8", errors="replace")
+        except OSError:
+            text[f] = ""
+
+    by_name = {t.name: t for t in tools}
+    # Достижимое от точек входа, потом транзитивно через сами инструменты.
+    reached = {n for n in by_name
+               if any(n in text[e] for e in entries) or n in declared}
+    for _ in range(len(by_name) + 1):
+        grown = set(reached)
+        for n, t in by_name.items():
+            if n in reached:
+                continue
+            if any(n in text[by_name[r]] for r in reached if r in by_name):
+                grown.add(n)
+        if grown == reached:
+            break
+        reached = grown
+
+    dead = sorted(n for n in by_name if n not in reached)
+    stale = sorted(d for d in declared if d not in by_name)
+
+    # Второй отказ этих же ворот, и он тише первого. `${CLAUDE_PLUGIN_ROOT}`
+    # разворачивается в корень ТОГО плагина, чей скилл исполняется. Скилл,
+    # зовущий `$CLAUDE_PLUGIN_ROOT/tools/verify.py` из пакета, где verify.py
+    # нет, выглядит подключённым и падает «нет такого файла» — то есть как
+    # поломка окружения, а не как опечатка в пути. Так и было: оба вызова
+    # единственного сборочного скилла указывали в пустоту несколько заходов.
+    wrong = []
+    for e in entries:
+        plug = e.relative_to(PLUG / "plugins").parts[0]
+        for m in re.finditer(r"\$\{?CLAUDE_PLUGIN_ROOT\}?/tools/([\w.]+\.py)",
+                             text[e]):
+            if not (PLUG / "plugins" / plug / "tools" / m.group(1)).is_file():
+                wrong.append(f"{plug}: зовёт {m.group(1)} через свой корень, "
+                             f"а его там нет")
+    if wrong:
+        return {"status": "fail",
+                "detail": f"пути в пустоту: {len(wrong)} — {wrong[0]}",
+                "wrong_paths": sorted(set(wrong)),
+                "next": "искать инструмент соседнего пакета по имени "
+                        "(tools/where.py), а не строить путь от своего корня"}
+
+    if dead:
+        return {"status": "fail",
+                "detail": f"инструментов не достать ниоткуда: {len(dead)} из "
+                          f"{len(tools)} — {', '.join(dead[:6])}",
+                "dead": [str(by_name[d].relative_to(PLUG)) for d in dead],
+                "next": "подключить к скиллу, хуку или агенту — либо записать "
+                        "в data/entrypoints.json с причиной, почему инструмент "
+                        "запускает человек"}
+    if stale:
+        return {"status": "unknown",
+                "detail": f"в списке точек входа названы несуществующие "
+                          f"инструменты: {', '.join(stale[:5])}"}
+    return {"status": "pass",
+            "detail": f"все {len(tools)} инструментов достижимы"
+                      + (f" ({len(declared)} — вручную, с причиной)" if declared else "")}
+
+
 GATES = [
     ("набор", gate_suite),
     ("герметичность", gate_hermetic),
     ("мутации", gate_mutations),
+    ("проводка", gate_wiring),
     ("правила", gate_rules),
     ("манифест", gate_manifest),
     ("план", gate_plan),
@@ -438,6 +740,81 @@ def stuck_mutations() -> list:
         if _looks_applied(t, m["find"], m["replace"]):
             stuck.append({"id": m["id"], "file": m["file"], "why": m["why"]})
     return stuck
+
+
+def restore_stuck() -> dict:
+    """Вернуть застрявшие мутации обратно в исходный код.
+
+    Обнаружение без починки — половина механизма. Пока её не было, чинить
+    приходилось `git checkout`: в этом репозитории он сработал, потому что
+    поломка не была закоммичена, — а в чужом проекте, куда мутационные ворота
+    и предназначены, рабочее дерево обычно грязное, и откат файла целиком
+    снёс бы вместе с мутацией живую работу человека.
+
+    Поэтому здесь ровно обратная замена: `replace` → `find`, один раз, в том
+    же файле. Она не трогает ничего, кроме самой поломки.
+
+    Восстановление ПРОВЕРЯЕТСЯ, а не объявляется: после записи файл читается
+    заново и мутация ищется снова. «Починил» без перечитывания — то же самое
+    «агент сказал», против которого написана вся система.
+    """
+    # Починка поверх ИДУЩЕЙ проверки вырывает файл у неё из-под рук: её
+    # измерение становится враньём, а моё — тем более. Ровно так я и сделал,
+    # разбирая эту самую сессию.
+    p = _lock()
+    if p.is_file():
+        try:
+            pid = int(p.read_text("utf-8").split()[0])
+        except (OSError, ValueError, IndexError):
+            pid = None
+        if pid and pid != os.getpid() and _alive(pid):
+            return {"restored": [], "failed": [], "status": "unknown",
+                    "detail": f"процесс {pid} прямо сейчас мутирует дерево — "
+                              "то, что выглядит застрявшим, применено намеренно; "
+                              "починка сорвала бы его измерение"}
+
+    src = PLUG / "tests" / "mutations.json"
+    if not src.is_file():
+        return {"restored": [], "failed": [], "status": "unknown",
+                "detail": f"нет набора мутаций: {src}"}
+    try:
+        muts = json.loads(src.read_text("utf-8"))["mutations"]
+    except (ValueError, KeyError) as e:
+        return {"restored": [], "failed": [], "status": "unknown",
+                "detail": f"набор мутаций не разобран: {e}"}
+
+    restored, failed = [], []
+    for m in muts:
+        f = PLUG / m["file"]
+        if not f.is_file():
+            continue
+        try:
+            t = f.read_text("utf-8", errors="replace")
+        except OSError:
+            continue
+        if not _looks_applied(t, m["find"], m["replace"]):
+            continue
+        try:
+            f.write_text(t.replace(m["replace"], m["find"], 1), encoding="utf-8")
+            back = f.read_text("utf-8", errors="replace")
+        except OSError as e:
+            failed.append({"id": m["id"], "file": m["file"], "why": str(e)})
+            continue
+        if _looks_applied(back, m["find"], m["replace"]):
+            failed.append({"id": m["id"], "file": m["file"],
+                           "why": "обратная замена не сняла поломку — чинить руками"})
+        else:
+            restored.append({"id": m["id"], "file": m["file"]})
+
+    # Байткод сносится и здесь: восстановленный исходник той же длины в ту же
+    # секунду неотличим для инвалидации, и следующий прогон пошёл бы по .pyc
+    # с ещё сломанным кодом — то есть починка выглядела бы не сработавшей.
+    if restored:
+        purge_bytecode()
+    return {"restored": restored, "failed": failed,
+            "status": "fail" if failed else "pass",
+            "detail": (f"вернул {len(restored)}"
+                       + (f", не смог {len(failed)}" if failed else ""))}
 
 
 def run(only: str = None, quick: bool = False) -> dict:
@@ -537,6 +914,26 @@ def main() -> int:
     argv = sys.argv[1:]
     quick = "--quick" in argv
     quiet = "--json" in argv
+
+    # Починка идёт ДО всего: планка с застрявшей поломкой отказывается стартовать,
+    # поэтому «сначала прогнать, потом чинить» здесь невозможно в принципе.
+    if "--unstick" in argv:
+        r = restore_stuck()
+        if not quiet:
+            print("ДЕРЕВО ВОССТАНОВЛЕНО" if r["status"] == "pass"
+                  else "ВОССТАНОВИТЬ НЕ УДАЛОСЬ", file=sys.stderr)
+            for x in r["restored"]:
+                print(f"  вернул: {x['id']} в {x['file']}", file=sys.stderr)
+            for x in r["failed"]:
+                print(f"  ! {x['id']} в {x['file']} — {x['why']}", file=sys.stderr)
+            if not r["restored"] and not r["failed"]:
+                print("  застрявших мутаций нет", file=sys.stderr)
+        print(json.dumps(r, ensure_ascii=False, indent=1))
+        code = {"pass": 0, "fail": 1}.get(r["status"], 2)
+        _log_event("gauntlet", "восстановление", r["detail"],
+                   duration_ms=(time.monotonic() - _t0) * 1000, exit_code=code)
+        return code
+
     only = None
     if "--gate" in argv:
         i = argv.index("--gate")

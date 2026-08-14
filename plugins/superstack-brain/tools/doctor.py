@@ -293,18 +293,21 @@ def _collect():
         import json as _json
         _here = Path(__file__).resolve().parent
         _plugins = _here.parent.parent
-        _deps = []
-        try:
-            _deps = _json.loads((_here.parent / ".claude-plugin" / "plugin.json")
-                                .read_text("utf-8")).get("dependencies", [])
-        except (OSError, ValueError):
-            pass
+        # Пробы ищутся по РАСКЛАДКЕ, а не по полю `dependencies`: движок
+        # Claude Code 2.1.42 отвергает это поле как неизвестный ключ, из-за
+        # чего ни один пакет не проходил валидацию. Поле убрано — вместе с ним
+        # исчезла бы и эта проводка, молча: doctor нашёл бы свой несуществующий
+        # `probe/collect.py` и упал на импорте.
         path = _here / "probe" / "collect.py"
-        for _d in _deps:
-            _cand = _plugins / _d["name"] / "tools" / "probe" / "collect.py"
-            if _cand.is_file():
-                path = _cand
-                break
+        if not path.is_file():
+            for _base in (_plugins, _plugins.parent):
+                if not _base.is_dir():
+                    continue
+                _hits = sorted(_base.glob("*/tools/probe/collect.py")) or \
+                        sorted(_base.glob("*/*/tools/probe/collect.py"))
+                if _hits:
+                    path = _hits[0]
+                    break
         spec = importlib.util.spec_from_file_location("ss_collect_lib", path)
         _COLLECT_MOD = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(_COLLECT_MOD)
