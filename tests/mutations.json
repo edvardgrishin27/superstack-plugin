@@ -1647,6 +1647,13 @@
    "find": "    cross = marketplace_crosscheck()\n    if cross[\"status\"] == \"fail\":\n        return cross\n    if not shutil.which(\"claude\"):",
    "replace": "    if not shutil.which(\"claude\"):\n        return {\"status\": \"unknown\", \"detail\": \"нечем проверить\"}\n    cross = marketplace_crosscheck()\n    if cross[\"status\"] == \"fail\":\n        return cross\n    if False:",
    "why": "на машине без claude сильная половина ворот исчезает молча: сверка «объявлено = существует» не требует подпроцессов и обязана работать всегда"
+  },
+  {
+   "id": "where.missing-plugin-not-named",
+   "file": "plugins/superstack-build/tools/where.py",
+   "find": "        who = OWNER.get(argv[0])",
+   "replace": "        who = None",
+   "why": "отказ перестаёт называть пакет, которого не хватает — движок не тянет зависимости, человек ставит часть набора, и «нет такого файла» читается как поломка продукта вместо «доставь пакет»"
   }
  ]
 }

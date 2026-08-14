@@ -295,3 +295,42 @@ class TestTheResolverFindsToolsAcrossPlugins(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestTheOwnerMapMatchesTheTree(unittest.TestCase):
+    """Карта «инструмент → пакет» в резолвере.
+
+    Нужна потому, что движок 2.1.42 не тянет зависимости между пакетами:
+    человек ставит часть набора, инструмент соседнего пакета не находится, и
+    отказ «нет такого файла» читается как поломка продукта. С картой отказ
+    называет пакет и команду.
+
+    Карта статична — в установленной раскладке спросить неоткуда, маркетплейса
+    рядом нет. Значит она обязана сверяться с деревом, иначе разойдётся молча и
+    начнёт называть не тот пакет, что хуже молчания.
+    """
+
+    def _map(self):
+        import importlib.util
+        p = REPO / "plugins" / "superstack-build" / "tools" / "where.py"
+        s = importlib.util.spec_from_file_location("_owner_map", p)
+        m = importlib.util.module_from_spec(s)
+        s.loader.exec_module(m)
+        return m.OWNER
+
+    def test_every_tool_in_the_tree_is_in_the_map(self):
+        real = {p.name: p.parts[-3] for p in REPO.glob("plugins/*/tools/*.py")}
+        missing = sorted(set(real) - set(self._map()))
+        self.assertEqual(missing, [], f"нет в карте: {missing}")
+
+    def test_the_map_names_the_right_plugin(self):
+        real = {p.name: p.parts[-3] for p in REPO.glob("plugins/*/tools/*.py")}
+        for name, plug in sorted(self._map().items()):
+            with self.subTest(tool=name):
+                self.assertEqual(real.get(name), plug,
+                                 f"{name}: карта говорит {plug}, лежит в {real.get(name)}")
+
+    def test_the_map_has_no_ghosts(self):
+        real = {p.name for p in REPO.glob("plugins/*/tools/*.py")}
+        ghosts = sorted(set(self._map()) - real)
+        self.assertEqual(ghosts, [], f"в карте есть несуществующие: {ghosts}")

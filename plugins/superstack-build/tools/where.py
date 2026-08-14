@@ -37,6 +37,46 @@ import sys
 from pathlib import Path
 
 
+#: Какой пакет даёт какой инструмент. Нужна для внятного отказа:
+#: движок 2.1.42 не тянет зависимости, поэтому выборочная установка
+#: оставляет дыры, и «нет такого файла» читается как поломка продукта.
+#: Соответствие карты дереву проверяется тестом.
+OWNER = {
+    "adjudicate.py": "superstack-core",
+    "adr.py": "superstack-spec",
+    "apply.py": "superstack-install",
+    "artifact_graph.py": "superstack-spec",
+    "baseline.py": "superstack-brain",
+    "blind_accept.py": "superstack-guard",
+    "contract.py": "superstack-build",
+    "crew.py": "superstack-build",
+    "doctor.py": "superstack-brain",
+    "fix.py": "superstack-control",
+    "gates.py": "superstack-spec",
+    "handoff.py": "superstack-build",
+    "learn.py": "superstack-brain",
+    "lint_rules.py": "superstack-core",
+    "log.py": "superstack-core",
+    "manifest.py": "superstack-spec",
+    "memory_file.py": "superstack-brain",
+    "memory_lint.py": "superstack-brain",
+    "oops.py": "superstack-control",
+    "premortem.py": "superstack-spec",
+    "progress.py": "superstack-build",
+    "prove.py": "superstack-guard",
+    "prove_tests.py": "superstack-guard",
+    "render.py": "superstack-core",
+    "render_html.py": "superstack-core",
+    "review.py": "superstack-guard",
+    "skill_test.py": "superstack-brain",
+    "spec_lint.py": "superstack-spec",
+    "state.py": "superstack-guard",
+    "verify.py": "superstack-guard",
+    "what.py": "superstack-control",
+    "where.py": "superstack-core",
+}
+
+
 def roots(start: Path) -> list:
     """Каталоги, где могут лежать пакеты. Порядок = порядок доверия."""
     out = [start]
@@ -84,11 +124,23 @@ def main() -> int:
 
     hit = find(argv[0], start)
     if hit is None:
+        who = OWNER.get(argv[0])
         looked = " · ".join(str(r) for r in roots(start))
-        print(f"НЕ УДАЛОСЬ: инструмента «{argv[0]}» нет ни в одном пакете.\n"
-              f"  искал в: {looked}\n"
-              "  это не поломка окружения — это неверное имя либо пакет, "
-              "который не установлен рядом", file=sys.stderr)
+        if who:
+            # Назвать ПАКЕТ, а не только факт отсутствия. Зависимости в движке
+            # 2.1.42 не работают, поэтому выборочная установка оставляет дыры,
+            # и отказ «нет такого файла» человек читает как поломку продукта.
+            print(f"НЕ УДАЛОСЬ: инструмента «{argv[0]}» нет — он живёт в "
+                  f"пакете {who}, а тот не установлен.", file=sys.stderr)
+            print(f"  поставить: CLAUDECODE= claude plugin install "
+                  f"{who}@superstack", file=sys.stderr)
+            print("  это не поломка: зависимости между пакетами движок пока "
+                  "не тянет, и недостающий ставится вручную", file=sys.stderr)
+        else:
+            print(f"НЕ УДАЛОСЬ: инструмента «{argv[0]}» нет ни в одном "
+                  "пакете — это неверное имя, а не поломка окружения.",
+                  file=sys.stderr)
+            print(f"  искал в: {looked}", file=sys.stderr)
         return 1
     print(str(hit))
     return 0

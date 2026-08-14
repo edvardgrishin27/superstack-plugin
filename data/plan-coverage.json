@@ -939,6 +939,15 @@
     "file": "plugins/superstack-control/tools/what.py",
     "contains": "def _wire_siblings"
    }
+  },
+  {
+   "id": "DIST.owner-map",
+   "layer": "L0 рантайм",
+   "mechanism": "отказ резолвера называет пакет, которого не хватает, и команду установки",
+   "evidence": {
+    "file": "plugins/superstack-build/tools/where.py",
+    "contains": "OWNER.get(argv[0])"
+   }
   }
  ]
 }
