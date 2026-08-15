@@ -111,7 +111,18 @@ def save(path: Path, data: dict, now: "str | None" = None) -> None:
     os.replace(tmp, path)
 
 
-def set_task(data: dict, tid: str, name: str, wave: int,
+def _wave_of(data: dict, tid: str) -> int:
+    """В какой волне таск лежит сейчас. Новому — первая."""
+    for w, lst in data["waves"].items():
+        if any(t["id"] == tid for t in lst):
+            try:
+                return int(w)
+            except ValueError:
+                return 1
+    return 1
+
+
+def set_task(data: dict, tid: str, name: str, wave: "int | None",
              status: str, exit_code: "int | None" = None,
              requirements: "list | None" = None,
              zone: "list | None" = None,
@@ -185,13 +196,38 @@ def set_task(data: dict, tid: str, name: str, wave: int,
                     "requirements", "zone", "blockedBy", "started"):
             if key not in entry and key in keep:
                 entry[key] = keep[key]
-    tasks = data["waves"].setdefault(str(wave), [])
-    for i, t in enumerate(tasks):
-        if t["id"] == tid:
-            tasks[i] = entry
-            break
+    # Волна не передана — таск остаётся там, где лежит. Раньше умолчание было
+    # «первая», и обновление существующего таска клало КОПИЮ в первую волну,
+    # оставляя исходную запись на месте. Найдено сквозным прогоном: после
+    # `task 02 --blocked-by 01` в файле оказались волна 1 с 01,02,03,04 и волна
+    # 2 с 02,03,04, а `crew.py` доложил «02 и 02 делят территорию».
+    #
+    # Цена дефекта — не грязный файл: волна раздаётся субагентам по одному
+    # вызову на таск, и два из них получили бы ОДИН таск, то есть писали бы в
+    # одну зону одновременно. Ровно та потеря, которую ловит расчёт зон, — с
+    # той разницей, что здесь её создаёт сам инструмент планирования.
+    where = wave if wave is not None else _wave_of(data, tid)
+    # Удаление из ВСЕХ волн до вставки: перенос обязан быть переносом, а не
+    # копированием. Один и тот же id в двух волнах — не состояние, а мусор.
+    # Позиция внутри волны запоминается: план читают глазами, и таск, уходящий
+    # в конец списка при каждой правке статуса, перетасовывает страницу без
+    # единой смысловой причины.
+    at = None
+    for w, lst in data["waves"].items():
+        for i in range(len(lst) - 1, -1, -1):
+            if lst[i]["id"] == tid:
+                if w == str(where):
+                    at = i
+                del lst[i]
+    target = data["waves"].setdefault(str(where), [])
+    if at is None:
+        target.append(entry)
     else:
-        tasks.append(entry)
+        target.insert(at, entry)
+    # Опустевшая волна удаляется: пустой ключ «2» читается как «волна есть, в
+    # ней никого», и расчёт ярусов считал бы её за волну.
+    for w in [k for k, v in data["waves"].items() if not v]:
+        del data["waves"][w]
     return data
 
 
@@ -317,8 +353,12 @@ def main() -> int:
             if started is None and _flag(rest, "--status") == RUNNING:
                 from datetime import datetime, timezone
                 started = datetime.now(timezone.utc).isoformat(timespec="seconds")
+            # None, а не «1»: умолчание «первая волна» превращало обновление
+            # существующего таска в его копию (см. set_task). Не передали
+            # волну — таск остаётся там, где лежит.
+            _w = _flag(rest, "--wave")
             data = set_task(data, rest[0], rest[1],
-                            int(_flag(rest, "--wave", "1")),
+                            int(_w) if _w is not None else None,
                             _flag(rest, "--status", WAITING),
                             int(code) if code is not None else None,
                             [x.strip() for x in reqs.split(",") if x.strip()]

@@ -1098,8 +1098,8 @@
   {
    "id": "manifest.addition-without-parent",
    "file": "plugins/superstack-spec/tools/manifest.py",
-   "find": "        if not parent:\n            raise ValueError(\n                f\"{rid}: добавка обязана назвать родительское требование — \"",
-   "replace": "        if False:\n            raise ValueError(\n                f\"{rid}: добавка обязана назвать родительское требование — \"",
+   "find": "        if not parent:\n            raise ValueError(\n                f\"{rid}: добавка обязана назвать родительское требование \"",
+   "replace": "        if False:\n            raise ValueError(\n                f\"{rid}: добавка обязана назвать родительское требование \"",
    "why": "добавка без родительского требования — это другой проект, выросший рядом с заказанным"
   },
   {
@@ -1812,9 +1812,58 @@
   {
    "id": "scope.starting-skill-does-not-mark",
    "file": "plugins/superstack-build/skills/go/SKILL.md",
-   "find": "python3 \"$(T enable.py)\" .",
-   "replace": "true",
+   "find": "python3 \"$(python3 \"$W\" enable.py)\" .",
+   "replace": "# отметка проекта не ставится",
    "why": "скилл перестаёт отмечать проект — хуки молчат там, где систему как раз позвали, и гейт верификации не срабатывает вовсе"
+  },
+  {
+   "id": "progress.update-clones-the-task",
+   "file": "plugins/superstack-build/tools/progress.py",
+   "find": "    where = wave if wave is not None else _wave_of(data, tid)",
+   "replace": "    where = wave if wave is not None else 1",
+   "why": "обновление таска без --wave снова кладёт КОПИЮ в первую волну, оставляя исходную запись: волна раздаётся по вызову агента на таск, и два субагента получат один и тот же кусок работы в одной зоне"
+  },
+  {
+   "id": "progress.move-copies-instead-of-moving",
+   "file": "plugins/superstack-build/tools/progress.py",
+   "find": "    for w, lst in data[\"waves\"].items():\n        for i in range(len(lst) - 1, -1, -1):\n            if lst[i][\"id\"] == tid:\n                if w == str(where):\n                    at = i\n                del lst[i]",
+   "replace": "    for w, lst in []:\n        for i in range(len(lst) - 1, -1, -1):\n            if lst[i][\"id\"] == tid:\n                if w == str(where):\n                    at = i\n                del lst[i]",
+   "why": "перенос таска в другую волну перестаёт быть переносом — один id остаётся в двух волнах, и расчёт волн считает несуществующую работу"
+  },
+  {
+   "id": "manifest.coverage-accepts-more-closed-than-found",
+   "file": "plugins/superstack-spec/tools/manifest.py",
+   "find": "            if nums[\"fixed\"] + nums[\"deferred\"] > nums[\"found\"]:",
+   "replace": "            if False:",
+   "why": "итог сверки принимает «закрыто больше, чем найдено» — это не щедрость отчёта, а признак того, что считали разные вещи, и гейт G2 пропустит непроверенное"
+  },
+  {
+   "id": "manifest.coverage-without-a-reviewer",
+   "file": "plugins/superstack-spec/tools/manifest.py",
+   "find": "            if not by:",
+   "replace": "            if False:",
+   "why": "сверка записывается без имени проверяющего — самопроверка становится неотличима от независимой, а весь смысл G2 в том, что спеку читал НЕ её автор"
+  },
+  {
+   "id": "manifest.deferred-left-unnamed",
+   "file": "plugins/superstack-spec/tools/manifest.py",
+   "find": "            if nums[\"deferred\"] and not data[\"coverage\"][\"deferred_what\"]:",
+   "replace": "            if False:",
+   "why": "отложенное перестаёт называться поимённо — «отложено 2» без имён неотличимо от «забыто 2», и отчёт человеку соврёт молча"
+  },
+  {
+   "id": "skill.positional-parameter-returns",
+   "file": "plugins/superstack-build/skills/go/SKILL.md",
+   "find": "W=\"$CLAUDE_PLUGIN_ROOT/tools/where.py\"",
+   "replace": "T() { python3 \"$CLAUDE_PLUGIN_ROOT/tools/where.py\" \"$1\"; }",
+   "why": "в скилл возвращается позиционный параметр: движок подставляет туда аргумент слэш-команды, и резолвер начинает искать инструмент с именем-словом из просьбы человека — все вызовы скилла указывают в пустоту"
+  },
+  {
+   "id": "progress.update-shuffles-the-plan",
+   "file": "plugins/superstack-build/tools/progress.py",
+   "find": "                if w == str(where):\n                    at = i",
+   "replace": "                if False:\n                    at = i",
+   "why": "правка статуса отправляет таск в конец волны — страница плана перетасовывается при каждом обновлении, и человек ищет глазами то, что вчера было выше"
   }
  ]
 }

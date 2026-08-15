@@ -32,6 +32,9 @@
   python3 manifest.py add  <файл> <id> --answer "..."             (G## из брифинга)
   python3 manifest.py add  <файл> <id> --addition "..." --parent R01
   python3 manifest.py add  <файл> <id> --discovered "что доказал код" --serves R01
+  python3 manifest.py coverage <файл> --found 23 --fixed 21 --deferred 2 \
+                               --by "кто сверял и что видел" \
+                               --deferred-what "одно; другое"
   python3 manifest.py set  <файл> <id> <статус> [--where X] [--why "почему статус"]
   python3 manifest.py drop <файл> <id> --said "слова человека, отменяющие это"
   python3 manifest.py show <файл>
@@ -199,8 +202,9 @@ def add(data: dict, rid: str, kind: str, *, quote: str = "", basis: str = "",
     elif kind == ADDITION:
         if not parent:
             raise ValueError(
-                f"{rid}: добавка обязана назвать родительское требование — "
-                "добавка без родителя это другой проект, а не углубление этого")
+                f"{rid}: добавка обязана назвать родительское требование "
+                "флагом --parent (например: --parent R03) — добавка без "
+                "родителя это другой проект, а не углубление этого")
         if not find(data, parent):
             raise ValueError(f"{rid}: родителя {parent} нет в манифесте")
         r_g = sum(1 for x in data["requirements"] if x["kind"] in (EXPLICIT, ANSWER))
@@ -214,7 +218,9 @@ def add(data: dict, rid: str, kind: str, *, quote: str = "", basis: str = "",
         if not basis:
             raise ValueError(f"{rid}: находка сборки обязана назвать, что доказал код")
         if not parent:
-            raise ValueError(f"{rid}: находка обязана назвать требование, которому служит")
+            raise ValueError(
+                f"{rid}: находка обязана назвать требование, которому служит, "
+                "флагом --serves (например: --serves R03)")
 
     data["requirements"].append({
         "id": rid, "kind": kind, "quote": quote, "status": OPEN,
@@ -397,15 +403,54 @@ def main() -> int:
                 data = add(data, rid, IMPLIED, basis=b)
             elif (a := _flag(rest, "--answer")) is not None:
                 data = add(data, rid, ANSWER, quote=a)
+            # `--parent` и `--serves` — одно и то же поле. Раньше добавка знала
+            # только первый флаг, находка только второй, и ошибка не называла
+            # ни один: «находка обязана назвать требование, которому служит» —
+            # верно и бесполезно, потому что не говорит ЧЕМ. На живом прогоне
+            # это стоило четырёх отказов подряд и мусорной строки в манифесте,
+            # которую потом нечем было убрать.
             elif (t := _flag(rest, "--addition")) is not None:
                 data = add(data, rid, ADDITION, basis=t,
-                           parent=_flag(rest, "--parent", ""))
+                           parent=_flag(rest, "--parent",
+                                        _flag(rest, "--serves", "")))
             elif (d := _flag(rest, "--discovered")) is not None:
                 data = add(data, rid, DISCOVERED, basis=d,
-                           parent=_flag(rest, "--serves", ""))
+                           parent=_flag(rest, "--serves",
+                                        _flag(rest, "--parent", "")))
             else:
                 return _fail("нужен один из: --quote | --implied | --answer | "
                              "--addition | --discovered")
+        elif cmd == "coverage":
+            found = _flag(rest, "--found")
+            if found is None:
+                return _fail("нужен --found N — сколько нашла независимая сверка")
+            try:
+                nums = {k: int(_flag(rest, f"--{k}", "0"))
+                        for k in ("found", "fixed", "deferred")}
+            except ValueError:
+                return _fail("--found, --fixed и --deferred — целые числа")
+            if any(v < 0 for v in nums.values()):
+                return _fail("отрицательное число находок ничего не значит")
+            if nums["fixed"] + nums["deferred"] > nums["found"]:
+                # Закрыть больше, чем нашли, нельзя: это не щедрость отчёта, а
+                # признак того, что считали разные вещи.
+                return _fail(f"закрыто {nums['fixed']} и отложено "
+                             f"{nums['deferred']} при {nums['found']} найденных "
+                             "— сумма больше найденного")
+            by = _flag(rest, "--by", "")
+            if not by:
+                # Сверка без имени проверяющего неотличима от самопроверки, а
+                # весь смысл G2 в том, что спеку прочитал НЕ её автор.
+                return _fail("нужен --by: кто сверял и что он видел "
+                             "(например: --by \"субагент, только бриф и спека\")")
+            data["coverage"] = {**nums, "by": by,
+                                "deferred_what": [
+                                    x.strip() for x in
+                                    _flag(rest, "--deferred-what", "").split(";")
+                                    if x.strip()]}
+            if nums["deferred"] and not data["coverage"]["deferred_what"]:
+                return _fail("отложенное обязано быть названо: "
+                             "--deferred-what \"одно; другое\"")
         elif cmd == "set":
             if len(rest) < 2:
                 return _fail("нужны id и статус")

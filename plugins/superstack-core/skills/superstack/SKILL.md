@@ -117,9 +117,12 @@ python3 "$CLAUDE_PLUGIN_ROOT/tools/render.py" "$W/findings.json" why <rule-id>
 проверкой, и модель не может объявить ступень словами.
 
 ```bash
-T() { python3 "$CLAUDE_PLUGIN_ROOT/tools/where.py" "$1"; }
-python3 "$(T prove.py)" run            # прогон с негативными контролями
-python3 "$(T state.py)" show           # какая ступень достигнута
+# Позиционных параметров здесь нет намеренно: движок подставляет
+# аргументы слэш-команды в тело скилла, и "$1" стал бы словом из
+# просьбы человека — резолвер пошёл бы искать инструмент с таким именем.
+W="$CLAUDE_PLUGIN_ROOT/tools/where.py"
+python3 "$(python3 "$W" prove.py)" run            # прогон с негативными контролями
+python3 "$(python3 "$W" state.py)" show           # какая ступень достигнута
 ```
 
 Код возврата `prove.py` и есть ответ. Ступень `proven` без него — это «агент

@@ -459,7 +459,7 @@ class TestSkillContract(unittest.TestCase):
         superstack-guard, так что `$CLAUDE_PLUGIN_ROOT/tools/verify.py`
         указывал в пустоту. Тест был зелёным всё это время.
         """
-        self.assertRegex(self.text, r"\$\(T verify\.py\)")
+        self.assertRegex(self.text, r'\$\(python3 "\$W" verify\.py\)')
 
     def test_skill_does_not_build_sibling_paths_from_its_own_root(self):
         """Единственная форма, которой здесь быть не должно: она выглядит

@@ -267,7 +267,7 @@ class TestTheResolverFindsToolsAcrossPlugins(unittest.TestCase):
             called = set()
             for s in skills.rglob("*.md"):
                 t = s.read_text("utf-8")
-                called |= set(re.findall(r"\$\(T ([\w.]+\.py)\)", t))
+                called |= set(re.findall(r'\$\(python3 "\$W" ([\w.]+\.py)\)', t))
                 called |= set(re.findall(
                     r"\$\{?CLAUDE_PLUGIN_ROOT\}?/tools/([\w.]+\.py)", t))
             foreign = called - own
@@ -340,7 +340,7 @@ class TestTheResolverFindsToolsAcrossPlugins(unittest.TestCase):
         start = REPO / "plugins" / "superstack-build"
         called = set()
         for s in REPO.glob("plugins/*/skills/**/*.md"):
-            called |= set(re.findall(r'\$\(T ([\w.]+\.py)\)', s.read_text("utf-8")))
+            called |= set(re.findall(r'\$\(python3 "\$W" ([\w.]+\.py)\)', s.read_text("utf-8")))
         self.assertTrue(called, "скиллы не зовут инструменты через резолвер")
         for name in sorted(called):
             with self.subTest(tool=name):

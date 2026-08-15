@@ -22,12 +22,19 @@ argument-hint: "<что хочешь построить>"
 соседних. Путь, собранный от своего корня, молча указывает в пустоту. Поэтому:
 
 ```bash
-T() { python3 "$CLAUDE_PLUGIN_ROOT/tools/where.py" "$1"; }
+W="$CLAUDE_PLUGIN_ROOT/tools/where.py"
 ```
 
-Дальше везде `python3 "$(T <имя инструмента>)"`. Если инструмент не найден, `T`
-скажет об этом внятно — это не поломка окружения, а неустановленный соседний
-пакет.
+Дальше везде `python3 "$(python3 "$W" <имя инструмента>)"`.
+
+Почему не функция с `$1`. Здесь её и не может быть: движок подставляет аргументы
+слэш-команды прямо в текст скилла, и `"$1"` в теле функции превращается в слово
+из просьбы человека. На первом же живом прогоне `/go прогон брифа студии
+керамики` резолвер стал искать инструмент с именем «брифа» — все 27 вызовов ниже
+указывали бы в пустоту. Позиционных параметров в этом файле нет намеренно.
+
+Инструмент не найден — резолвер скажет об этом внятно и назовёт пакет: это не
+поломка окружения, а неустановленный сосед.
 
 Рабочий каталог прогона — `.superstack/`.
 
@@ -36,7 +43,7 @@ T() { python3 "$CLAUDE_PLUGIN_ROOT/tools/where.py" "$1"; }
 вовсе — работали бы во всех чужих проектах на машине:
 
 ```bash
-python3 "$(T enable.py)" .
+python3 "$(python3 "$W" enable.py)" .
 ```
 
 ## Фаза 0 — ЗАВЕСТИ
@@ -48,17 +55,20 @@ python3 "$(T enable.py)" .
 ```bash
 mkdir -p .superstack
 # бриф записан отдельно, ровно как сказано
-python3 "$(T manifest.py)" init .superstack/manifest.json .superstack/<дата>-brief.md
-python3 "$(T memory_file.py)" init . --project "<название>" --about "<одна строка>"
+python3 "$(python3 "$W" manifest.py)" init .superstack/manifest.json .superstack/<дата>-brief.md
+python3 "$(python3 "$W" memory_file.py)" init . --project "<название>" --about "<одна строка>"
 ```
 
 ## Фаза 1 — ПОНЯТЬ
 
 **Сначала разбери задачу, потом спрашивай.** Семь вопросов задаются ЗАДАЧЕ, а не
-человеку; ответы ищешь сам:
+человеку; ответы ищешь сам. Ключи именно эти, других инструмент не примет:
+
+`провал` · `столкновение` · `непроверенное` · `цена` · `условие` ·
+`вторая-неделя` · `второй-актор`
 
 ```bash
-python3 "$(T premortem.py)" add .superstack/premortem.json \
+python3 "$(python3 "$W" premortem.py)" add .superstack/premortem.json \
   --q условие --what "заявки идут круглосуточно, а мастер один" \
   --then "очередь и обещание ответа в рабочие часы"
 ```
@@ -70,9 +80,13 @@ python3 "$(T premortem.py)" add .superstack/premortem.json \
 **Требования — дословными цитатами из брифа.** Инструмент не примет пересказ:
 
 ```bash
-python3 "$(T manifest.py)" add .superstack/manifest.json R01 --quote "<точные слова>"
-python3 "$(T manifest.py)" add .superstack/manifest.json R06i --implied "<из чего следует>"
+python3 "$(python3 "$W" manifest.py)" add .superstack/manifest.json R01 --quote "<точные слова>"
+python3 "$(python3 "$W" manifest.py)" add .superstack/manifest.json R06i --implied "<из чего следует>"
 ```
+
+Идентификаторы строгие, и вид строки читается из них: `R01` — из брифа, `R01i` —
+подразумеваемое, `G01` — ответ брифинга, `A01` — добавка (`--parent`), `D01` —
+находка сборки (`--serves`). Ни `R13a`, ни `R17d` инструмент не примет.
 
 Спрашивай **только то, на что человек отвечает из своего опыта.** «Postgres или
 SQLite» — твоё решение. «Кто этим будет пользоваться» — вопрос. Весь фронтир
@@ -81,13 +95,13 @@ SQLite» — твоё решение. «Кто этим будет пользо�
 Ответ, отменяющий требование, — единственная дверь к «снято»:
 
 ```bash
-python3 "$(T manifest.py)" drop .superstack/manifest.json R04 --said "<слова человека>"
+python3 "$(python3 "$W" manifest.py)" drop .superstack/manifest.json R04 --said "<слова человека>"
 ```
 
 **Гейт G1** — ни одного нерешённого требования:
 
 ```bash
-python3 "$(T gates.py)" .superstack/manifest.json --gate G1
+python3 "$(python3 "$W" gates.py)" .superstack/manifest.json --gate G1
 ```
 
 ## Фаза 2 — СПЕКА
@@ -106,11 +120,15 @@ python3 "$(T gates.py)" .superstack/manifest.json --gate G1
 бриф и спеку. Ни манифеста, ни разговора: манифест это твоё прочтение брифа, и
 отдав его, ты просишь проверить прочтение само против себя.
 
-Итог сверки запиши в `coverage` манифеста (`found`/`fixed`/`deferred`) — гейт
-считает `null` провалом, а не пустым успехом:
+Итог сверки записывается командой — гейт считает `null` провалом, а не пустым
+успехом, а отложенное обязано быть названо поимённо:
 
 ```bash
-python3 "$(T gates.py)" .superstack/manifest.json --gate G2
+python3 "$(python3 "$W" manifest.py)" coverage .superstack/manifest.json \
+  --found 23 --fixed 21 --deferred 2 \
+  --by "субагент, видел только бриф и спеку" \
+  --deferred-what "повтор уведомления; страница пропущенных заявок"
+python3 "$(python3 "$W" gates.py)" .superstack/manifest.json --gate G2
 ```
 
 ## Фаза 3 — ПЛАН · ПЕРВЫЙ БЛОКИРУЮЩИЙ ГЕЙТ
@@ -123,10 +141,10 @@ python3 "$(T gates.py)" .superstack/manifest.json --gate G2
 У каждого таска: требования, зона владения, блокеры, критерии приёмки.
 
 ```bash
-python3 "$(T progress.py)" task .superstack/state.json 03 "приём заявок" \
+python3 "$(python3 "$W" progress.py)" task .superstack/state.json 03 "приём заявок" \
   --wave 2 --status waiting --requirements R01,R01.1 --zone src/bot/
-python3 "$(T crew.py)" check .superstack/state.json --declared T2
-python3 "$(T gates.py)" .superstack/manifest.json --gate G3 --tasks .superstack/state.json
+python3 "$(python3 "$W" crew.py)" check .superstack/state.json --declared T2
+python3 "$(python3 "$W" gates.py)" .superstack/manifest.json --gate G3 --tasks .superstack/state.json
 ```
 
 `crew.py` сам считает волны из зависимостей и ловит два таска одной волны на
@@ -139,7 +157,7 @@ python3 "$(T gates.py)" .superstack/manifest.json --gate G3 --tasks .superstack/
 Собери страницу плана и покажи её через **Artifact**:
 
 ```bash
-python3 "$(T render_html.py)" .superstack/state.json > .superstack/plan.html
+python3 "$(python3 "$W" render_html.py)" .superstack/state.json > .superstack/plan.html
 ```
 
 **Остановись.** Код не пишется, пока человек не сказал «да». Ни своей
@@ -155,7 +173,7 @@ python3 "$(T render_html.py)" .superstack/state.json > .superstack/plan.html
 Промпт исполнителю собирает код, а не память:
 
 ```bash
-python3 "$(T handoff.py)" .superstack/state.json 03 \
+python3 "$(python3 "$W" handoff.py)" .superstack/state.json 03 \
   --interfaces .superstack/interfaces.md --spec .superstack/spec.md \
   --test-cmd "<команда тестов>" --adr docs/adr
 ```
@@ -173,7 +191,7 @@ python3 "$(T handoff.py)" .superstack/state.json 03 \
 Контракт **разбирается кодом, а не читается глазами**:
 
 ```bash
-python3 "$(T contract.py)" check .superstack/return-03.txt --task 03
+python3 "$(python3 "$W" contract.py)" check .superstack/return-03.txt --task 03
 ```
 
 Ловит противоречие внутри самого блока: «DONE» при красных тестах в той же
@@ -183,10 +201,10 @@ python3 "$(T contract.py)" check .superstack/return-03.txt --task 03
 Ревью по трём осям, отчёты **раздельные**:
 
 ```bash
-python3 "$(T review.py)" find .superstack/review-03.json --axis manifest \
+python3 "$(python3 "$W" review.py)" find .superstack/review-03.json --axis manifest \
   --where src/bot/intake.ts:44 --what "статус сохраняется, но нигде не виден" \
   --must "статус виден клиенту после отправки"
-python3 "$(T review.py)" route .superstack/review-03.json
+python3 "$(python3 "$W" review.py)" route .superstack/review-03.json
 ```
 
 `route` отвечает на единственный вопрос — мог ли исполнитель знать. Находка по
@@ -198,7 +216,7 @@ python3 "$(T review.py)" route .superstack/review-03.json
 ## Фаза 5 — ГЕЙТ ВЕРИФИКАЦИИ
 
 ```bash
-python3 "$(T verify.py)" .
+python3 "$(python3 "$W" verify.py)" .
 ```
 
 | код | что это значит | что делать |
@@ -213,7 +231,7 @@ python3 "$(T verify.py)" .
 поломку, которая обязана его уронить, и прогони:
 
 ```bash
-python3 "$(T prove_tests.py)" .
+python3 "$(python3 "$W" prove_tests.py)" .
 ```
 
 Для интеграции — заглушка: та же форма ответа, ничего не делает. Именно так
@@ -230,7 +248,7 @@ python3 "$(T prove_tests.py)" .
 Всё до сих пор сверялось со спекой, то есть с твоим же пересказом просьбы.
 
 ```bash
-python3 "$(T blind_accept.py)" pack .superstack/<дата>-brief.md изменения.diff
+python3 "$(python3 "$W" blind_accept.py)" pack .superstack/<дата>-brief.md изменения.diff
 ```
 
 Пакет отдай агенту `blind-acceptance`: он видит просьбу и изменения, и **ничего
@@ -240,7 +258,7 @@ python3 "$(T blind_accept.py)" pack .superstack/<дата>-brief.md измене
 отрицает:
 
 ```bash
-python3 "$(T gates.py)" .superstack/manifest.json --gate G4
+python3 "$(python3 "$W" gates.py)" .superstack/manifest.json --gate G4
 ```
 
 Сойтись можно в обе стороны — починив сборку или честно понизив строку. Нельзя
@@ -251,8 +269,8 @@ python3 "$(T gates.py)" .superstack/manifest.json --gate G4
 Спека умирает в день сдачи. То, что должно её пережить, уходит отсюда.
 
 ```bash
-python3 "$(T memory_file.py)" set . --section "Команды" --body "<проверенные>"
-python3 "$(T memory_file.py)" check .
+python3 "$(python3 "$W" memory_file.py)" set . --section "Команды" --body "<проверенные>"
+python3 "$(python3 "$W" memory_file.py)" check .
 ```
 
 Файл памяти пишется **только между маркерами** — всё, что написал человек,
@@ -262,10 +280,10 @@ python3 "$(T memory_file.py)" check .
 отвергнутый вариант, и каждое называет зону, которой правит:
 
 ```bash
-python3 "$(T adr.py)" new docs/adr "<решение>" --zone src/bot/ --serves R01 \
+python3 "$(python3 "$W" adr.py)" new docs/adr "<решение>" --zone src/bot/ --serves R01 \
   --context "..." --decision "..." --because "..." \
   --rejected "<что рассмотрели и чем оно не подошло>" --consequences "..."
-python3 "$(T adr.py)" check docs/adr --tier T2 --manifest .superstack/manifest.json --root .
+python3 "$(python3 "$W" adr.py)" check docs/adr --tier T2 --manifest .superstack/manifest.json --root .
 ```
 
 Каждая находка сборки (`D##`) обязана дожить до решения: это дорога, уже
@@ -274,7 +292,7 @@ python3 "$(T adr.py)" check docs/adr --tier T2 --manifest .superstack/manifest.j
 Документы прогона связаны между собой, и связность держит скрипт, а не память:
 
 ```bash
-python3 "$(T artifact_graph.py)" .superstack
+python3 "$(python3 "$W" artifact_graph.py)" .superstack
 ```
 
 Ловит циклы, ссылки в никуда и спеку без тестов.
