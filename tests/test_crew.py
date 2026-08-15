@@ -254,3 +254,49 @@ class TestPartialCheckIsNeverAPass(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestAVanishedBuilderIsNotWork(unittest.TestCase):
+    """Исполнитель, не вернувшийся вовсе, выглядит как работа, которая идёт.
+
+    Найдено на живом прогоне и найдено глазами, а не механизмом: субагент был
+    запущен, завершился, не вернул контракт и не создал ни одного файла. Таск
+    остался `running` с отметкой старта — и остался бы ею навсегда.
+
+    Ни одна другая проверка этого не видит. Контракт возврата разбирает
+    ВЕРНУВШИЙСЯ блок; гейт верификации — код, которого нет; расчёт волн —
+    разброс отметок у тех, кто стартовал.
+    """
+
+    def _now(self):
+        from datetime import datetime, timezone
+        return datetime(2026, 8, 15, 12, 0, tzinfo=timezone.utc)
+
+    def _task(self, minutes: int, status: str = "running") -> dict:
+        from datetime import timedelta
+        return {"id": "01", "status": status, "zone": ["src/"],
+                "started": (self._now() - timedelta(minutes=minutes)).isoformat()}
+
+    def test_a_long_silent_task_is_reported(self):
+        self.assertEqual(cr.stalled([self._task(55)], self._now()),
+                         [{"id": "01", "minutes": 55}])
+
+    def test_a_task_still_within_the_budget_is_not(self):
+        """Порог щедрый намеренно: медленная работа не должна выглядеть
+        как пропавшая, иначе проверку начнут игнорировать."""
+        self.assertEqual(cr.stalled([self._task(9)], self._now()), [])
+
+    def test_a_finished_task_is_never_stalled(self):
+        self.assertEqual(cr.stalled([self._task(600, "proven")], self._now()), [])
+
+    def test_a_running_task_without_a_stamp_is_not_guessed_about(self):
+        """Без отметки старта возраст неизвестен, а выдуманный возраст хуже
+        отсутствующего: он превращает догадку в отчёт."""
+        self.assertEqual(cr.stalled([{"id": "01", "status": "running"}],
+                                    self._now()), [])
+
+    def test_the_check_reports_it_as_a_problem(self):
+        state = {"waves": {"1": [self._task(55)]}}
+        v = cr.check(state)
+        self.assertEqual(v["status"], "fail")
+        self.assertTrue(any("молчит" in p for p in v["problems"]), v["problems"])

@@ -232,9 +232,35 @@ def blockers(state: dict, task: dict, interfaces: str, spec: str,
     return bad
 
 
+def holdout_leak(task: dict, prompt: str) -> list:
+    """Скрытые проверки, ПРОСОЧИВШИЕСЯ в промпт исполнителя.
+
+    Зачем скрытые проверки вообще. Всё, что исполнитель видит, находится внутри
+    его оптимизационной петли: имея критерий, он со временем удовлетворит
+    ИМЕННО его — и это не жульничество, а работа по заданию. Значит часть
+    проверок обязана остаться снаружи петли, иначе «критерий выполнен» и
+    «сделано то, что нужно» перестают быть разными утверждениями.
+
+    Зачем проверять протечку кодом. Скрытность здесь — свойство ТЕКСТА, который
+    уходит агенту, а текст собирается из полей таска; одна неосторожная правка
+    сборщика — и скрытое поле поедет в промпт, оставаясь скрытым по названию.
+    Отказ при этом молчит: прогон зелёный, holdout «прошёл», и никто не узнает,
+    что проверка была подсказкой.
+    """
+    out = []
+    for h in (task.get("holdout") or []):
+        core = h.strip()
+        if len(core) >= 12 and core.lower() in prompt.lower():
+            out.append(core[:80])
+    return out
+
+
 def build(state: dict, task: dict, interfaces: str, spec_excerpt: str,
           test_cmd: str, adrs: list = None) -> str:
-    """Промпт исполнителю. Обязательные куски вложены здесь, а не вспомнены."""
+    """Промпт исполнителю. Обязательные куски вложены здесь, а не вспомнены.
+
+    Поле `holdout` сюда НЕ попадает намеренно: см. `holdout_leak`.
+    """
     reqs = ", ".join(task.get("requirements") or [])
     zone = " · ".join(task.get("zone") or [])
     crit = "\n".join(f"- [ ] {c}" for c in (task.get("acceptance") or []))
@@ -343,6 +369,21 @@ def main() -> int:
     prompt = build(state, task, interfaces,
                    extract_sections(spec, task.get("spec_sections") or []),
                    test_cmd, read_adrs(adr_dir))
+
+    # Скрытые проверки сверяются с готовым текстом, а не с намерением его
+    # автора: скрытность — свойство того, что уехало агенту.
+    leaked = holdout_leak(task, prompt)
+    if leaked:
+        print("СКРЫТЫЕ ПРОВЕРКИ ПРОСОЧИЛИСЬ", file=sys.stderr)
+        for x in leaked:
+            print(f"  ! в промпте: «{x}»", file=sys.stderr)
+        print("  всё, что исполнитель видит, попадает внутрь его петли: он "
+              "удовлетворит именно это, и проверка перестанет быть проверкой",
+              file=sys.stderr)
+        print(json.dumps({"task": task["id"], "status": "fail",
+                          "holdout_leaked": leaked}, ensure_ascii=False, indent=1))
+        return 1
+
     if "--json" in argv:
         print(json.dumps({"task": task["id"], "status": "pass", "prompt": prompt},
                          ensure_ascii=False, indent=1))

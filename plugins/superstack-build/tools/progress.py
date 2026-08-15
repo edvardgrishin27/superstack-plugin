@@ -31,6 +31,7 @@
                                               проставляется сама
                             [--goal "..."] [--acceptance "a;b"] [--quotes "..."]
                             [--spec-sections "..."]   — без них таск не передать
+                            [--holdout "a;b"]  проверки, скрытые от исполнителя
   python3 progress.py debt  <файл> <вид> <текст>        вид: stub|assumption|env
   python3 progress.py debt  <файл> <вид> --none         смотрели, закрывать нечего
   python3 progress.py source <файл> <путь>              где лежат требования и задачи
@@ -131,7 +132,8 @@ def set_task(data: dict, tid: str, name: str, wave: "int | None",
              goal: "str | None" = None,
              acceptance: "list | None" = None,
              quotes: "list | None" = None,
-             spec_sections: "list | None" = None) -> dict:
+             spec_sections: "list | None" = None,
+             holdout: "list | None" = None) -> dict:
     """Записать задачу. «Готово» без доказательства записать НЕЛЬЗЯ.
 
     Единственное место, где решается, будет ли на экране сплошная полоса или
@@ -181,8 +183,13 @@ def set_task(data: dict, tid: str, name: str, wave: "int | None",
     # структурным разрывом: инструмент, создающий таски, не мог заполнить то,
     # что требует инструмент, их раздающий, — и передача честно отказывала
     # на каждом таске. Поодиночке оба работали; цепочка не складывалась.
+    # `holdout` — проверки, которых исполнитель не увидит. Они живут рядом с
+    # критериями и намеренно НЕ попадают в промпт: всё, что исполнитель видит,
+    # находится внутри его оптимизационной петли, и имея критерий, он со
+    # временем удовлетворит именно его. Часть проверок обязана остаться снаружи.
     for key, val in (("goal", goal), ("acceptance", acceptance),
-                     ("quotes", quotes), ("spec_sections", spec_sections)):
+                     ("quotes", quotes), ("spec_sections", spec_sections),
+                     ("holdout", holdout)):
         if val is not None:
             entry[key] = list(val) if isinstance(val, (list, tuple)) else val
 
@@ -193,7 +200,7 @@ def set_task(data: dict, tid: str, name: str, wave: "int | None",
         # статус меняют чаще, чем критерии, и молчаливая потеря критериев
         # сделала бы передачу невозможной со второго вызова.
         for key in ("goal", "acceptance", "quotes", "spec_sections",
-                    "requirements", "zone", "blockedBy", "started"):
+                    "requirements", "zone", "blockedBy", "started", "holdout"):
             if key not in entry and key in keep:
                 entry[key] = keep[key]
     # Волна не передана — таск остаётся там, где лежит. Раньше умолчание было
@@ -347,6 +354,7 @@ def main() -> int:
             acc = _flag(rest, "--acceptance")
             quo = _flag(rest, "--quotes")
             sec = _flag(rest, "--spec-sections")
+            hold = _flag(rest, "--holdout")
             # Переход в работу без явной отметки штампуется здесь: пропущенная
             # отметка тише неверной, но обходится дороже — она делает
             # проверку параллельности бессильной, ничего об этом не сказав.
@@ -376,7 +384,9 @@ def main() -> int:
                             [x.strip() for x in quo.split(";") if x.strip()]
                             if quo is not None else None,
                             [x.strip() for x in sec.split(";") if x.strip()]
-                            if sec is not None else None)
+                            if sec is not None else None,
+                            [x.strip() for x in hold.split(";") if x.strip()]
+                            if hold is not None else None)
         elif cmd == "debt":
             if not rest:
                 return _fail("нужен вид долга")

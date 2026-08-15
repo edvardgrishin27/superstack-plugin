@@ -75,6 +75,67 @@ class TestBlindnessIsEnforcedNotRequested(unittest.TestCase):
         self.assertTrue(p["hidden_files"][0]["why"])
 
 
+class TestOurOwnRetellingIsCutToo(unittest.TestCase):
+    """Список ловил ЧУЖИЕ форматы пересказа и не ловил свой.
+
+    `.planning/`, `PLAN.md`, тикеты — всё это чужие соглашения, и они были
+    закрыты. А манифест требований, состояние плана, границы модулей и отчёты
+    ревью лежат в `.superstack/`, все они являются пересказом просьбы, и ни
+    один под прежние правила не подпадал. Судья получил бы прочтение брифа,
+    сделанное тем же, кто писал код, и сверял бы пересказ с пересказом.
+    """
+
+    def test_the_run_directory_never_reaches_the_judge(self):
+        for path in (".superstack/manifest.json", ".superstack/state.json",
+                     ".superstack/interfaces.md", ".superstack/review-03.json",
+                     ".superstack/premortem.json"):
+            with self.subTest(path=path):
+                self.assertTrue(ba.is_retelling(path), f"пересказ не опознан: {path}")
+
+    def test_a_file_merely_mentioning_superstack_is_still_code(self):
+        """Обратный контроль: вырезание идёт по каталогу, а не по слову."""
+        self.assertFalse(ba.is_retelling("src/superstack_client.py"))
+
+
+class TestLeaksInsideTheBodyAreCaught(unittest.TestCase):
+    """Вырезание работает по путям; следы пересказа умеют приезжать ВНУТРИ
+    файлов, которые пройти обязаны, — например, в комментарии к тесту.
+
+    Свойство независимости, которое никто не проверяет, — это свойство
+    независимости, которого нет: пока проверки не было, слепота держалась на
+    полноте одного списка регулярок, а список молчит, когда в нём чего-то
+    не хватает.
+    """
+
+    def _v(self, body: str) -> dict:
+        d = (f"diff --git a/src/a.js b/src/a.js\n--- a/src/a.js\n+++ b/src/a.js\n"
+             f"@@ -1 +1,2 @@\n+{body}\n")
+        return ba.verdict(ba.build_packet("хочу сайт", d))
+
+    def test_a_manifest_id_in_a_comment_is_a_leak(self):
+        v = self._v("// R03: форма отправляется")
+        self.assertEqual(v["status"], "leaked", v)
+
+    def test_a_path_to_the_run_directory_is_a_leak(self):
+        v = self._v("const plan = require('../.superstack/state.json')")
+        self.assertEqual(v["status"], "leaked", v)
+
+    def test_a_phrase_pointing_at_the_retelling_is_a_leak(self):
+        v = self._v("// по спецификации здесь должно быть 3 места")
+        self.assertEqual(v["status"], "leaked", v)
+
+    def test_clean_code_still_passes(self):
+        """Обратный контроль: перестраховка сделала бы гейт непроходимым, и
+        его начали бы обходить."""
+        v = self._v("export const seatsLeft = (slot) => slot.seats - slot.taken")
+        self.assertEqual(v["status"], "ready", v)
+
+    def test_a_leak_is_a_failure_not_a_note(self):
+        """Судья, увидевший пересказ, вынесет вердикт о совпадении пересказа
+        с кодом — и вердикт будет выглядеть точно как настоящий."""
+        self.assertEqual(ba.EXIT["leaked"], 1)
+
+
 class TestNothingToJudgeIsNotSuccess(unittest.TestCase):
     """«Не смог проверить» и «прошло» — разные утверждения."""
 

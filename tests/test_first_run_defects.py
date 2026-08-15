@@ -225,3 +225,58 @@ class TestUpdatingATaskDoesNotCloneIt(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestWritingIsNotAVerdict(unittest.TestCase):
+    """Код записи и вердикт о состоянии — разные утверждения.
+
+    `review.py find` возвращал 1 сразу после УСПЕШНОЙ записи находки: находка
+    легла в файл, а код сообщал «ревью не пройдено». Первая же находка выглядела
+    отказом инструмента; скрипт, смотрящий на код, бросает работу на середине
+    ревью, а человек видит красное там, где механизм отработал как задуман.
+
+    Тот же класс уже чинился в манифесте и в состязательном проходе — здесь он
+    пережил обе починки, потому что живёт в третьем инструменте.
+    """
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.f = Path(self.tmp.name) / "review.json"
+        self.tool = plug("superstack-guard") / "tools" / "review.py"
+
+    def _run(self, *args):
+        return subprocess.run([sys.executable, str(self.tool), *args],
+                              capture_output=True, text=True, timeout=60)
+
+    def test_recording_a_finding_returns_zero(self):
+        p = self._run("find", str(self.f), "--axis", "craft",
+                      "--where", "src/a.js:1", "--what", "что-то",
+                      "--must", "как должно быть")
+        self.assertEqual(p.returncode, 0, p.stderr[-200:])
+
+    def test_the_verdict_still_reports_blockers(self):
+        """Обратный контроль: смягчив код записи, нельзя потерять вердикт."""
+        self._run("find", str(self.f), "--axis", "craft", "--where", "src/a.js:1",
+                  "--what", "что-то", "--must", "как должно быть")
+        self.assertEqual(self._run("route", str(self.f)).returncode, 1)
+
+
+class TestTheLessonWatchdogIgnoresTheSystemsOwnNoise(unittest.TestCase):
+    """«Файл изменился» не значит «работал агент».
+
+    Прогон мутаций правит и восстанавливает файлы в том же дереве десятки минут
+    подряд. Критерий «изменился ли хоть один файл» давал «да» на каждом
+    разговорном ходе — шесть подряд, ни в одном не было правки. Сторож считал
+    собственный шум системы работой человека и снова превращал разговор в петлю
+    коротких реплик, ради выхода из которой критерий и вводился.
+    """
+
+    HOOK = plug("superstack-brain") / "hooks" / "session-lesson.sh"
+
+    def test_the_hook_is_silent_while_mutations_run(self):
+        t = self.HOOK.read_text("utf-8")
+        self.assertIn(".mutation-lock", t,
+                      "хук не знает признака «система работает сама»")
+        self.assertIn(".mutation-backup", t,
+                      "служебные копии считаются работой человека")

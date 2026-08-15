@@ -189,6 +189,38 @@ class TestVerdict(unittest.TestCase):
         """Ноль/один/два обязаны различаться: на них строится решение скрипта."""
         self.assertEqual(sorted(vf.EXIT.values()), [0, 1, 2])
 
+    def test_exit_two_from_the_project_means_unmeasured_not_broken(self):
+        """Код 2 — «не смог проверить» во всей системе, и того же она просит от
+        проверок проекта. Пока гейт читал 2 как провал, он наказывал проект за
+        то, чего сам требовал: исполнителю было велено вернуть 2 на пустом
+        наборе, чтобы «пусто» не выглядело «зелено», — и гейт объявил НЕ ПРОШЛО.
+        Проект, отдающий на нуле тестов ноль, проходил бы."""
+        self.assertTrue(vf._nothing_was_checked(2, "тестов не найдено"))
+        self.assertFalse(vf._nothing_was_checked(1, "1 failed"),
+                         "код 1 с падением — провал, и он обязан им остаться")
+        # Первая версия починки читала САМ код 2 как пустоту, и красный make
+        # (он выходит двойкой) перестал блокировать ход. Пустота узнаётся по
+        # выводу прогонщика, а не по коду: код принадлежит соглашению, которого
+        # у каждого инструмента своё.
+        self.assertFalse(vf._nothing_was_checked(2, "make: *** [test] Error 1"),
+                         "чужая двойка принята за пустоту")
+
+    def test_an_empty_check_among_greens_is_unmeasured_not_a_failure(self):
+        """Разница не в строгости, а в диагнозе: провал означает «чини код»,
+        пустота — «заведи тест». Ход при этом одинаково не закрывается: код 2
+        зелёным не является."""
+        v = vf.verdict([self._res(2, "no tests", empty=True), self._res(0)],
+                       Path("/x"))
+        self.assertEqual(v["status"], "absent", v)
+        self.assertEqual(vf.EXIT[v["status"]], 2)
+        self.assertNotIn("починить", v["next"])
+
+    def test_a_real_failure_next_to_an_empty_one_is_still_a_failure(self):
+        """Обратный контроль: смягчение пустоты не должно прятать красное."""
+        bad = vf.Result(vf.Check("l", "линт", ("true",), "w"), 1, "boom", False)
+        v = vf.verdict([self._res(2, "no tests", empty=True), bad], Path("/x"))
+        self.assertEqual(v["status"], "fail", v)
+
     def test_empty_markers_catch_the_common_runners(self):
         for out in ("No tests found, exiting", "Tests:       0 total",
                     "collected 0 items", "?   pkg  [no test files]"):

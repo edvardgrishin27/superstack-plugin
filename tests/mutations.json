@@ -55,8 +55,8 @@
   {
    "id": "verify.empty-markers-blind",
    "file": "plugins/superstack-guard/tools/verify.py",
-   "find": "    return code == 0 and any(rx.search(out) for rx in EMPTY_MARKERS)",
-   "replace": "    return False",
+   "find": "    return any(rx.search(out) for rx in EMPTY_MARKERS)",
+   "replace": "    return False  # маркеры пустоты не читаются",
    "why": "самая тихая форма ложного зелёного: инструмент отработал, тестов ноль, код успешный"
   },
   {
@@ -1497,8 +1497,8 @@
   {
    "id": "pipeline.rewrite-loses-the-criteria",
    "file": "plugins/superstack-build/tools/progress.py",
-   "find": "        for key in (\"goal\", \"acceptance\", \"quotes\", \"spec_sections\",\n                    \"requirements\", \"zone\", \"blockedBy\", \"started\"):\n            if key not in entry and key in keep:",
-   "replace": "        for key in (\"goal\", \"acceptance\", \"quotes\", \"spec_sections\",\n                    \"requirements\", \"zone\", \"blockedBy\", \"started\"):\n            if False:",
+   "find": "        for key in (\"goal\", \"acceptance\", \"quotes\", \"spec_sections\",\n                    \"requirements\", \"zone\", \"blockedBy\", \"started\", \"holdout\"):",
+   "replace": "        for key in (\"goal\",):",
    "why": "перезапись таска теряет критерии приёмки и цитаты — передача становится невозможной со второго вызова, а второй вызов бывает всегда: статус меняют чаще, чем критерии"
   },
   {
@@ -1525,8 +1525,8 @@
   {
    "id": "contract.red-detected-by-word-not-number",
    "file": "plugins/superstack-build/tools/contract.py",
-   "find": "_RED = re.compile(r\"\\b(\\d+)\\s*(failed|failing|упал\\w*|провал\\w*)\\b\", re.I)",
-   "replace": "_RED = re.compile(r\"(failed|failing|упал\\w*|провал\\w*)\", re.I)",
+   "find": "_RED = re.compile(r\"\\b(\\d+)\\s*(failed|failing|упал\\w*|провал\\w*)\\b\"",
+   "replace": "_RED = re.compile(r\"\\b(failed|failing|упал\\w*|провал\\w*)\\b\"",
    "why": "красное ищется по слову, а не по числу: «0 failed» на каждом зелёном прогоне даёт ложное нарушение, и проверку снимут на второй день"
   },
   {
@@ -1864,6 +1864,195 @@
    "find": "                if w == str(where):\n                    at = i",
    "replace": "                if False:\n                    at = i",
    "why": "правка статуса отправляет таск в конец волны — страница плана перетасовывается при каждом обновлении, и человек ищет глазами то, что вчера было выше"
+  },
+  {
+   "id": "blind.our-own-retelling-passes-through",
+   "file": "plugins/superstack-guard/tools/blind_accept.py",
+   "find": "    re.compile(r\"(?:^|/)\\.superstack/\", re.I),",
+   "replace": "    re.compile(r\"(?:^|/)НИКОГДА-НЕ-СОВПАДЁТ/\", re.I),",
+   "why": "наш собственный рабочий каталог перестаёт вырезаться — судья получает манифест требований и состояние плана, то есть прочтение брифа тем же, кто писал код, и сверяет пересказ с пересказом"
+  },
+  {
+   "id": "blind.body-leak-is-only-a-note",
+   "file": "plugins/superstack-guard/tools/blind_accept.py",
+   "find": "    leaked = leaks_in(packet[\"changes\"])\n    if leaked:",
+   "replace": "    leaked = []\n    if leaked:",
+   "why": "следы пересказа внутри файлов перестают проверяться — слепота снова держится на полноте одного списка путей, а список молчит, когда в нём чего-то не хватает"
+  },
+  {
+   "id": "blind.leak-does-not-fail-the-pack",
+   "file": "plugins/superstack-guard/tools/blind_accept.py",
+   "find": "EXIT = {\"ready\": 0, \"leaked\": 1, \"unknown\": 2}",
+   "replace": "EXIT = {\"ready\": 0, \"leaked\": 0, \"unknown\": 2}",
+   "why": "нарушенная слепота возвращает ноль — пакет с пересказом уходит судье, и его вердикт выглядит точно как настоящий"
+  },
+  {
+   "id": "skill.output-budget-removed",
+   "file": "plugins/superstack-build/skills/go/SKILL.md",
+   "find": "## Сколько говорить — прочти до первого слова человеку",
+   "replace": "## Заметки о стиле",
+   "why": "бюджет речи перестаёт быть правилом — прогон снова объясняет себя на каждом шаге, и новичок бросает читать ровно там, где начинаются вопросы, на которые может ответить только он"
+  },
+  {
+   "id": "skill.questions-lose-the-rounds",
+   "file": "plugins/superstack-build/skills/go/SKILL.md",
+   "find": "**Три раунда, не анкета.**",
+   "replace": "Спроси всё сразу.",
+   "why": "интервью снова становится анкетой: человек получает список вопросов вместо трёх решающих, и отвечает наугад на то, что должно было прийти умолчанием"
+  },
+  {
+   "id": "skill.hard-words-without-an-explanation",
+   "file": "plugins/superstack-build/skills/go/SKILL.md",
+   "find": "**К непонятному слову — вариант «объясни сначала».**",
+   "replace": "Термины используй свободно.",
+   "why": "человек, слышащий слово впервые, снова угадывает вместо того, чтобы спросить, — и догадка выглядит как принятое решение"
+  },
+  {
+   "id": "holdout.leak-check-disabled",
+   "file": "plugins/superstack-build/tools/handoff.py",
+   "find": "    leaked = holdout_leak(task, prompt)",
+   "replace": "    leaked = []",
+   "why": "скрытые проверки перестают сверяться с готовым промптом — поле остаётся «скрытым» по названию и уезжает исполнителю, а прогон при этом зелёный: проверка превращается в подсказку молча"
+  },
+  {
+   "id": "holdout.lost-on-rewrite",
+   "file": "plugins/superstack-build/tools/progress.py",
+   "find": "                    \"requirements\", \"zone\", \"blockedBy\", \"started\", \"holdout\"):",
+   "replace": "                    \"requirements\", \"zone\", \"blockedBy\", \"started\"):",
+   "why": "перезапись таска теряет скрытые проверки — статус меняют чаще, чем проверки, и их пропажа выглядит как «их и не заводили»"
+  },
+  {
+   "id": "holdout.leak-is-not-a-failure",
+   "file": "plugins/superstack-build/tools/handoff.py",
+   "find": "        print(json.dumps({\"task\": task[\"id\"], \"status\": \"fail\",\n                          \"holdout_leaked\": leaked}, ensure_ascii=False, indent=1))\n        return 1",
+   "replace": "        print(json.dumps({\"task\": task[\"id\"], \"status\": \"fail\",\n                          \"holdout_leaked\": leaked}, ensure_ascii=False, indent=1))\n        return 0",
+   "why": "протёкшая скрытая проверка возвращает ноль — таск уходит исполнителю вместе с подсказкой, и приёмка потом подтвердит ровно то, что он оптимизировал"
+  },
+  {
+   "id": "doctor.placeholder-counts-as-secret",
+   "file": "plugins/superstack-guard/tools/project_doctor.py",
+   "find": "    return bool(_PLACEHOLDER_WORD.search(value) or _REPEATED.search(value))",
+   "replace": "    return False",
+   "why": "пример из документации снова считается утечкой — осмотр краснеет на README, и его выключают целиком, а вместе с шумом пропадают настоящие находки"
+  },
+  {
+   "id": "doctor.cleanup-read-as-muted-check",
+   "file": "plugins/superstack-guard/tools/project_doctor.py",
+   "find": "    (re.compile(_CHECKY + r\"[^\\n]*\\|\\|\\s*true\", re.I),",
+   "replace": "    (re.compile(r\"\\|\\|\\s*true\", re.I),",
+   "why": "`|| true` в уборке trap снова читается как погашенная проверка — семь ложных провалов на здоровом репозитории, после которых инструменту перестают верить"
+  },
+  {
+   "id": "doctor.fixture-secret-is-a-failure",
+   "file": "plugins/superstack-guard/tools/project_doctor.py",
+   "find": "                    \"level\": WARN if fixture else FAIL,",
+   "replace": "                    \"level\": FAIL,",
+   "why": "секретоподобная фикстура в тестах снова валит осмотр — красное на каждом наборе тестов, где есть хоть одна проверка сканера"
+  },
+  {
+   "id": "doctor.secret-value-printed",
+   "file": "plugins/superstack-guard/tools/project_doctor.py",
+   "find": "                    \"what\": (f\"{why} — похоже на фикстуру, но проверь глазами\"\n                             if fixture else f\"{why} в отслеживаемом файле\"),",
+   "replace": "                    \"what\": f\"{why}: {rx.search(t).group(0)}\",",
+   "why": "отчёт печатает само значение секрета — осмотр размножает то, что нашёл: в вывод, в журнал и в историю чата"
+  },
+  {
+   "id": "crew.vanished-builder-looks-like-work",
+   "file": "plugins/superstack-build/tools/crew.py",
+   "find": "    for t_ in stalled(tasks):",
+   "replace": "    for t_ in []:",
+   "why": "исполнитель, не вернувшийся вовсе, снова выглядит как идущая работа: таск остаётся «в работе» навсегда, и ни контракт возврата, ни гейт верификации, ни расчёт волн этого не видят"
+  },
+  {
+   "id": "crew.stall-threshold-ignores-the-clock",
+   "file": "plugins/superstack-build/tools/crew.py",
+   "find": "        if minutes >= STALL_MINUTES:",
+   "replace": "        if False:",
+   "why": "порог молчания перестаёт срабатывать — проверка остаётся в коде и не проверяет ничего, что хуже её отсутствия: в отчёте она числится"
+  },
+  {
+   "id": "autonomy.level-set-without-proof",
+   "file": "plugins/superstack-guard/tools/autonomy.py",
+   "find": "    if not v[\"ok\"]:",
+   "replace": "    if False:",
+   "why": "ступень поднимается желанием — подтверждения снимаются, проверок не прибавилось, и первый же прогон превращается в «оно само что-то сделало»"
+  },
+  {
+   "id": "autonomy.broken-record-reads-high",
+   "file": "plugins/superstack-guard/tools/autonomy.py",
+   "find": "    if not isinstance(lvl, int) or not 0 <= lvl <= MAX_LEVEL:",
+   "replace": "    if False:",
+   "why": "повреждённая запись читается как заданная ступень — ошибка разбора становится разрешением действовать без человека"
+  },
+  {
+   "id": "autonomy.unmeasured-gate-counts",
+   "file": "plugins/superstack-guard/tools/autonomy.py",
+   "find": "        return json.loads(f.read_text(\"utf-8\")).get(\"exit_code\") in (0, 1)",
+   "replace": "        return \"exit_code\" in json.loads(f.read_text(\"utf-8\"))",
+   "why": "код 2 («проверять нечем») засчитывается за работающий гейт — код начинает писаться без подтверждения там, где проверять нечем в принципе"
+  },
+  {
+   "id": "verify.exit-two-read-as-failure",
+   "file": "plugins/superstack-guard/tools/verify.py",
+   "find": "    re.compile(r\"тестов не найдено\", re.I),",
+   "replace": "    re.compile(r\"НИКОГДА-НЕ-СОВПАДЁТ\", re.I),",
+   "why": "прогонщик, честно печатающий «тестов не найдено», перестаёт опознаваться — пустой набор снова читается как провал, и человека отправляют чинить работающий код"
+  },
+  {
+   "id": "verify.empty-among-greens-is-a-failure",
+   "file": "plugins/superstack-guard/tools/verify.py",
+   "find": "        status = \"absent\"\n        nxt = f\"{empty[0]['label']}: прогон был, но проверять нечего — завести тест\"",
+   "replace": "        status = \"fail\"\n        nxt = f\"{empty[0]['label']}: прогон был, но проверять нечего — завести тест\"",
+   "why": "пустая проверка снова объявляется провалом — диагноз «чини код» вместо «заведи тест», и человек ищет поломку там, где её нет"
+  },
+  {
+   "id": "review.write-returns-the-verdict",
+   "file": "plugins/superstack-guard/tools/review.py",
+   "find": "    if cmd == \"find\":\n        return 0",
+   "replace": "    if False:\n        return 0",
+   "why": "запись находки снова возвращает вердикт — успешно записанная первая находка выглядит отказом инструмента, и скрипт бросает ревью на середине"
+  },
+  {
+   "id": "lesson.watchdog-counts-system-noise",
+   "file": "plugins/superstack-brain/hooks/session-lesson.sh",
+   "find": "  if [ -f \"$STATE/../superstack/.mutation-lock\" ] || \\\n     [ -f \"./.mutation-lock\" ]; then\n    exit 0\n  fi",
+   "replace": "  if false; then\n    exit 0\n  fi",
+   "why": "сторож урока снова считает правки прогона мутаций работой человека — на каждом разговорном ходе спрашивает про урок, и разговор превращается в петлю коротких реплик"
+  },
+  {
+   "id": "design.direction-phase-removed",
+   "file": "plugins/superstack-build/skills/go/SKILL.md",
+   "find": "## Фаза 2.5 — НАПРАВЛЕНИЕ (только если у продукта есть интерфейс)",
+   "replace": "## Заметки о внешнем виде",
+   "why": "фаза направления перестаёт быть фазой — вкус снова доживает до кода прилагательными, и «как linear.app» проигрывает первому же техническому доводу исполнителя, потому что в критериях приёмки его нет"
+  },
+  {
+   "id": "design.taste-never-becomes-numbers",
+   "file": "plugins/superstack-build/skills/go/SKILL.md",
+   "find": "| цветовых токенов | ровно четыре: фон, текст, приглушённый, акцент |",
+   "replace": "| цвета | подобрать со вкусом |",
+   "why": "вкус перестаёт переводиться в проверяемые величины — гейт не может проверить внешний вид, и спор о нём возвращается к мнениям"
+  },
+  {
+   "id": "autonomy.ladder-removed",
+   "file": "plugins/superstack-build/skills/go/SKILL.md",
+   "find": "### Ступень подтверждений",
+   "replace": "### Заметки о согласованиях",
+   "why": "ступень подтверждений перестаёт быть выбором человека — одно умолчание на всех дёргает новичка на каждом таске либо не спрашивает там, где он хотел посмотреть"
+  },
+  {
+   "id": "autonomy.ladder-can-switch-off-gates",
+   "file": "plugins/superstack-build/skills/go/SKILL.md",
+   "find": "- **гейты остаются гейтами на всех трёх.**",
+   "replace": "- на верхней ступени гейты можно не запускать:",
+   "why": "шкала доверия превращается в тумблер «не проверяй» — человек, выбравший меньше подтверждений, теряет вместе с ними коды возврата, слепую приёмку и G4"
+  },
+  {
+   "id": "sync.literal-split-breaks-fixtures",
+   "file": "tests/test_project_doctor.py",
+   "find": "FAKE_TOKEN = \"ghp_\" + \"A1b2C3d4E5f6G7h8I9j0K1\"",
+   "replace": "FAKE_TOKEN = \"ghp_A1b2C3d4E5f6G7h8I9j0K1\"",
+   "why": "секрет-фикстура снова цельным литералом — выкладка разобьёт её прямо внутри строки, которую тест пишет в файл, доктор перестанет находить токен, и три теста покраснеют уже в опубликованном дереве"
   }
  ]
 }

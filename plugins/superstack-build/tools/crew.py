@@ -35,7 +35,7 @@ from __future__ import annotations
 import json
 import os
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 #: Ярус читается из ПРОДУКТА, а не из длины спеки. Здесь проверяется лишь то,
@@ -196,6 +196,44 @@ def serial_flight(tasks: list, waves: dict, tolerance: int = TOGETHER_SECONDS) -
     return {"serial": serial, "unmeasured": unmeasured}
 
 
+#: Сколько минут таск может быть «в работе», прежде чем молчание станет
+#: отказом. Порог щедрый: живой исполнитель на среднем таске укладывается в
+#: десять-пятнадцать минут, и сорок означают не медленную работу, а её
+#: отсутствие.
+STALL_MINUTES = 40
+
+
+def stalled(tasks: list, now: "datetime | None" = None) -> list:
+    """Таски, застрявшие в работе. Пропавший исполнитель — отдельный отказ.
+
+    Найдено на живом прогоне, и найдено не механизмом, а глазами: субагент был
+    запущен, завершился, не вернул контракт и не создал ни одного файла. Таск
+    остался `running` с отметкой старта — и остался бы ею навсегда.
+
+    Почему это не ловится ничем другим. Контракт возврата проверяет ВЕРНУВШИЙСЯ
+    блок; гейт верификации — код, которого нет; расчёт волн — разброс отметок у
+    тех, кто стартовал. Исполнитель, не вернувшийся вовсе, не попадает ни под
+    одну проверку: он выглядит как работа, которая всё ещё идёт.
+
+    Часы подаются аргументом — иначе тест перестанет давать один и тот же ответ
+    завтра.
+    """
+    now = now or datetime.now(timezone.utc)
+    out = []
+    for t in tasks:
+        if t.get("status") != "running":
+            continue
+        at = _at(t)
+        if at is None:
+            continue
+        if at.tzinfo is None:
+            at = at.replace(tzinfo=timezone.utc)
+        minutes = int((now - at).total_seconds() // 60)
+        if minutes >= STALL_MINUTES:
+            out.append({"id": t["id"], "minutes": minutes})
+    return out
+
+
 def check(state: dict, declared: str = None) -> dict:
     tasks = rows(state)
     if not tasks:
@@ -233,6 +271,12 @@ def check(state: dict, declared: str = None) -> dict:
     for s in f["serial"]:
         problems.append(f"волна {s['wave']} летела гуськом: разброс старта "
                         f"{s['spread_seconds']} с ({', '.join(s['tasks'])}) — {s['why']}")
+
+    for t_ in stalled(tasks):
+        problems.append(
+            f"{t_['id']} в работе {t_['minutes']} мин и молчит — исполнитель "
+            "пропал, не вернув контракт; таск не сделан и не провален, он "
+            "просто исчез, и без этой проверки он останется «в работе» навсегда")
 
     return {"status": "fail" if problems else ("unknown" if unmeasured else "pass"),
             "problems": problems, "unmeasured": unmeasured,

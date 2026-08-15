@@ -957,6 +957,24 @@
     "file": "tools/sync_public.py",
     "contains": "\"README.md\")"
    }
+  },
+  {
+   "id": "UX.confirmation-ladder",
+   "layer": "интерфейс",
+   "mechanism": "ступень подтверждений: сколько раз система останавливается — выбор человека, но гейты, слепая приёмка и G4 не отключаются ни на одной",
+   "evidence": {
+    "file": "plugins/superstack-build/skills/go/SKILL.md",
+    "contains": "Ступень подтверждений"
+   }
+  },
+  {
+   "id": "UX.design-direction",
+   "layer": "интерфейс",
+   "mechanism": "направление интерфейса выбирается до кода и переводится в проверяемые числа; ориентир человека не вычёркивается",
+   "evidence": {
+    "file": "plugins/superstack-build/skills/go/SKILL.md",
+    "contains": "Фаза 2.5 — НАПРАВЛЕНИЕ"
+   }
   }
  ]
 }
