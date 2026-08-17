@@ -206,5 +206,91 @@ class TestCommandLine(unittest.TestCase):
             self.assertNotIn("Traceback", r.stderr)
 
 
+class TestThePhaseFollowsTheWork(unittest.TestCase):
+    """Этап писала одна команда, задачу запускала другая, и ничто их не
+    связывало.
+
+    17.08 это выстрелило вживую: этап остался на «Дизайн-система», пока
+    помощник уже писал страницу. Панель показывала записанное — то есть
+    неправду, — и человек увидел на экране одно, а в разговоре другое.
+    Дефект не в подписи, а в том, что подпись зависела от памяти автора.
+    """
+
+    def test_starting_work_moves_the_phase(self):
+        d = pr.set_phase(fresh(), "Дизайн-система", "система")
+        d = pr.set_task(d, "06", "страница", 1, pr.RUNNING)
+        self.assertEqual(d["phase"]["name"], pr.BUILD_PHASE)
+        self.assertEqual(d["phase"]["owner"], "исполнитель")
+
+    def test_the_moved_phase_names_the_task(self):
+        """«Пишем код» без имени задачи не отличает работу от зависания."""
+        d = pr.set_task(fresh(), "06", "страница по системе", 1, pr.RUNNING)
+        self.assertIn("06", d["phase"]["detail"])
+        self.assertIn("страница", d["phase"]["detail"])
+
+    def test_several_running_tasks_are_all_named(self):
+        d = pr.set_task(fresh(), "02", "галерея", 2, pr.RUNNING)
+        d = pr.set_task(d, "03", "слоты", 2, pr.RUNNING)
+        for tid in ("02", "03"):
+            self.assertIn(tid, d["phase"]["detail"])
+
+    def test_the_clock_is_not_reset_by_a_later_edit(self):
+        """Иначе каждая правка задачи обнуляет счётчик, и застрявший этап
+        выглядит вечно свежим — то есть ровно наоборот."""
+        d = pr.set_task(fresh(), "06", "страница", 1, pr.RUNNING)
+        first = d["phase"]["since"]
+        d = pr.set_task(d, "06", "страница", 1, pr.RUNNING,
+                        acceptance=["добавили критерий"])
+        self.assertEqual(d["phase"]["since"], first)
+
+    def test_finishing_work_leaves_the_phase_alone(self):
+        """Двигаем только вперёд и только по факту: что идёт после кода —
+        решает тот, кто ведёт прогон, а не эта функция."""
+        d = pr.set_task(fresh(), "06", "страница", 1, pr.RUNNING)
+        d = pr.set_task(d, "06", "страница", 1, pr.CLAIMED)
+        self.assertEqual(d["phase"]["name"], pr.BUILD_PHASE)
+
+
+class TestHowLongItTookIsMeasured(unittest.TestCase):
+    """«Сколько ещё ждать» — первый вопрос ожидающего человека, и до сих пор
+    ответа на него не было ни у кого: длительность частей никто не мерил.
+
+    Обещать срок нельзя — никто его не знает. Но сказать «прошлые части
+    занимали столько-то» можно, если это замерено. Здесь заперт сам замер.
+    """
+
+    def test_leaving_work_stamps_the_end(self):
+        d = pr.set_task(fresh(), "01", "каркас", 1, pr.RUNNING,
+                        started="2026-08-17T10:00:00+00:00")
+        d = pr.set_task(d, "01", "каркас", 1, pr.CLAIMED,
+                        finished="2026-08-17T10:12:00+00:00")
+        t = d["waves"]["1"][0]
+        self.assertEqual(t["finished"], "2026-08-17T10:12:00+00:00")
+        self.assertEqual(t["started"], "2026-08-17T10:00:00+00:00")
+
+    def test_work_in_progress_has_no_end_yet(self):
+        d = pr.set_task(fresh(), "01", "каркас", 1, pr.RUNNING)
+        self.assertNotIn("finished", d["waves"]["1"][0])
+
+    def test_reopening_clears_the_stale_measurement(self):
+        """Часть вернули в работу — прежний замер стал неправдой. Оставленный,
+        он попал бы в расчёт «сколько ещё» как законченный."""
+        d = pr.set_task(fresh(), "01", "каркас", 1, pr.RUNNING,
+                        started="2026-08-17T10:00:00+00:00")
+        d = pr.set_task(d, "01", "каркас", 1, pr.CLAIMED,
+                        finished="2026-08-17T10:12:00+00:00")
+        d = pr.set_task(d, "01", "каркас", 1, pr.RUNNING)
+        self.assertNotIn("finished", d["waves"]["1"][0])
+
+    def test_the_measurement_survives_an_unrelated_edit(self):
+        d = pr.set_task(fresh(), "01", "каркас", 1, pr.RUNNING,
+                        started="2026-08-17T10:00:00+00:00")
+        d = pr.set_task(d, "01", "каркас", 1, pr.CLAIMED,
+                        finished="2026-08-17T10:12:00+00:00")
+        d = pr.set_task(d, "01", "каркас", 1, pr.CLAIMED, goal="уточнили цель")
+        self.assertEqual(d["waves"]["1"][0]["finished"],
+                         "2026-08-17T10:12:00+00:00")
+
+
 if __name__ == "__main__":
     unittest.main()

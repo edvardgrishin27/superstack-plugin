@@ -185,9 +185,23 @@ def check(adrs: list, parse_bad: list, root: Path, tier: str = None,
     # пройденная и найденная закрытой, и она ценнее прочих записей.
     if manifest is not None:
         served = {s for a in adrs for s in a["serves"]}
+        # Находка закрывается не только решением. Часть из них — уточнения, у
+        # которых отвергнутого варианта не существует: «килобайт здесь
+        # двоичный», «команда проверки не фильтрует по подстроке». Их место в
+        # спеке, и когда спека их вобрала (статус `in-spec` и дальше), находка
+        # прожила ровно то, ради чего записана, — она не потерялась.
+        #
+        # Требовать ADR на каждую значит либо писать решения с выдуманным
+        # отвергнутым вариантом, либо не проходить гейт никогда. Первое хуже:
+        # выдуманный отвергнутый вариант обесценивает те решения, где он
+        # настоящий, и читать перестают все.
+        absorbed = {r["id"] for r in manifest.get("requirements", [])
+                    if r.get("kind") == "discovered"
+                    and r.get("status") in ("in-spec", "in-ticket", "done",
+                                            "deferred", "dropped")}
         d_rows = [r["id"] for r in manifest.get("requirements", [])
                   if r.get("kind") == "discovered"]
-        lost = [d for d in d_rows if d not in served]
+        lost = [d for d in d_rows if d not in served and d not in absorbed]
         if lost:
             broken.append(
                 f"находки сборки без решения: {', '.join(lost)} — это дороги, "

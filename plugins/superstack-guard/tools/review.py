@@ -168,6 +168,81 @@ def followup_allowed(data: dict) -> dict:
                    "считается попыткой"}
 
 
+#: Две причины, по которым работа возвращается, и они лечатся по-разному.
+#:
+#: НЕДОДЕЛКА — исполнитель мог и не сделал: красный тест, блокирующая находка.
+#: Его контекст ещё держит задачу, и дозапрос стоит одной строки-условия.
+#:
+#: ОТКАЗ — исполнитель пробовал и не смог: BLOCKED, кончившийся контекст,
+#: уже провалившаяся починка. Дозапрос сюда бесполезен: тот же контекст той же
+#: дорогой приведёт туда же. Нужен свежий контекст, а на второй раз — другая
+#: дорога.
+#:
+#: Раньше оба случая шли одним маршрутом, и «не смог» получал дозапрос за
+#: дозапросом — три попытки повторить то, что уже не вышло.
+SHORTFALL, REFUSAL = "недоделка", "отказ"
+KINDS = (SHORTFALL, REFUSAL)
+
+#: Лестница целиком: 2 дозапроса + 1 свежий контекст + 1 другой подход.
+#: Пятой попытки не бывает — дальше это не упрямая задача, а неверная нарезка
+#: или неверно понятое требование, и чинить надо их.
+MAX_RETRIES, MAX_APPROACHES = 1, 1
+
+
+def repair_route(data: dict, kind: str, reason: str = "") -> dict:
+    """Куда отправлять починку и на каком она шаге лестницы.
+
+    Причина обязательна, и это не формальность. «Почини, чтобы проходило» —
+    прямое приглашение лечить симптом: подогнать тест, обернуть пустым catch,
+    захардкодить значение. Названная причина превращает починку в работу с
+    источником; её отсутствие означает, что источник не найден, а это не
+    ремонт, а отказ.
+    """
+    if kind not in KINDS:
+        raise ValueError(f"неизвестный вид возврата: {kind} — есть "
+                         + ", ".join(KINDS))
+    if not reason.strip():
+        return {"to": "свежий контекст", "step": "отказ",
+                "allowed": True, "why":
+                "причина не названа. Починка без названной причины лечит "
+                "симптом: подгоняет тест, глушит ошибку, вписывает значение. "
+                "Это отказ, а не ремонт — нужен свежий контекст"}
+
+    f = data.get("followups", 0)
+    r = data.get("retries", 0)
+    a = data.get("approaches", 0)
+
+    if kind == SHORTFALL and f < MAX_FOLLOWUPS:
+        return {"to": "тому же исполнителю", "step": "дозапрос",
+                "allowed": True,
+                "why": f"дозапрос {f + 1} из {MAX_FOLLOWUPS}: его контекст ещё "
+                       "держит задачу, и условия хватит"}
+    if r < MAX_RETRIES:
+        return {"to": "свежий контекст", "step": "повтор",
+                "allowed": True,
+                "why": "тот же путь, но с чистой головой: контекст исчерпан "
+                       "или дозапросы кончились"}
+    if a < MAX_APPROACHES:
+        return {"to": "свежий контекст, другой подход", "step": "смена подхода",
+                "allowed": True,
+                "why": "повтор той же дорогой уже не сработал — нужен другой "
+                       "путь: иная схема, другая библиотека, иной порядок"}
+    return {"to": "человеку", "step": "сдача", "allowed": False,
+            "why": f"исчерпано: {f} дозапросов, {r} повтор, {a} смена подхода. "
+                   "Дальше это не упрямая задача, а неверная нарезка или "
+                   "неверно понятое требование — чинить надо их, а не пробовать "
+                   "пятый раз"}
+
+
+def count_repair(data: dict, step: str) -> dict:
+    """Отметить израсходованную попытку. Считает КОД, а не память ведущего."""
+    key = {"дозапрос": "followups", "повтор": "retries",
+           "смена подхода": "approaches"}.get(step)
+    if key:
+        data[key] = data.get(key, 0) + 1
+    return data
+
+
 def reviewer_continuity(data: dict, axis: str, who: str, wave: int) -> dict:
     """Не сменился ли ревьюер посреди волны.
 
@@ -209,7 +284,8 @@ def halt_if_paused() -> None:
         raise SystemExit(10)
 
 
-_TAKES = {"--axis", "--where", "--what", "--must", "--who", "--wave"}
+_TAKES = {"--axis", "--where", "--what", "--must", "--who", "--wave",
+          "--kind", "--reason"}
 
 
 def _one(argv, name, default=""):
@@ -229,8 +305,9 @@ def main() -> int:
             skip = True
         elif not a.startswith("--"):
             plain.append(a)
-    if len(plain) < 2 or plain[0] not in ("find", "route", "show", "followup"):
-        print("вызов: review.py find|route|show|followup <файл> ...", file=sys.stderr)
+    if len(plain) < 2 or plain[0] not in ("find", "route", "show", "followup", "repair"):
+        print("вызов: review.py find|route|show|followup|repair <файл> ...",
+              file=sys.stderr)
         return 3
     cmd, path = plain[0], Path(plain[1])
     data = load(path)
@@ -245,6 +322,14 @@ def main() -> int:
             r = followup_allowed(data)
             if r["allowed"]:
                 data["followups"] = data.get("followups", 0) + 1
+                save(path, data)
+            print(json.dumps(r, ensure_ascii=False, indent=1))
+            return 0 if r["allowed"] else 1
+        elif cmd == "repair":
+            kind = _one(argv, "--kind") or SHORTFALL
+            r = repair_route(data, kind, _one(argv, "--reason") or "")
+            if r["allowed"]:
+                data = count_repair(data, r["step"])
                 save(path, data)
             print(json.dumps(r, ensure_ascii=False, indent=1))
             return 0 if r["allowed"] else 1

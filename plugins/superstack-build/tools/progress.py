@@ -24,11 +24,16 @@
 приятно показывать.
 
   python3 progress.py init <файл> <название>
+  python3 progress.py phase <файл> <имя> <держатель> [--detail X]
+                            держатель: человек|система|исполнитель|внешний-инструмент
   python3 progress.py stage <файл> <имя> <статус> [--detail X]
   python3 progress.py task  <файл> <id> <имя> --wave N --status X [--exit-code N]
                             [--requirements R01,R02] [--zone src/a/] [--blocked-by 01]
                             [--started ISO]   отметка старта; при --status running
                                               проставляется сама
+                            [--finished ISO]  отметка конца; при уходе из running
+                                              проставляется сама. По ней панель
+                                              отвечает «сколько ещё ждать»
                             [--goal "..."] [--acceptance "a;b"] [--quotes "..."]
                             [--spec-sections "..."]   — без них таск не передать
                             [--holdout "a;b"]  проверки, скрытые от исполнителя
@@ -55,6 +60,18 @@ WAITING = "waiting"
 TASK_STATES = (PROVEN, CLAIMED, RUNNING, WAITING)
 
 STAGE_STATES = (PROVEN, CLAIMED, RUNNING, WAITING)
+
+#: На ком сейчас ход. Половина ожиданий в прогоне — не «долго считает», а
+#: «каждый ждёт другого»: человек ждёт систему, система ждёт человека, и оба
+#: молчат. Панель обязана называть держателя, иначе она показывает занятость,
+#: а не состояние.
+OWNERS = ("человек", "система", "исполнитель", "внешний-инструмент")
+
+#: Этап, на котором пишут код. Он же назван в панели; совпадение написаний
+#: проверяется тестом, иначе они разойдутся молча и панель начнёт показывать
+#: этап, которого нет в её же списке.
+BUILD_PHASE = "Пишем код"
+
 DEBT_KINDS = ("stub", "assumption", "env")
 
 #: Кому и что делать. Долг — не бухгалтерия, а список того, что нужно ОТ
@@ -70,6 +87,8 @@ EMPTY = {
     "schema": "superstack.progress.v1",
     "project": "",
     "stages": [],
+    # Где мы сейчас и на ком ход. Одно на прогон, в отличие от истории этапов.
+    "phase": None,
     "waves": {},
     "debt": {k: [] for k in DEBT_KINDS},
     "requirements": {"total": None, "covered": None,
@@ -129,6 +148,7 @@ def set_task(data: dict, tid: str, name: str, wave: "int | None",
              zone: "list | None" = None,
              blocked_by: "list | None" = None,
              started: "str | None" = None,
+             finished: "str | None" = None,
              goal: "str | None" = None,
              acceptance: "list | None" = None,
              quotes: "list | None" = None,
@@ -200,9 +220,22 @@ def set_task(data: dict, tid: str, name: str, wave: "int | None",
         # статус меняют чаще, чем критерии, и молчаливая потеря критериев
         # сделала бы передачу невозможной со второго вызова.
         for key in ("goal", "acceptance", "quotes", "spec_sections",
-                    "requirements", "zone", "blockedBy", "started", "holdout"):
+                    "requirements", "zone", "blockedBy", "started", "holdout",
+                    "finished"):
             if key not in entry and key in keep:
                 entry[key] = keep[key]
+
+    # Отметка конца — единственный способ ответить человеку «сколько ещё».
+    # Обещать срок нельзя: никто его не знает. Но сказать «прошлые части
+    # занимали столько-то» можно — если кто-то это мерил. Раньше не мерил
+    # никто, и панель честно молчала о времени, оставляя человека гадать.
+    if status == RUNNING:
+        entry.pop("finished", None)   # снова в работе — прежний замер неверен
+    elif finished is not None:
+        entry["finished"] = finished  # часы подаются извне — иначе тест протухнет
+    elif keep and keep.get("status") == RUNNING and "finished" not in entry:
+        from datetime import datetime, timezone
+        entry["finished"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
     # Волна не передана — таск остаётся там, где лежит. Раньше умолчание было
     # «первая», и обновление существующего таска клало КОПИЮ в первую волну,
     # оставляя исходную запись на месте. Найдено сквозным прогоном: после
@@ -235,6 +268,85 @@ def set_task(data: dict, tid: str, name: str, wave: "int | None",
     # ней никого», и расчёт ярусов считал бы её за волну.
     for w in [k for k, v in data["waves"].items() if not v]:
         del data["waves"][w]
+
+    # Этап следует из ФАКТА, а не из памяти того, кто ведёт состояние.
+    #
+    # Раньше этап писала одна команда, а задачу запускала другая, и ничто их не
+    # связывало. 17.08 это выстрелило: этап остался на «Дизайн-система», пока
+    # помощник уже писал страницу. Панель показывала записанное — то есть
+    # неправду, — и человек увидел на экране одно, а в разговоре другое.
+    #
+    # Двигаем только ВПЕРЁД и только по факту работы; отметка «идёт уже» при
+    # этом не сбрасывается, иначе каждая правка задачи обнуляла бы таймер и
+    # застрявший этап выглядел бы вечно свежим.
+    if status == RUNNING:
+        busy = sorted(t["id"] for w in data["waves"].values() for t in w
+                      if t["status"] == RUNNING)
+        detail = (f"задача {busy[0]} — {name}" if len(busy) == 1
+                  else "задачи в работе: " + ", ".join(busy))
+        was = data.get("phase") or {}
+        keep = was.get("since") if was.get("name") == BUILD_PHASE else None
+        data = set_phase(data, BUILD_PHASE, "исполнитель", detail, now=keep,
+                         plain=False)
+    return data
+
+
+def _jargon_in(text: str) -> list:
+    """Слова, которых человек не поймёт, — списком.
+
+    Словарь живёт в соседнем пакете и находится общим резолвером. Если соседа
+    нет (одиночная установка одного пакета), проверка молчит: отказать в записи
+    состояния из-за отсутствующего словаря значило бы сломать работу ради
+    вычитки. Достижимость соседа при полной установке держат ворота проводки.
+    """
+    if not text:
+        return []
+    try:
+        import importlib.util
+        sys.path.insert(0, str(Path(__file__).resolve().parent))
+        import where  # noqa: E402
+        p = where.find("plain_ru.py")
+        if not p:
+            return []
+        spec = importlib.util.spec_from_file_location("ss_plain_ru", p)
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        return mod.find_jargon(text)
+    except Exception:
+        return []
+
+
+def set_phase(data: dict, name: str, owner: str, detail: str = "",
+              now: str = None, plain: bool = True) -> dict:
+    """Текущая фаза и тот, на ком ход.
+
+    Пишется отдельно от этапов: этапов много и они историчны, а «где мы сейчас»
+    ровно одно, и читается оно с панели за полсекунды. Отметка времени нужна,
+    чтобы «идёт» отличалось от «застряло»: фаза, висящая на человеке сорок
+    минут, и фаза, начатая минуту назад, выглядят одинаково без неё.
+    """
+    if owner not in OWNERS:
+        raise ValueError(f"неизвестный держатель хода: {owner} — есть "
+                         + ", ".join(OWNERS))
+    # Деталь этапа человек читает на панели, а пишет её модель — и пишет своим
+    # рабочим языком. «Таск 06 — страница по принесённой системе; я жду
+    # возврата» перечитывается автором как понятная строка и не сообщает
+    # неразработчику ничего. Вычиткой это не ловится: чтобы заметить непонятное
+    # слово, нужно перестать его понимать. Поэтому — отказ на записи.
+    #
+    # Проверяется ТОЛЬКО подпись, написанная здесь и сейчас. Подпись, собранная
+    # из имени части работы, идёт мимо: имя даёт план, а не эта функция, и
+    # отказ записать состояние из-за чужого слова остановил бы прогон вместо
+    # того, чтобы поправить текст. Имена частей — отдельный рычаг.
+    bad = _jargon_in(detail) if plain else []
+    if bad:
+        raise ValueError(
+            "в подписи этапа слова, которых человек не поймёт: "
+            + "; ".join(f"«{w}» → {better}" for w, _, better in bad[:4]))
+    from datetime import datetime, timezone
+    data["phase"] = {
+        "name": name, "owner": owner, "detail": detail,
+        "since": now or datetime.now(timezone.utc).isoformat(timespec="seconds")}
     return data
 
 
@@ -338,6 +450,11 @@ def main() -> int:
                 return _fail("нужно название проекта")
             data = json.loads(json.dumps(EMPTY))
             data["project"] = rest[0]
+        elif cmd == "phase":
+            if len(rest) < 2:
+                return _fail("нужны имя фазы и держатель хода: "
+                             + ", ".join(OWNERS))
+            data = set_phase(data, rest[0], rest[1], _flag(rest, "--detail", ""))
         elif cmd == "stage":
             if len(rest) < 2:
                 return _fail("нужны имя этапа и статус")
@@ -375,7 +492,7 @@ def main() -> int:
                             if zone is not None else None,
                             [x.strip() for x in blk.split(",") if x.strip()]
                             if blk is not None else None,
-                            started, goal,
+                            started, _flag(rest, "--finished"), goal,
                             # Критерии и цитаты режутся по «;», а не по запятой:
                             # запятая внутри критерия — обычное дело, и разбор
                             # по ней порезал бы одно условие на два бессмысленных.

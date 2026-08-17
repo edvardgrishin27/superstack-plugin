@@ -1,6 +1,6 @@
 {
   "name": "superstack-build",
-  "version": "0.2.5",
+  "version": "0.2.6",
   "description": "Стройка: /go ведёт от фразы до доказанного куска через два блокирующих гейта — план и верификацию.",
   "author": {
     "name": "Edvard Grishin"

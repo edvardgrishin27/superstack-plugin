@@ -133,5 +133,65 @@ class TestParsing(unittest.TestCase):
         self.assertFalse(v["broken"])
 
 
+class TestWorkCanBeHandedOnInsteadOfFaked(unittest.TestCase):
+    """Исходов было четыре, и ни один не описывал «сделал половину».
+
+    Исполнитель, у которого кончается место в контексте, выбирал между «сдать
+    недоделанное как DONE» и «вернуть BLOCKED». Первое врёт о готовности,
+    второе — о причине: он не «не смог», он не поместился. Оба ответа стоят
+    следующей попытки с нуля, потому что сделанное не названо.
+
+    Взято из autopilot (nick-vels), где статус передачи есть, а проверок при
+    нём нет: там передача — просьба к модели. Здесь это код возврата.
+    """
+
+    GOOD = ("STATUS: HANDOFF\n"
+            "FILES: src/booking/slots.ts\n"
+            "TESTS: npm test -> 12 passed, 0 failed\n"
+            "INTERFACES: reserve(slotId) -> {ok}\n"
+            "REQUIREMENTS: R03 in progress\n"
+            "HANDOFF: схема и запись готовы, дальше — отмена брони\n"
+            "CONCERNS: нет\nBLOCKERS: нет")
+
+    def test_a_green_handoff_passes(self):
+        self.assertEqual(ct.check(self.GOOD)["status"], "pass")
+
+    def test_red_work_may_not_be_handed_on(self):
+        """Красное, ушедшее в чужой контекст, становится чужой поломкой:
+        принимающий тратит своё место на разбор того, чего не делал."""
+        red = self.GOOD.replace("12 passed, 0 failed", "10 passed, 2 failed")
+        v = ct.check(red)
+        self.assertEqual(v["status"], "fail")
+        self.assertTrue(any("красных" in b for b in v["broken"]))
+
+    def test_a_handoff_without_a_run_is_refused(self):
+        no_run = self.GOOD.replace("TESTS: npm test -> 12 passed, 0 failed",
+                                   "TESTS: не запускал")
+        self.assertEqual(ct.check(no_run)["status"], "fail")
+
+    def test_a_handoff_must_say_where_it_stopped(self):
+        """Без этого принимающий восстанавливает замысел по коду — платит
+        второй раз за то, что передающий уже знал."""
+        blind = (self.GOOD.replace("HANDOFF: схема и запись готовы, дальше — отмена брони\n", "")
+                 .replace("CONCERNS: нет", "CONCERNS:"))
+        v = ct.check(blind)
+        self.assertEqual(v["status"], "fail")
+        self.assertTrue(any("HANDOFF" in b for b in v["broken"]))
+
+    def test_the_third_handoff_is_a_planning_defect(self):
+        """Часть, не поместившаяся в три контекста, разрезана неверно:
+        четвёртый потратится так же, как первые три."""
+        v = ct.check(self.GOOD, handoffs=ct.MAX_HANDOFFS)
+        self.assertEqual(v["status"], "fail")
+        self.assertTrue(any("нарезк" in b for b in v["broken"]))
+
+    def test_handoffs_below_the_ceiling_are_normal(self):
+        self.assertEqual(ct.check(self.GOOD, handoffs=1)["status"], "pass")
+
+    def test_the_ceiling_is_a_named_constant(self):
+        self.assertIsInstance(ct.MAX_HANDOFFS, int)
+        self.assertGreaterEqual(ct.MAX_HANDOFFS, 1)
+
+
 if __name__ == "__main__":
     unittest.main()

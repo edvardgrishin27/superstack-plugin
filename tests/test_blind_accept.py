@@ -206,12 +206,65 @@ class TestAgentContract(unittest.TestCase):
         self.fm = self.text.split("---")[1]
         self.flat = " ".join(self.text.split())
 
-    def test_judge_can_only_read(self):
-        tools = [t.strip() for t in
-                 __import__("re").search(r"^tools:\s*(.+)$", self.fm,
-                                         __import__("re").M).group(1).split(",")]
-        self.assertEqual(tools, ["Read"],
-                         "судье дали больше чтения — приёмка перестаёт быть слепой")
+    def _tools(self):
+        import re
+        return [t.strip() for t in
+                re.search(r"^tools:\s*(.+)$", self.fm, re.M).group(1).split(",")]
+
+    def test_the_judge_can_run_the_project(self):
+        """Приёмка по одному чтению — рецензия, а не приёмка.
+
+        Так и вышло однажды: судья честно написал, что выполнить `npm test`
+        нечем, и вердикт свёлся к пересказу файлов. Половину того, что человек
+        увидел своими глазами через минуту, он не нашёл. Проект, который ни
+        разу не запускали, — проект, который никто не видел в работе.
+
+        Прежняя редакция этого теста требовала ровно `Read` и тем закрепляла
+        дыру: набор был зелёным всё время, пока приёмка не могла ничего
+        проверить.
+        """
+        self.assertIn("Bash", self._tools(),
+                      "судья не может запустить проект — это рецензия, а не приёмка")
+
+    def test_the_judge_cannot_change_anything(self):
+        """Запускать и чинить — разные права: приёмщик, поправивший код,
+        принимает уже свою работу."""
+        for writer in ("Write", "Edit", "NotebookEdit"):
+            self.assertNotIn(writer, self._tools(),
+                             f"судье дали {writer} — он начнёт чинить и примет своё")
+
+    def test_the_agent_is_told_to_run_not_to_read(self):
+        self.assertIn("Не читай — запусти", self.flat)
+        self.assertIn("зелёный прогон на нуле тестов это красная работа", self.flat)
+
+    def test_formally_working_counts_as_partial(self):
+        """«Данные сохраняются, но нигде не видны» — это частично, а не
+        готово; без этого правила судья засчитывает букву."""
+        self.assertIn("работает формально, но не по сути", self.flat.lower())
+
+    def test_the_verdict_is_given_part_by_part(self):
+        """Просьба почти всегда составная: «галерея, запись и уведомление» —
+        три разных ответа. Один общий вердикт «частично» не говорит, ЧТО
+        именно сломано, и человек остаётся ровно там же, где был."""
+        self.assertIn("ПО КАЖДОЙ ЧАСТИ ПРОСЬБЫ", self.text)
+        for status in ("реализовано", "частично", "нет"):
+            self.assertIn(status, self.flat)
+
+    def test_every_status_needs_evidence(self):
+        self.assertIn("доказательство:", self.flat)
+
+    def test_the_run_commands_come_back_verbatim(self):
+        """Без них следующий установит и настроит проект заново, чтобы узнать
+        то, что судья уже знает."""
+        self.assertIn("чем запускал и что вышло", self.flat.lower())
+
+    def test_unverifiable_is_an_open_question_not_an_approval(self):
+        """Молчание превращает непроверенное в подтверждённое — это самая
+        дорогая тишина в прогоне."""
+        self.assertIn("открытый вопрос, а не «принято»", self.flat)
+
+    def test_it_names_what_the_page_shows_untruthfully(self):
+        self.assertIn("недостоверно", self.flat)
 
     def test_judge_runs_on_another_model(self):
         self.assertRegex(self.fm, r"(?m)^model:\s*fable\s*$")

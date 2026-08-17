@@ -975,6 +975,53 @@
     "file": "plugins/superstack-build/skills/go/SKILL.md",
     "contains": "Фаза 2.5 — НАПРАВЛЕНИЕ"
    }
+  },
+  {
+   "id": "UX.design-goes-out-to-the-human",
+   "layer": "интерфейс",
+   "mechanism": "дизайн делает человек во внешнем инструменте: система собирает ему промпт со списком того, что принести обратно, и ждёт; код до этого не пишется",
+   "evidence": {
+    "file": "plugins/superstack-build/skills/go/SKILL.md",
+    "contains": "Код в это время не пишется"
+   }
+  },
+  {
+   "id": "UX.design-prompt-checked-against-docs",
+   "layer": "интерфейс",
+   "mechanism": "промпт для внешнего дизайн-инструмента не показывается, пока не записана свежая сверка с его документацией с названными источниками",
+   "evidence": {
+    "file": "plugins/superstack-spec/tools/design_brief.py",
+    "contains": "DOCS_FRESH_DAYS"
+   }
+  },
+  {
+   "id": "UX.live-panel",
+   "layer": "интерфейс",
+   "mechanism": "живая панель хода: этап и держатель хода видны постоянно, обновление стоит одной записи состояния; этап следует из работы — переход части в running двигает его сам",
+   "evidence": {
+    "file": "plugins/superstack-build/tools/progress.py",
+    "contains": "data = set_phase(data, BUILD_PHASE, \"исполнитель\", detail, now=keep,"
+   },
+   "note": "Улика указывает на запись состояния, а не на разметку: разметка и её JS живут в строковом литерале live_panel.py, а ворота вырезают из .py прозу и литералы целиком — там любая улика невидима. Отображение держат тесты test_live_panel.py и мутации panel.*, они по литералу работают."
+  },
+  {
+   "id": "UX.plain-ru",
+   "layer": "интерфейс",
+   "mechanism": "человеческий русский на всём, что видит человек: словарь жаргона с заменами, роли и этапы с пояснениями, надписи вне кода; подпись с жаргоном не записывается вовсе",
+   "evidence": {
+    "file": "plugins/superstack-build/tools/progress.py",
+    "contains": "bad = _jargon_in(detail) if plain else []"
+   }
+  },
+  {
+   "id": "UX.eta-from-measurement",
+   "layer": "интерфейс",
+   "mechanism": "«сколько ещё ждать» считается только по замеренному: конец части отмечается, оценка берёт середину ряда прошлых длительностей; замеров нет — оценки нет, и об этом говорится прямо",
+   "evidence": {
+    "file": "plugins/superstack-build/tools/progress.py",
+    "contains": "elif keep and keep.get(\"status\") == RUNNING and \"finished\" not in entry:"
+   },
+   "note": "Улика на ЗАМЕР, а не на его показ: без отметки конца показывать нечего, а сам показ проверяется тестами панели."
   }
  ]
 }

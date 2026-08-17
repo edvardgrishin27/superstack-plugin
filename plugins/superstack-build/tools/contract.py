@@ -41,12 +41,29 @@ from pathlib import Path
 
 DONE, CONCERNS = "DONE", "DONE_WITH_CONCERNS"
 BLOCKED, NEEDS_CONTEXT = "BLOCKED", "NEEDS_CONTEXT"
-STATUSES = (DONE, CONCERNS, BLOCKED, NEEDS_CONTEXT)
+
+#: Работа не поместилась в один контекст и передаётся дальше.
+#:
+#: Раньше такого исхода не было вовсе, и это дорого стоило: исполнитель, у
+#: которого кончается место, либо торопится и сдаёт недоделанное как DONE, либо
+#: возвращает BLOCKED — «не смог», хотя смог наполовину. Оба ответа врут о
+#: причине, и оба стоят следующей попытки с нуля.
+#:
+#: Передавать разрешено ТОЛЬКО зелёное: красный прогон, ушедший в чужой
+#: контекст, становится чужой поломкой, которую никто не заказывал.
+HANDOFF = "HANDOFF"
+STATUSES = (DONE, CONCERNS, BLOCKED, NEEDS_CONTEXT, HANDOFF)
 
 FIELDS = ("STATUS", "FILES", "TESTS", "INTERFACES", "REQUIREMENTS",
-          "CONCERNS", "BLOCKERS")
+          "CONCERNS", "BLOCKERS", "HANDOFF")
 
 MAX_LINES = 25
+
+#: Сколько раз работу можно передать дальше. Третья передача означает не
+#: длинную работу, а неверную нарезку: часть, которая не помещается в три
+#: контекста, была разрезана неправильно, и следующий контекст потратится так
+#: же, как первые два. Это дефект планирования, и он записывается им.
+MAX_HANDOFFS = 2
 
 #: Признаки красного прогона в строке TESTS. Ищем ЧИСЛО, а не слово: «упало 0»
 #: и «0 failed» не должны считаться провалом, а «2 failed» — обязаны.
@@ -87,7 +104,12 @@ def _lines_of_block(text: str) -> int:
     return 0 if start is None else len([l for l in lines[start:] if l.strip()])
 
 
-def check(text: str, task: str = None) -> dict:
+def check(text: str, task: str = None, handoffs: int = 0) -> dict:
+    """Разбор блока. `handoffs` — сколько раз эту часть уже передавали.
+
+    Счётчик приходит извне, из состояния прогона: сам блок о прошлых передачах
+    не знает, а третья подряд означает не длинную работу, а неверную нарезку.
+    """
     p = parse(text)
     f = p["fields"]
     if "STATUS" not in f:
@@ -129,6 +151,31 @@ def check(text: str, task: str = None) -> dict:
         broken.append("BLOCKED без названного блокера — отказ, по которому "
                       "нельзя ничего предпринять")
 
+    if st == HANDOFF:
+        # Передавать можно только зелёное. Красный прогон, ушедший в чужой
+        # контекст, становится чужой поломкой: следующий тратит своё место на
+        # разбор чужой, не зная даже, чинил ли её кто-то до него.
+        if red_n > 0:
+            broken.append(
+                f"передача работы при красных тестах ({tests.strip()[:60]}) — "
+                "следующий получит чужую поломку и потратит свой контекст на "
+                "её разбор; передавать можно только зелёное, иначе это BLOCKED")
+        if not tests.strip() or not ran:
+            broken.append("передача без прогона тестов — принимающий не знает, "
+                          "что из сделанного работает, и начнёт с проверки всего")
+        # «Что дальше» — половина смысла передачи. Без неё принимающий
+        # восстанавливает замысел по коду, то есть платит второй раз за то,
+        # что передающий уже знал.
+        if not f.get("HANDOFF", "").strip() and not f.get("CONCERNS", "").strip():
+            broken.append("передача без строки HANDOFF: не сказано, на чём "
+                          "остановился и что делать следующему")
+        if handoffs >= MAX_HANDOFFS:
+            broken.append(
+                f"передача {handoffs + 1}-я при потолке {MAX_HANDOFFS} — часть, "
+                "не поместившаяся в три контекста, разрезана неверно: следующий "
+                "потратится так же, как первые два. Это дефект нарезки, и чинить "
+                "его нужно в плане, а не выдачей ещё одного контекста")
+
     n = _lines_of_block(text)
     if n > MAX_LINES:
         broken.append(f"блок на {n} строк при потолке {MAX_LINES} — восемь "
@@ -157,7 +204,7 @@ def halt_if_paused() -> None:
 def main() -> int:
     halt_if_paused()
     argv = sys.argv[1:]
-    takes = {"--task"}
+    takes = {"--task", "--handoffs"}
     plain, skip = [], False
     for a in argv:
         if skip:
@@ -177,7 +224,12 @@ def main() -> int:
         return 3
     task = argv[argv.index("--task") + 1] if "--task" in argv else None
 
-    v = check(p.read_text("utf-8", errors="replace"), task)
+    try:
+        done = int(argv[argv.index("--handoffs") + 1]) if "--handoffs" in argv else 0
+    except (ValueError, IndexError):
+        print("НЕ УДАЛОСЬ: --handoffs ждёт число", file=sys.stderr)
+        return 3
+    v = check(p.read_text("utf-8", errors="replace"), task, done)
     if "--json" not in argv:
         head = {"pass": "КОНТРАКТ ГОДЕН", "fail": "КОНТРАКТ НАРУШЕН",
                 "unknown": "КОНТРАКТА НЕТ"}

@@ -1,6 +1,6 @@
 {
   "name": "superstack-spec",
-  "version": "0.2.5",
+  "version": "0.2.6",
   "description": "Проектирование: линт спеки и граф артефактов — агентский markdown гниёт молча, скрипт читает его целиком всегда.",
   "author": {
     "name": "Edvard Grishin"

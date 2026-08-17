@@ -172,3 +172,31 @@ class TestConfirmationLevelIsTheHumansChoice(unittest.TestCase):
         """Незаписанная договорённость к третьему таску забыта, и система
         тихо съезжает к своему умолчанию."""
         self.assertIn("записывается в манифест", self.t)
+
+
+class TestTheRunLeavesASummaryInTheProject(unittest.TestCase):
+    """Отчёт человек читает один раз, и он исчезает вместе с окном.
+
+    Следующий заход — другой сессией, с чистым контекстом — смотрит в память
+    проекта раньше, чем в исходники. Всё, что прогон понял и не записал туда,
+    он будет выяснять заново: те же вопросы человеку, те же находки, та же
+    цена. Сводка в чате этого не решает — её там уже нет.
+    """
+
+    def setUp(self):
+        self.t = GO.read_text("utf-8")
+
+    def test_the_summary_goes_to_project_memory(self):
+        self.assertIn("Сводка остаётся в проекте", self.t)
+        self.assertIn('memory_file.py)" set .', self.t)
+
+    def test_it_names_what_belongs_in_it(self):
+        for part in ("что теперь существует", "что ждёт человека",
+                     "что решено и почему", "обо что споткнулись"):
+            with self.subTest(part=part):
+                self.assertIn(part, self.t)
+
+    def test_it_forbids_praise_and_unmeasured_numbers(self):
+        """Сводка, повторяющая отчёт и хвалящая себя, не читается никем — и
+        первым перестаёт читать её следующий прогон."""
+        self.assertIn("Чего в сводке не бывает", self.t)

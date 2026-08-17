@@ -79,6 +79,29 @@ class TestTheContractCannotBeForgotten(unittest.TestCase):
         p = ho.build(state(task()), task(), "СИГНАТУРЫ ОТСЮДА", "", "npm test")
         self.assertIn("СИГНАТУРЫ ОТСЮДА", p)
 
+    def test_the_context_ceiling_is_always_in_the_prompt(self):
+        """Исполнитель не видит своих токенов и не знает, что у контекста есть
+        край. Подойдя к нему без предупреждения, он выбирает между «сдать
+        недоделанное как готовое» и «вернуть отказ»: первое врёт о готовности,
+        второе о причине — он не «не смог», он не поместился.
+
+        Считать предложено вызовы инструментов: единственная величина, которую
+        он может посчитать сам.
+        """
+        p = ho.build(state(task()), task(), "x", "", "npm test")
+        self.assertIn(ho.CEILING, p)
+        self.assertIn("вызовы инструментов", p)
+
+    def test_the_prompt_forbids_handing_on_red_work(self):
+        """Красное, ушедшее дальше, становится чужой поломкой: принимающий
+        тратит своё место на разбор того, чего не делал."""
+        p = ho.build(state(task()), task(), "x", "", "npm test")
+        self.assertIn("Красное не передавай", p)
+
+    def test_the_return_contract_offers_the_handoff_status(self):
+        p = ho.build(state(task()), task(), "x", "", "npm test")
+        self.assertIn("HANDOFF", p)
+
 
 class TestIncompleteTaskIsNotHandedOver(unittest.TestCase):
 

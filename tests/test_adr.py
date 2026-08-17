@@ -269,3 +269,34 @@ class TestTwoReadersDoNotDrift(Base):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestAFindingCanBeClosedByTheSpecToo(Base):
+    """Находка сборки закрывается не только архитектурным решением.
+
+    Часть находок — уточнения, у которых отвергнутого варианта не существует:
+    «килобайт здесь двоичный», «команда проверки не фильтрует по подстроке».
+    Их место в спеке, и когда спека их вобрала, находка прожила ровно то, ради
+    чего записана.
+
+    Требование ADR на каждую оставляло два пути, и оба плохие: писать решения с
+    выдуманным отвергнутым вариантом либо не проходить гейт никогда. Первое
+    хуже — выдуманный отвергнутый вариант обесценивает те решения, где он
+    настоящий, и читать перестают все. Найдено на живом прогоне: из пяти
+    находок архитектурной была одна.
+    """
+
+    def _manifest(self, status: str) -> dict:
+        return {"requirements": [
+            {"id": "D01", "kind": "discovered", "status": status,
+             "basis": "сборка доказала", "parent": "R01"}]}
+
+    def test_a_finding_absorbed_by_the_spec_is_not_lost(self):
+        v = self.check(tier="T0", manifest=self._manifest("in-spec"))
+        self.assertNotIn("находки сборки без решения", " ".join(v["broken"]), v)
+
+    def test_an_open_finding_still_needs_one(self):
+        """Обратный контроль: незакрытая находка действительно теряется, и
+        смягчение не должно её пропускать."""
+        v = self.check(tier="T0", manifest=self._manifest("open"))
+        self.assertIn("находки сборки без решения", " ".join(v["broken"]), v)

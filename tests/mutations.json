@@ -1266,7 +1266,7 @@
   {
    "id": "adr.discovered-may-die",
    "file": "plugins/superstack-spec/tools/adr.py",
-   "find": "        lost = [d for d in d_rows if d not in served]",
+   "find": "        lost = [d for d in d_rows if d not in served and d not in absorbed]",
    "replace": "        lost = []",
    "why": "находки сборки (D##) не обязаны дожить до решения — это дороги, уже пройденные и найденные закрытыми, и без записи по ним пойдут снова"
   },
@@ -1497,7 +1497,7 @@
   {
    "id": "pipeline.rewrite-loses-the-criteria",
    "file": "plugins/superstack-build/tools/progress.py",
-   "find": "        for key in (\"goal\", \"acceptance\", \"quotes\", \"spec_sections\",\n                    \"requirements\", \"zone\", \"blockedBy\", \"started\", \"holdout\"):",
+   "find": "        for key in (\"goal\", \"acceptance\", \"quotes\", \"spec_sections\",\n                    \"requirements\", \"zone\", \"blockedBy\", \"started\", \"holdout\",\n                    \"finished\"):",
    "replace": "        for key in (\"goal\",):",
    "why": "перезапись таска теряет критерии приёмки и цитаты — передача становится невозможной со второго вызова, а второй вызов бывает всегда: статус меняют чаще, чем критерии"
   },
@@ -1518,8 +1518,8 @@
   {
    "id": "contract.done-over-red-tests-passes",
    "file": "plugins/superstack-build/tools/contract.py",
-   "find": "        if red_n > 0:",
-   "replace": "        if False:",
+   "find": "    if st in (DONE, CONCERNS):\n        if red_n > 0:",
+   "replace": "    if st in (DONE, CONCERNS):\n        if False:",
    "why": "«DONE» при красных тестах в том же блоке перестаёт быть противоречием — исполнитель честно печатает и «сделано», и число упавших, а глазами видно слово; красное уезжает в коммит с пометкой «готово» и находится через восемь тасков"
   },
   {
@@ -1917,7 +1917,7 @@
   {
    "id": "holdout.lost-on-rewrite",
    "file": "plugins/superstack-build/tools/progress.py",
-   "find": "                    \"requirements\", \"zone\", \"blockedBy\", \"started\", \"holdout\"):",
+   "find": "                    \"requirements\", \"zone\", \"blockedBy\", \"started\", \"holdout\",",
    "replace": "                    \"requirements\", \"zone\", \"blockedBy\", \"started\"):",
    "why": "перезапись таска теряет скрытые проверки — статус меняют чаще, чем проверки, и их пропажа выглядит как «их и не заводили»"
   },
@@ -2053,6 +2053,293 @@
    "find": "FAKE_TOKEN = \"ghp_\" + \"A1b2C3d4E5f6G7h8I9j0K1\"",
    "replace": "FAKE_TOKEN = \"ghp_A1b2C3d4E5f6G7h8I9j0K1\"",
    "why": "секрет-фикстура снова цельным литералом — выкладка разобьёт её прямо внутри строки, которую тест пишет в файл, доктор перестанет находить токен, и три теста покраснеют уже в опубликованном дереве"
+  },
+  {
+   "id": "adr.spec-absorbed-finding-still-demands-a-decision",
+   "file": "plugins/superstack-spec/tools/adr.py",
+   "find": "                    and r.get(\"status\") in (\"in-spec\", \"in-ticket\", \"done\",\n                                            \"deferred\", \"dropped\")}",
+   "replace": "                    and r.get(\"status\") in ()}",
+   "why": "находка, вобранная спекой, снова требует архитектурного решения — остаётся либо писать решения с выдуманным отвергнутым вариантом, либо не проходить гейт никогда; первое обесценивает те решения, где отвергнутый вариант настоящий"
+  },
+  {
+   "id": "design.brief-shows-when-incomplete",
+   "file": "plugins/superstack-spec/tools/design_brief.py",
+   "find": "        if gaps:\n            print(\"ПРОМПТ НЕПОЛОН",
+   "replace": "        if False:\n            print(\"ПРОМПТ НЕПОЛОН",
+   "why": "неполный промпт уходит человеку — он тратит заход во внешний инструмент и возвращается с палитрой без ролей или одиноким экраном, а понять это можно только вернувшись"
+  },
+  {
+   "id": "design.brief-drops-what-to-bring-back",
+   "file": "plugins/superstack-spec/tools/design_brief.py",
+   "find": "1. **Имя у каждого компонента.**",
+   "replace": "1. Что-нибудь на твой вкус.",
+   "why": "из промпта пропадает требование называть компоненты — дальше на них нельзя сослаться по имени в задаче, и вместо готового компонента каждый раз берётся произвольный"
+  },
+  {
+   "id": "design.skill-builds-without-the-design",
+   "file": "plugins/superstack-build/skills/go/SKILL.md",
+   "find": "**Чего в ней делать нельзя:** отдавать таск на интерфейс, пока дизайн не",
+   "replace": "**Заметка:** таск на интерфейс можно отдавать когда угодно, пока дизайн не",
+   "why": "таск на интерфейс снова уходит без принесённого дизайна — строитель выбирает палитру сам, и человек видит её впервые уже работающей"
+  },
+  {
+   "id": "design.prompt-shown-without-checking-docs",
+   "file": "plugins/superstack-spec/tools/design_brief.py",
+   "find": "        if stale:\n            print(f\"ПРОМПТ НЕ ПРОВЕРЕН: {stale}\", file=sys.stderr)",
+   "replace": "        if False:\n            print(f\"ПРОМПТ НЕ ПРОВЕРЕН: {stale}\", file=sys.stderr)",
+   "why": "промпт уходит человеку без сверки с документацией дизайн-инструмента — собранный по памяти модели, он выглядит точно так же, как собранный по документации, и человек узнаёт разницу только вернувшись с бесполезным результатом"
+  },
+  {
+   "id": "design.stale-check-passes-as-fresh",
+   "file": "plugins/superstack-spec/tools/design_brief.py",
+   "find": "    if age > DOCS_FRESH_DAYS:",
+   "replace": "    if False:",
+   "why": "сверка годовой давности считается свежей — инструмент исследовательский и меняется месяцами, а промпт по прошлогоднему представлению неотличим от верного"
+  },
+  {
+   "id": "design.check-without-sources-passes",
+   "file": "plugins/superstack-spec/tools/design_brief.py",
+   "find": "    if not (data.get(\"docs\") or {}).get(\"sources\"):",
+   "replace": "    if False:",
+   "why": "«сверялся» без единой ссылки принимается за проверку — это то же «агент сказал», только про документацию"
+  },
+  {
+   "id": "design.default-stage-is-both",
+   "file": "plugins/superstack-spec/tools/design_brief.py",
+   "find": "        stage = _flag(argv, \"--stage\", \"system\")",
+   "replace": "        stage = _flag(argv, \"--stage\", \"both\")",
+   "why": "по умолчанию печатаются оба этапа разом — человек несёт во внешний инструмент второй вместе с первым и получает экраны раньше системы, то есть систему под уже нарисованный экран"
+  },
+  {
+   "id": "panel.bar-counts-claimed",
+   "file": "plugins/superstack-core/tools/live_panel.py",
+   "find": "    tasks.length ? Math.round(100 * proven / tasks.length) + '%' : '0';",
+   "replace": "    tasks.length ? Math.round(100 * (proven + claimed) / tasks.length) + '%' : '0';",
+   "why": "полоса растёт от заявленного — «агент сказал готово» становится неотличимо от «гейт вернул ноль», и зелёная шкала даёт уверенность ровно там, где её быть не должно"
+  },
+  {
+   "id": "panel.holder-not-validated",
+   "file": "plugins/superstack-build/tools/progress.py",
+   "find": "    if owner not in OWNERS:",
+   "replace": "    if False:",
+   "why": "держателем хода становится любая строка — опечатка в имени делает панель бессмысленной молча, и человек снова не знает, ждут ли его"
+  },
+  {
+   "id": "panel.stale-wait-not-marked",
+   "file": "plugins/superstack-core/tools/live_panel.py",
+   "find": "  $('since').className = 'since' + (ph.owner === 'человек' && ph.since &&",
+   "replace": "  $('since').className = 'since' + (false &&",
+   "why": "долгое ожидание на человеке перестаёт выделяться — «идёт» и «забыли» выглядят одинаково, и вечер уходит на взаимное ожидание"
+  },
+  {
+   "id": "progress.running-does-not-move-phase",
+   "file": "plugins/superstack-build/tools/progress.py",
+   "find": "        data = set_phase(data, BUILD_PHASE, \"исполнитель\", detail, now=keep,\n                         plain=False)",
+   "replace": "        pass",
+   "why": "этап перестаёт следовать из работы и снова зависит от памяти автора: помощник пишет код, а панель показывает прошлый этап — ровно то, что человек увидел 17.08 и назвал расхождением"
+  },
+  {
+   "id": "progress.phase-label-accepts-jargon",
+   "file": "plugins/superstack-build/tools/progress.py",
+   "find": "    bad = _jargon_in(detail)",
+   "replace": "    bad = []",
+   "why": "подпись этапа снова уезжает на язык автора: «таск 06 — жду возврата» проходит молча, и человек, который не пишет код, читает на панели строку, где не понимает ни слова"
+  },
+  {
+   "id": "progress.end-of-work-is-not-measured",
+   "file": "plugins/superstack-build/tools/progress.py",
+   "find": "        entry[\"finished\"] = datetime.now(timezone.utc).isoformat(timespec=\"seconds\")",
+   "replace": "        pass",
+   "why": "длительность частей перестаёт замеряться, и на вопрос «сколько ещё ждать» нечем ответить: остаётся либо молчание, либо выдуманный срок"
+  },
+  {
+   "id": "panel.drift-from-the-work-is-hidden",
+   "file": "plugins/superstack-core/tools/live_panel.py",
+   "find": "  const off = running > 0 && ph.name && ph.name !== BUILD_PHASE;",
+   "replace": "  const off = false;",
+   "why": "панель перестаёт замечать, что разошлась с работой, и уверенно показывает устаревший этап — такой панели верят, поэтому молчащая хуже отсутствующей"
+  },
+  {
+   "id": "panel.estimate-counts-unfinished-parts",
+   "file": "plugins/superstack-core/tools/live_panel.py",
+   "find": "    .filter(t => t.started && t.finished)",
+   "replace": "    .filter(t => t.started)",
+   "why": "оценка «сколько ещё» считается по незаконченным частям, то есть по ничему: срок становится выдуманным, а выдуманному верят и по нему планируют день"
+  },
+  {
+   "id": "plain-ru.stem-ignores-declension",
+   "file": "plugins/superstack-core/tools/plain_ru.py",
+   "find": "        core = stem[:-1] if stem.endswith(\"й\") else stem",
+   "replace": "        core = stem",
+   "why": "жаргон в косвенных падежах проходит мимо словаря («деплоя», «репозитория»), и проверка остаётся зелёной на тексте, который человек не поймёт"
+  },
+  {
+   "id": "derive.blocking-finding-does-not-hand-over-the-turn",
+   "file": "plugins/superstack-core/tools/derive_phase.py",
+   "find": "        who = HUMAN if f[\"блокирующая находка\"] else SYSTEM\n        return _say(\"Проверяем\", who, f,",
+   "replace": "        who = SYSTEM\n        return _say(\"Проверяем\", who, f,",
+   "why": "панель говорит «работаю я», когда работа упёрлась в находку и ждёт решения человека: обе стороны молчат и каждый ждёт другого — это и есть половина потерянного времени прогона"
+  },
+  {
+   "id": "panel.serves-the-written-phase-instead-of-the-derived",
+   "file": "plugins/superstack-core/tools/live_panel.py",
+   "find": "    state[\"phase\"] = {\n        \"name\": got[\"name\"],",
+   "replace": "    state[\"phase\"] = {\n        \"name\": was.get(\"name\") or got[\"name\"],",
+   "why": "этап на панели снова приходит из записи, которую делают отдельной командой и забывают: за один вечер забыли дважды, и панель уверенно показывала не тот этап"
+  },
+  {
+   "id": "panel.keeps-a-caption-from-another-phase",
+   "file": "plugins/superstack-core/tools/live_panel.py",
+   "find": "        \"detail\": was.get(\"detail\", \"\") if same else \"\",",
+   "replace": "        \"detail\": was.get(\"detail\", \"\"),",
+   "why": "заголовок этапа верный, а объяснение под ним от прошлого часа — самая тихая форма вранья: несоответствие нечем заметить"
+  },
+  {
+   "id": "panel.resets-the-clock-on-every-poll",
+   "file": "plugins/superstack-core/tools/live_panel.py",
+   "find": "        \"since\": was.get(\"since\") if same else None,",
+   "replace": "        \"since\": None,",
+   "why": "«идёт уже» обнуляется каждые три секунды: застрявший на час этап выглядит вечно свежим, то есть признак застревания показывает обратное тому, что есть"
+  },
+  {
+   "id": "contract.red-work-may-be-handed-on",
+   "file": "plugins/superstack-build/tools/contract.py",
+   "find": "        if red_n > 0:\n            broken.append(\n                f\"передача работы при красных тестах",
+   "replace": "        if False:\n            broken.append(\n                f\"передача работы при красных тестах",
+   "why": "красный прогон уезжает в чужой контекст: принимающий тратит своё место на разбор поломки, которой не делал, и не знает, чинил ли её кто-то до него"
+  },
+  {
+   "id": "contract.handoffs-without-a-ceiling",
+   "file": "plugins/superstack-build/tools/contract.py",
+   "find": "        if handoffs >= MAX_HANDOFFS:",
+   "replace": "        if False:",
+   "why": "часть можно передавать бесконечно: неверная нарезка перестаёт быть заметной и оплачивается новым контекстом каждый раз, вместо того чтобы чиниться в плане"
+  },
+  {
+   "id": "contract.handoff-need-not-say-where-it-stopped",
+   "file": "plugins/superstack-build/tools/contract.py",
+   "find": "        if not f.get(\"HANDOFF\", \"\").strip() and not f.get(\"CONCERNS\", \"\").strip():",
+   "replace": "        if False:",
+   "why": "передача приходит без «на чём остановился»: принимающий восстанавливает замысел по коду и платит второй раз за то, что передающий уже знал"
+  },
+  {
+   "id": "handoff.prompt-omits-the-context-ceiling",
+   "file": "plugins/superstack-build/tools/handoff.py",
+   "find": "        \"\", \"## Сколько тебя хватит\", \"\", CEILING,",
+   "replace": "",
+   "why": "исполнитель не знает, что у его контекста есть край: подойдя к нему, он либо сдаёт недоделанное как готовое, либо возвращает отказ — оба ответа врут, и оба стоят повторения всей работы с нуля"
+  },
+  {
+   "id": "review.refusal-gets-followups-like-a-shortfall",
+   "file": "plugins/superstack-guard/tools/review.py",
+   "find": "    if kind == SHORTFALL and f < MAX_FOLLOWUPS:",
+   "replace": "    if f < MAX_FOLLOWUPS:",
+   "why": "тому, кто не смог, шлют дозапрос за дозапросом: тот же контекст той же дорогой приходит туда же, и три попытки тратятся на повторение уже провалившейся"
+  },
+  {
+   "id": "review.repair-without-a-named-cause-is-allowed",
+   "file": "plugins/superstack-guard/tools/review.py",
+   "find": "    if not reason.strip():",
+   "replace": "    if False:",
+   "why": "починка без названной причины лечит симптом: подгоняет тест, глушит ошибку пустым catch, вписывает значение — и всё это выглядит зелёным"
+  },
+  {
+   "id": "review.repair-ladder-has-no-end",
+   "file": "plugins/superstack-guard/tools/review.py",
+   "find": "    return {\"to\": \"человеку\", \"step\": \"сдача\", \"allowed\": False,",
+   "replace": "    return {\"to\": \"свежий контекст\", \"step\": \"смена подхода\", \"allowed\": True,",
+   "why": "лестница попыток становится бесконечной: неверная нарезка или неверно понятое требование оплачиваются пятой, шестой и седьмой попыткой вместо того, чтобы чиниться"
+  },
+  {
+   "id": "measure.counts-one-message-many-times",
+   "file": "plugins/superstack-control/tools/measure_run.py",
+   "find": "            if not u or (mid and mid in seen_msgs):",
+   "replace": "            if not u:",
+   "why": "расход завышается вдвое: журнал хранит по записи на каждый блок ответа, и одно сообщение считается до девяти раз — числам верят и по ним меняют пороги"
+  },
+  {
+   "id": "measure.one-ceiling-for-everyone",
+   "file": "plugins/superstack-control/tools/measure_run.py",
+   "find": "            if d.get(\"isSidechain\") and size > CONTEXT_CEILING:",
+   "replace": "            if size > CONTEXT_CEILING:",
+   "why": "длинный контекст ведущей сессии считается превышением: тысячи ложных тревог топят настоящие, и отчёт перестают читать"
+  },
+  {
+   "id": "measure.no-logs-reads-as-zero-spend",
+   "file": "plugins/superstack-control/tools/measure_run.py",
+   "find": "        return {\"status\": \"unknown\", \"dir\": str(d), \"sessions\": [],",
+   "replace": "        return {\"status\": \"pass\", \"dir\": str(d), \"sessions\": [],",
+   "why": "отсутствие журналов выдаётся за нулевой расход: человек видит успокаивающий ноль там, где не измерено ничего"
+  },
+  {
+   "id": "page.frame-passes-as-a-page",
+   "file": "plugins/superstack-guard/tools/page_check.py",
+   "find": "    caркас = len(seen) > PLACEHOLDER_LIMIT",
+   "replace": "    caркас = False",
+   "why": "каркас из заглушек показывается человеку как готовая страница: он открывает её, видит форму для ввода своих данных вместо сайта и решает, что работа не сделана вовсе"
+  },
+  {
+   "id": "page.tests-counted-as-the-page",
+   "file": "plugins/superstack-guard/tools/page_check.py",
+   "find": "        if \".test.\" in f.name:\n            continue",
+   "replace": "        if False:\n            continue",
+   "why": "тестовые файлы считаются страницей: их вхождения удваивают счёт заглушек, и нормальная наполненная страница объявляется каркасом — проверке перестают верить"
+  },
+  {
+   "id": "page.verdict-without-questions",
+   "file": "plugins/superstack-guard/tools/page_check.py",
+   "find": "    v[\"ask\"] = what_to_ask(v)",
+   "replace": "    v[\"ask\"] = []",
+   "why": "человек получает отказ «это каркас» без единого вопроса: он видит запрет и не знает, что именно от него нужно, чтобы страница ожила"
+  },
+  {
+   "id": "blind.judge-cannot-run-the-project",
+   "file": "plugins/superstack-guard/agents/blind-acceptance.md",
+   "find": "tools: Read, Bash, Glob, Grep",
+   "replace": "tools: Read",
+   "why": "приёмка снова становится рецензией: судья читает код и подтверждает, что нужные строки написаны, но не может увидеть, работают ли они вместе — половину того, что человек находит за минуту, он не найдёт"
+  },
+  {
+   "id": "blind.judge-may-fix-what-he-finds",
+   "file": "plugins/superstack-guard/agents/blind-acceptance.md",
+   "find": "tools: Read, Bash, Glob, Grep",
+   "replace": "tools: Read, Bash, Glob, Grep, Edit, Write",
+   "why": "приёмщик получает право чинить и принимает уже собственную работу — независимость проверки исчезает вместе с её смыслом"
+  },
+  {
+   "id": "blind.one-verdict-instead-of-part-by-part",
+   "file": "plugins/superstack-guard/agents/blind-acceptance.md",
+   "find": "**Дальше — разбор ПО КАЖДОЙ ЧАСТИ ПРОСЬБЫ, а не один общий приговор.**",
+   "replace": "**Дальше — общий вывод.**",
+   "why": "составная просьба («галерея, запись и уведомление») сводится к одному слову «частично»: человек узнаёт, что что-то не так, и не узнаёт что именно — приёмка перестаёт быть действием и становится оценкой"
+  },
+  {
+   "id": "blind.unverifiable-passes-in-silence",
+   "file": "plugins/superstack-guard/agents/blind-acceptance.md",
+   "find": "**Отдельным блоком — чего проверить не смог и почему.**",
+   "replace": "Непроверенное можно не упоминать.",
+   "why": "то, что не удалось запустить, молча уходит в «принято»: непроверенное становится подтверждённым, и это самая дорогая тишина прогона"
+  },
+  {
+   "id": "drift.stale-install-passes",
+   "file": "plugins/superstack-control/tools/installed_drift.py",
+   "find": "            elif _sha(f) != _sha(there):",
+   "replace": "            elif False:",
+   "why": "правки в репозитории считаются доехавшими до дела: набор зелёный, планка взята, а запускается прежняя копия — ровно так приёмка дважды осталась без права запуска, и никто этого не заметил"
+  },
+  {
+   "id": "drift.versions-compared-as-strings",
+   "file": "plugins/superstack-control/tools/installed_drift.py",
+   "find": "    versions = sorted((p for p in root.iterdir() if p.is_dir()), key=key)",
+   "replace": "    versions = sorted((p for p in root.iterdir() if p.is_dir()), key=lambda p: p.name)",
+   "why": "версии сравниваются строками, и «0.2.10» оказывается младше «0.2.9»: сверка молча берёт не ту копию и объявляет расхождение там, где его нет, либо молчит там, где оно есть"
+  },
+  {
+   "id": "drift.not-installed-reads-as-in-sync",
+   "file": "plugins/superstack-control/tools/installed_drift.py",
+   "find": "        return {\"plugin\": name, \"status\": \"unknown\", \"installed\": None,",
+   "replace": "        return {\"plugin\": name, \"status\": \"pass\", \"installed\": None,",
+   "why": "«пакет не установлен» выдаётся за «установленное совпадает»: человек читает зелёное там, где сравнивать было не с чем"
   }
  ]
 }

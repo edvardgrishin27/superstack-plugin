@@ -220,5 +220,62 @@ class TestPersistence(unittest.TestCase):
             self.assertEqual(rv.load(p)["findings"], [])
 
 
+class TestRepairKnowsWhyItFailed(unittest.TestCase):
+    """Возврат работы бывает двух видов, и раньше оба шли одним маршрутом.
+
+    НЕДОДЕЛКА — мог и не сделал: красный тест, блокирующая находка. Его
+    контекст ещё держит задачу, дозапрос стоит одной строки.
+
+    ОТКАЗ — пробовал и не смог: тот же контекст той же дорогой приведёт туда
+    же. Раньше «не смог» получал дозапрос за дозапросом — три попытки
+    повторить то, что уже не вышло.
+
+    Взято из autopilot (nick-vels), где разделение описано прозой; здесь оно
+    отвечает кодом возврата.
+    """
+
+    def test_a_shortfall_goes_back_to_the_same_worker(self):
+        r = rv.repair_route({}, rv.SHORTFALL, "тест падает на пустом слоте")
+        self.assertEqual(r["step"], "дозапрос")
+        self.assertIn("тому же", r["to"])
+
+    def test_a_refusal_skips_followups_entirely(self):
+        """Дозапрос к тому, кто не смог, — повторение той же попытки."""
+        r = rv.repair_route({}, rv.REFUSAL, "нет доступа к хранилищу")
+        self.assertEqual(r["step"], "повтор")
+        self.assertIn("свежий", r["to"])
+
+    def test_the_ladder_ends_at_a_different_approach(self):
+        d = {"followups": rv.MAX_FOLLOWUPS, "retries": rv.MAX_RETRIES}
+        r = rv.repair_route(d, rv.SHORTFALL, "та же поломка")
+        self.assertEqual(r["step"], "смена подхода")
+
+    def test_after_the_ladder_it_goes_to_the_human(self):
+        """Пятая попытка означает не упрямую задачу, а неверную нарезку."""
+        d = {"followups": rv.MAX_FOLLOWUPS, "retries": rv.MAX_RETRIES,
+             "approaches": rv.MAX_APPROACHES}
+        r = rv.repair_route(d, rv.SHORTFALL, "снова то же")
+        self.assertFalse(r["allowed"])
+        self.assertIn("нарезка", r["why"])
+
+    def test_repair_without_a_named_cause_is_a_refusal(self):
+        """«Почини, чтобы проходило» — приглашение лечить симптом: подогнать
+        тест, заглушить ошибку, вписать значение."""
+        r = rv.repair_route({}, rv.SHORTFALL, "")
+        self.assertEqual(r["step"], "отказ")
+        self.assertIn("симптом", r["why"])
+
+    def test_an_unknown_kind_is_refused(self):
+        with self.assertRaises(ValueError):
+            rv.repair_route({}, "как-нибудь", "причина")
+
+    def test_attempts_are_counted_by_code_not_by_memory(self):
+        d = {}
+        d = rv.count_repair(d, "дозапрос")
+        d = rv.count_repair(d, "повтор")
+        self.assertEqual(d["followups"], 1)
+        self.assertEqual(d["retries"], 1)
+
+
 if __name__ == "__main__":
     unittest.main()
