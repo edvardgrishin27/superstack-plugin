@@ -294,3 +294,61 @@ class TestHowLongItTookIsMeasured(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestParallelWritersDoNotEraseEachOther(unittest.TestCase):
+    """Волна из двух помощников — это два процесса, пишущих один файл.
+
+    Каждый читает состояние, меняет СВОЮ часть и записывает ЦЕЛИКОМ. Тот, кто
+    записал вторым, затирает чужую правку, и оба выходят с кодом 0. Атомарной
+    замены файла здесь мало: дыра находится между чтением и записью.
+
+    18.08.2026 так исчезла отметка «проверено» у части 10: гейт вернул ноль, я
+    записал результат, а параллельный процесс вернул строке «в работе». Молча,
+    без единой ошибки — заметить можно было только глазами.
+    """
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.f = Path(self.tmp.name) / "state.json"
+        subprocess.run([sys.executable, str(TOOL), "init", str(self.f), "проба"],
+                       capture_output=True, env=ENV, timeout=60)
+        for tid in ("01", "02"):
+            subprocess.run([sys.executable, str(TOOL), "task", str(self.f), tid,
+                            f"часть {tid}", "--wave", "1", "--status", "running"],
+                           capture_output=True, env=ENV, timeout=60)
+
+    def test_two_writers_both_survive(self):
+        import threading
+        done = []
+
+        def close(tid):
+            r = subprocess.run(
+                [sys.executable, str(TOOL), "task", str(self.f), tid, f"часть {tid}",
+                 "--status", "proven", "--exit-code", "0"],
+                capture_output=True, env=ENV, timeout=60)
+            done.append(r.returncode)
+
+        threads = [threading.Thread(target=close, args=(t,)) for t in ("01", "02")]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        self.assertEqual(done, [0, 0], "запись вернула не ноль")
+        data = json.loads(self.f.read_text("utf-8"))
+        got = {t["id"]: t["status"] for w in data["waves"].values() for t in w}
+        self.assertEqual(got.get("01"), "proven", "правка первой части затёрта")
+        self.assertEqual(got.get("02"), "proven", "правка второй части затёрта")
+
+    def test_the_lock_is_released_even_on_a_refused_call(self):
+        """Замок, не снятый после отказа, вешает следующую запись навсегда —
+        и прогон встаёт молча, без ошибки."""
+        subprocess.run([sys.executable, str(TOOL), "task", str(self.f), "01",
+                        "часть 01", "--status", "готово"],
+                       capture_output=True, env=ENV, timeout=60)
+        r = subprocess.run([sys.executable, str(TOOL), "task", str(self.f), "01",
+                            "часть 01", "--status", "claimed"],
+                           capture_output=True, env=ENV, timeout=30)
+        self.assertEqual(r.returncode, 0, "после отказа замок остался взятым")

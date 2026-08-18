@@ -2396,6 +2396,34 @@
    "find": "    return [t for t, need in rules.items() if not need or (set(need) & have)]",
    "replace": "    return [t for t, need in rules.items() if set(need) & have]",
    "why": "темы, нужные всегда — ввод, секреты, инфраструктура, скорость, — исчезают у продукта без особых возможностей: страница из одного экрана остаётся вообще без проверок"
+  },
+  {
+   "id": "progress.state-written-without-a-lock",
+   "file": "plugins/superstack-build/tools/progress.py",
+   "find": "    lock = _Lock(path)\n    lock.__enter__()\n    data = load(path)",
+   "replace": "    lock = _Lock(path)\n    data = load(path)",
+   "why": "два помощника одной волны пишут состояние одновременно, и второй затирает правку первого: отметка «проверено» исчезает молча, с кодом возврата 0, и заметить это можно только глазами"
+  },
+  {
+   "id": "progress.lock-stays-taken-after-a-refusal",
+   "file": "plugins/superstack-build/tools/progress.py",
+   "find": "    except ValueError as e:\n        lock.__exit__()\n        return _fail(str(e))",
+   "replace": "    except ValueError as e:\n        return _fail(str(e))",
+   "why": "замок остаётся взятым после отказа, и следующая запись состояния виснет навсегда — прогон встаёт молча, без ошибки и без признака поломки"
+  },
+  {
+   "id": "contract.crashes-on-an-exit-code",
+   "file": "plugins/superstack-build/tools/contract.py",
+   "find": "        число = next((g for g in red.groups() if g and g.isdigit()), \"0\")\n        red_n = int(число)",
+   "replace": "        red_n = int(red.group(1))",
+   "why": "разбор падает с трассировкой на честном возврате, где написано «exit 1»: инструмент, падающий вместо вердикта, хуже строгого — он не судит вовсе, и работа встаёт без объяснения"
+  },
+  {
+   "id": "contract.expected-failure-covers-everything",
+   "file": "plugins/superstack-build/tools/contract.py",
+   "find": "        хвост = tests[red.end():red.end() + 60]",
+   "replace": "        хвост = tests",
+   "why": "одна пометка «ожидаемый отказ» оправдывает все провалы блока разом — самый дешёвый способ провести красное как зелёное, и он выглядит честной строкой"
   }
  ]
 }

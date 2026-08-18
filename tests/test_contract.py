@@ -195,3 +195,52 @@ class TestWorkCanBeHandedOnInsteadOfFaked(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestAnExpectedFailureIsNotABrokenRun(unittest.TestCase):
+    """Ненулевой код возврата не всегда провал.
+
+    Гейт, доказавший свою работу отказом — «сборка выпуска не пустила пример
+    наполнения» — это УСПЕХ проверки, и числом он неотличим от поломки.
+    Живой случай: исполнитель честно написал «npm run build:release → exit 1
+    (пример наполнения)», а контракт объявил это красным прогоном и завернул
+    работу целиком.
+
+    Угадывать здесь нельзя, поэтому исход называется дословно. Пометка — это
+    утверждение исполнителя, за которое он отвечает, и она снимает ровно тот
+    прогон, рядом с которым стоит.
+    """
+
+    BASE = ("STATUS: DONE\nFILES: src/a.ts\nTESTS: {}\n"
+            "INTERFACES: —\nREQUIREMENTS: R01 done\nCONCERNS: нет\nBLOCKERS: нет")
+
+    def _check(self, tests: str):
+        return ct.check(self.BASE.format(tests))
+
+    def test_a_green_run_passes(self):
+        v = self._check("npm test -> 169 passed, exit 0")
+        self.assertEqual(v["status"], "pass")
+
+    def test_a_real_failure_is_still_caught(self):
+        v = self._check("npm test -> 167 passed, 2 failed")
+        self.assertEqual(v["status"], "fail")
+        self.assertEqual(v["tests_red"], 2)
+
+    def test_a_gate_proving_itself_by_refusing_is_not_red(self):
+        v = self._check("npm test -> 169 passed, exit 0 | "
+                        "npm run build:release -> exit 1 (ожидаемый отказ: пример наполнения)")
+        self.assertEqual(v["status"], "pass", v.get("broken"))
+
+    def test_the_mark_does_not_cover_a_later_failure(self):
+        """Иначе одна пометка оправдала бы все провалы блока разом — и это был
+        бы самый дешёвый способ провести красное как зелёное."""
+        v = self._check("npm run build:release -> exit 1 (ожидаемый отказ) | "
+                        "npm test -> 3 failed")
+        self.assertEqual(v["status"], "fail")
+        self.assertEqual(v["tests_red"], 3)
+
+    def test_the_parser_does_not_crash_on_an_exit_code(self):
+        """Инструмент, падающий с трассировкой вместо вердикта, хуже строгого:
+        он не судит вовсе. Так и случилось на живом возврате."""
+        v = self._check("npm run build -> exit 1")
+        self.assertIn(v["status"], ("pass", "fail"))

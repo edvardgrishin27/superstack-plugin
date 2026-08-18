@@ -11,7 +11,7 @@
       "name": "superstack-brain",
       "source": "./plugins/superstack-brain",
       "description": "Память и эволюция: журнал находок с планкой из трёх условий, доктор, линт памяти.",
-      "version": "0.2.7",
+      "version": "0.2.8",
       "license": "MIT",
       "category": "workflow"
     },
@@ -19,7 +19,7 @@
       "name": "superstack-build",
       "source": "./plugins/superstack-build",
       "description": "Стройка: /go от фразы до доказанного куска, экипаж, передача таска, исполнитель.",
-      "version": "0.2.7",
+      "version": "0.2.8",
       "license": "MIT",
       "category": "workflow"
     },
@@ -27,7 +27,7 @@
       "name": "superstack-control",
       "source": "./plugins/superstack-control",
       "description": "Пульт: /what, /oops, /fix — четыре команды, которые знает новичок.",
-      "version": "0.2.7",
+      "version": "0.2.8",
       "license": "MIT",
       "category": "workflow"
     },
@@ -35,7 +35,7 @@
       "name": "superstack-core",
       "source": "./plugins/superstack-core",
       "description": "Ядро: пробы машины, решатель правил, отчёт страницей в трёх глубинах.",
-      "version": "0.2.7",
+      "version": "0.2.8",
       "license": "MIT",
       "category": "workflow"
     },
@@ -43,7 +43,7 @@
       "name": "superstack-guard",
       "source": "./plugins/superstack-guard",
       "description": "Гарантии: верификация, слепая приёмка, три оси ревью, мутации тестов проекта.",
-      "version": "0.2.7",
+      "version": "0.2.8",
       "license": "MIT",
       "category": "workflow"
     },
@@ -51,7 +51,7 @@
       "name": "superstack-install",
       "source": "./plugins/superstack-install",
       "description": "Установщик: базовый набор, обратимое применение, доказательство прогоном.",
-      "version": "0.2.7",
+      "version": "0.2.8",
       "license": "MIT",
       "category": "workflow"
     },
@@ -59,7 +59,7 @@
       "name": "superstack-spec",
       "source": "./plugins/superstack-spec",
       "description": "Проектирование: манифест требований, четыре гейта, состязательный проход, ADR.",
-      "version": "0.2.7",
+      "version": "0.2.8",
       "license": "MIT",
       "category": "workflow"
     }

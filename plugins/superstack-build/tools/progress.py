@@ -115,6 +115,41 @@ def load(path: Path) -> dict:
     return d
 
 
+class _Lock:
+    """Замок на файл состояния — на всё время «прочитал, изменил, записал».
+
+    Атомарной замены файла мало. Волна из двух помощников означает два процесса,
+    которые читают состояние, меняют СВОЮ часть и пишут ЦЕЛИКОМ: тот, кто
+    записал вторым, затирает чужую правку, и оба выходят с кодом 0.
+
+    Это не теория. 18.08.2026 в девятой волне так исчезла отметка «проверено» у
+    части 10: я закрыл её кодом возврата, а параллельный процесс вернул ей
+    «в работе» — молча, без единой ошибки. Заметить можно было только глазами.
+
+    Замок берётся на всю операцию, а не на запись: между чтением и записью и
+    находится дыра.
+    """
+
+    def __init__(self, path: Path):
+        self.path = path.with_suffix(path.suffix + ".lock")
+        self.fh = None
+
+    def __enter__(self):
+        import fcntl
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        self.fh = self.path.open("a+")
+        fcntl.flock(self.fh.fileno(), fcntl.LOCK_EX)
+        return self
+
+    def __exit__(self, *exc):
+        import fcntl
+        try:
+            fcntl.flock(self.fh.fileno(), fcntl.LOCK_UN)
+        finally:
+            self.fh.close()
+        return False
+
+
 def save(path: Path, data: dict, now: "str | None" = None) -> None:
     """Записать состояние, проставив отметку времени.
 
@@ -442,6 +477,11 @@ def main() -> int:
         return 3
     cmd, path = argv[0], Path(argv[1])
     rest = argv[2:]
+    # Замок держится до конца операции: читаем, меняем и пишем под ним.
+    # Иначе параллельный помощник, начавший читать между нашими чтением и
+    # записью, вернёт файл к прежнему виду — молча и с кодом 0.
+    lock = _Lock(path)
+    lock.__enter__()
     data = load(path)
 
     try:
@@ -529,9 +569,11 @@ def main() -> int:
         else:
             return _fail(f"неизвестная команда: {cmd}")
     except ValueError as e:
+        lock.__exit__()
         return _fail(str(e))
 
     save(path, data)
+    lock.__exit__()
     s = summary(data)
     print(json.dumps({**data, "summary": s}, ensure_ascii=False, indent=1))
     # Запись состояния — не место для вердикта о полноте: пока идёт стройка,
