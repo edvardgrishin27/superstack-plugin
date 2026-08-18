@@ -28,6 +28,8 @@ temp-дереве.
 from __future__ import annotations
 
 import importlib.util
+import contextlib
+import io
 import json
 import os
 import subprocess
@@ -634,3 +636,73 @@ class TestEveryMutationAnchorResolves(unittest.TestCase):
         когда мутация выживет. Пустое поле превращает отчёт в список идентификаторов."""
         mute = [m["id"] for m in self.muts if len(m.get("why", "")) < 20]
         self.assertEqual(mute, [], f"мутации без объяснения: {mute}")
+
+
+class TestTheBarShowsItIsAlive(unittest.TestCase):
+    """Долгий прогон без признака жизни неотличим от зависшего.
+
+    Ворота мутаций идут 45+ минут и печатали всё разом в конце. Судить о том,
+    идёт прогон или встал, можно было только по смене дочерних процессов в
+    `ps`. Это ровно тот класс отказа, который ворота ловят у ЧУЖОГО кода —
+    механизм, о работе которого нельзя узнать, — и он был у самой планки.
+
+    Поток идёт в stderr намеренно: stdout занят машиночитаемым отчётом, и
+    строка прогресса в нём сломала бы разбор тому, кто читает JSON.
+    """
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.plug = Path(self.tmp.name)
+        (self.plug / "tests").mkdir(parents=True)
+        (self.plug / "tools").mkdir(parents=True)
+        (self.plug / "tools" / "t.py").write_text("x = 'GOOD'\n", encoding="utf-8")
+        self._orig, gt.PLUG = gt.PLUG, self.plug
+        self.addCleanup(setattr, gt, "PLUG", self._orig)
+
+    def _прогон(self, поймана: bool):
+        (self.plug / "tests" / "mutations.json").write_text(json.dumps(
+            {"mutations": [
+                {"id": "п1", "file": "tools/t.py", "find": "GOOD",
+                 "replace": "СЛОМАНО", "why": "первая"},
+                {"id": "п2", "file": "tools/t.py", "find": "x =",
+                 "replace": "y =", "why": "вторая, с длинным объяснением"}]},
+            ensure_ascii=False), encoding="utf-8")
+        орig = gt._sh
+        gt._sh = lambda *a, **k: ((1, "") if поймана else (0, ""))
+        self.addCleanup(setattr, gt, "_sh", орig)
+        буфер = io.StringIO()
+        with contextlib.redirect_stderr(буфер):
+            v = gt._mutate_all(json.loads(
+                (self.plug / "tests" / "mutations.json").read_text("utf-8"))["mutations"])
+        return v, буфер.getvalue()
+
+    def test_each_mutation_reports_before_it_runs(self):
+        _, поток = self._прогон(поймана=True)
+        self.assertIn("мутация 1/2", поток,
+                      "прогон молчит — снаружи «идёт» не отличить от «висит»")
+        self.assertIn("мутация 2/2", поток)
+        self.assertIn("п1", поток, "не названо, какая именно идёт")
+
+    def test_a_survivor_is_announced_at_once_not_at_the_end(self):
+        """Выжившая — единственная новость, ради которой стоит прервать поток.
+
+        Узнать о ней через сорок минут значит сорок минут считать, что всё в
+        порядке, и всё это время принимать решения на ложном основании.
+        """
+        _, поток = self._прогон(поймана=False)
+        self.assertIn("ВЫЖИЛА: п1", поток)
+        self.assertIn("ВЫЖИЛА: п2", поток)
+
+    def test_the_stream_stays_out_of_the_machine_readable_output(self):
+        """Обратный контроль: прогресс в stdout сломал бы разбор отчёта."""
+        буфер = io.StringIO()
+        with contextlib.redirect_stdout(буфер):
+            self._прогон(поймана=True)
+        self.assertNotIn("мутация 1/2", буфер.getvalue(),
+                         "строка прогресса попала в stdout — тот, кто читает "
+                         "отчёт JSON-ом, получит мусор перед ним")
+
+
+if __name__ == "__main__":
+    unittest.main()

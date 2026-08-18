@@ -1176,6 +1176,15 @@
     "file": "tests/test_distribution.py",
     "contains": "test_the_workflow_is_one_github_will_actually_accept"
    }
+  },
+  {
+   "id": "L7.bar-shows-it-is-alive",
+   "layer": "L7 эволюция",
+   "mechanism": "долгие ворота подают признак жизни в stderr: номер, имя и оценка остатка по факту, а выжившая объявляется сразу",
+   "evidence": {
+    "file": "tools/gauntlet.py",
+    "contains": "мутация {n}/{всего}"
+   }
   }
  ]
 }
