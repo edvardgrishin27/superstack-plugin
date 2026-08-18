@@ -60,12 +60,30 @@ STATE="${SUPERSTACK_STATE_DIR:-${HOME:-/nonexistent}/.claude/superstack}"
 # хук срабатывает в КАЖДОМ проекте на машине, сохраняя чужие транскрипты.
 # Отметку ставит явный вызов скилла: /go, /superstack, /what, /fix, /oops.
 PROJECT="${SUPERSTACK_PROJECT_DIR:-${CLAUDE_PROJECT_DIR:-$PWD}}"
+# Симлинки разрешаются ОБЯЗАТЕЛЬНО. Отметку пишет `enable.py` через
+# `path.resolve()`, то есть уже разрешённой; сюда путь приходит из окружения,
+# а `$PWD` оболочка наследует как есть. На macOS `/var` — симлинк на
+# `/private/var`, и одного этого хватает, чтобы строки не совпали: отметка
+# стоит, гейт её не видит, и НИ ОДИН хук не срабатывает. Молча — а значит
+# человек остаётся без гейта верификации и не узнаёт об этом.
+# Не удалось перейти в каталог — оставляем как есть: гейт не имеет права
+# падать из-за проверки собственного пути.
+PROJECT=$(CDPATH= cd -- "$PROJECT" 2>/dev/null && pwd -P) || \
+  PROJECT="${SUPERSTACK_PROJECT_DIR:-${CLAUDE_PROJECT_DIR:-$PWD}}"
+[ -n "$PROJECT" ] || PROJECT="$PWD"
 enabled_here() {
   [ -f "$STATE/projects" ] || return 1
   while IFS= read -r line; do
     [ -n "$line" ] || continue
     # Совпадение по сегментам пути: /a/bc не заводится записью /a/b.
     case "$PROJECT/" in "$line"/*) return 0 ;; esac
+    # ...и то же самое по разрешённым именам. Один и тот же каталог приходит
+    # сюда под разными именами: `enable.py` пишет `path.resolve()`, оболочка
+    # отдаёт `$PWD` как есть, а на macOS `/var` — симлинк на `/private/var`.
+    # Сверять одну сторону мало: промах возможен в обе.
+    real=$(CDPATH= cd -- "$line" 2>/dev/null && pwd -P) || real=""
+    [ -n "$real" ] || continue
+    case "$PROJECT/" in "$real"/*) return 0 ;; esac
   done < "$STATE/projects"
   return 1
 }

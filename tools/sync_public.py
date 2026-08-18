@@ -48,7 +48,8 @@ REPO = Path(__file__).resolve().parent.parent
 #: десктопе нет, — и предлагать три пакета из семи, что даёт рабочий на вид
 #: `/go`, падающий на первом гейте. Правки входа жили в приватном и не доезжали
 #: до тех, кто по ним ставит.
-CARRY = ("plugins", "tests", "tools", "data", ".claude-plugin", "README.md")
+CARRY = ("plugins", "tests", "tools", "data", ".claude-plugin",
+         ".github", "README.md")
 
 #: Длина, с которой строка начинает выглядеть как ключ для чужого сканера.
 LITERAL_LIMIT = 24

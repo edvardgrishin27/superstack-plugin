@@ -1,0 +1,91 @@
+# SUPERSTACK — ворота на каждый push.
+#
+# Зачем. Инструмент требует «либо код возврата ноль, либо не готово», а сам до
+# сих пор жил без автопрогона: числа в сообщениях коммитов ставил скрипт
+# выкладки, и они верны на момент коммита — но обычный `git push` идёт мимо
+# него, и красное уезжало бы молча.
+#
+# Что здесь НЕ делается и почему. Ворота мутаций идут 45+ минут: применить
+# поломку, прогнать набор, восстановить — и так 347 раз. Вешать это на каждый
+# push значит либо ждать час на правку опечатки, либо через неделю отключить
+# проверку целиком. Поэтому мутации — отдельным заданием по ночам и на теге.
+#
+# Ворота «манифест» частично требуют `claude plugin validate`; в CI этого
+# двоичного файла нет. Проверка честно скажет «не смог» и НЕ будет выдана за
+# пройденную — сверка маркетплейса с деревом при этом отрабатывает полностью.
+name: ворота
+
+on:
+  push:
+  pull_request:
+  schedule:
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+
+jobs:
+  набор:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install --quiet pytest
+      - name: тесты
+        run: python -m pytest tests/ -q
+      - name: герметичность — тот же набор при чужом HOME
+        run: HOME="$(mktemp -d)" python -m pytest tests/ -q
+
+  ворота:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install --quiet pytest
+      - name: проводка, правила, манифест, план
+        run: |
+          python3 tools/gauntlet.py --quick > ворота.json || true
+          python3 - <<'PY'
+          import json, sys
+          v = json.load(open("ворота.json"))
+          красные, неясные = [], []
+          for g in v["gates"]:
+              if g["status"] == "fail":
+                  красные.append(f'{g["gate"]}: {g["detail"]}')
+              elif g["status"] == "unknown":
+                  неясные.append(f'{g["gate"]}: {g["detail"]}')
+              elif g["status"] == "pass":
+                  print(f'  {g["gate"]}: {g["detail"]}')
+          for n in неясные:
+              print(f"::warning::не смог проверить — {n}")
+          if красные:
+              for r in красные:
+                  print(f"::error::{r}")
+              sys.exit(1)
+          PY
+
+  мутации:
+    # Только по ночам, на теге и по кнопке: 347 поломок × прогон набора.
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install --quiet pytest
+      - name: каждая зарегистрированная поломка обязана уронить набор
+        run: |
+          python3 tools/gauntlet.py --gate мутации > мутации.json || true
+          python3 - <<'PY'
+          import json, sys
+          v = json.load(open("мутации.json"))
+          g = next(x for x in v["gates"] if x["gate"] == "мутации")
+          print(g["detail"])
+          for s in g.get("survivors", []):
+              print(f"::error::мутация выжила — {s}")
+          sys.exit(0 if g["status"] == "pass" else 1)
+          PY

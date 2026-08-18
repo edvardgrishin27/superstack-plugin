@@ -138,6 +138,109 @@ class TestHooksAreSilentInForeignProjects(unittest.TestCase):
         self.assertIn("hookSpecificOutput", p.stdout)
 
 
+class TestTheGateSurvivesASymlinkedPath(unittest.TestCase):
+    """Отметка стоит, а гейт её не видит — из-за симлинка в пути.
+
+    Найдено проверкой выкладки с чистого клона: клон лёг в `mktemp -d`, то есть
+    под `/var/folders/...`, а `/var` на macOS — симлинк на `/private/var`.
+    Одиннадцать тестов покраснели на КОДЕ, который на самом деле верен.
+
+    Дефект при этом настоящий и тяжелее, чем выглядит. `enable.py` пишет
+    `path.resolve()` — разрешённый путь; хук берёт `$PWD`, который оболочка
+    наследует как есть. У человека, чей проект лежит под симлинком (`/tmp`,
+    сетевой том, синхронизированный каталог), отметка проставится, а НИ ОДИН
+    хук не сработает: ни гейт верификации, ни страховка памяти, ни вопрос об
+    уроке. Молча — и узнать об этом неоткуда.
+
+    На своей машине это не воспроизводится: репозиторий лежит под `/Users`,
+    где симлинка нет. Поэтому тест строит симлинк сам.
+    """
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        база = Path(self.tmp.name)
+        self.state = база / "state"
+        self.state.mkdir()
+        self.настоящий = база / "настоящий"
+        self.настоящий.mkdir()
+        # Ссылка на тот же каталог другим именем — ровно то, чем является
+        # `/var` для `/private/var`.
+        self.через_ссылку = база / "ссылка"
+        self.через_ссылку.symlink_to(self.настоящий, target_is_directory=True)
+
+    def _след(self, hook: Path, project: Path) -> tuple:
+        """Наблюдаемый след запуска: заговорил ли, каким кодом вышел, оставил
+        ли снимок. Сравнивать сами тексты нельзя — в них входит путь проекта,
+        и он законно разный под разными именами.
+        """
+        транскрипт = Path(self.tmp.name) / "т.jsonl"
+        транскрипт.write_text('{"role":"user"}\n', encoding="utf-8")
+        снимки = self.state / "precompact"
+        for f in снимки.glob("*.jsonl") if снимки.is_dir() else ():
+            f.unlink()
+        # Отметка «когда спрашивали в прошлый раз» делает второй запуск подряд
+        # молчаливым: хук не спрашивает про урок, если с прошлого раза ничего
+        # не менялось. Без сброса сравнение измеряло бы её, а не гейт — первая
+        # версия теста так и падала, показывая расхождение там, где его нет.
+        (self.state / "last-lesson-ask").unlink(missing_ok=True)
+        # То же и у гейта верификации: он помечает сессию, которой уже сказал,
+        # и второй раз молчит. Оба следа — законная память хука о собственной
+        # работе, но здесь она маскировала бы измеряемое.
+        (self.state / "gate-noted.sessions").unlink(missing_ok=True)
+        env = {**os.environ, "SUPERSTACK_STATE_DIR": str(self.state),
+               "SUPERSTACK_PROJECT_DIR": str(project)}
+        env.pop("SUPERSTACK_DISABLE", None)
+        env.pop("SUPERSTACK_IGNORE_PAUSE", None)
+        p = subprocess.run(
+            ["sh", str(hook)], capture_output=True, text=True, timeout=60,
+            env=env, cwd=str(project),
+            input='{"session_id":"с1","transcript_path":"%s"}' % транскрипт)
+        оставил = снимки.is_dir() and any(снимки.glob("*.jsonl"))
+        return (bool(p.stdout.strip()), p.returncode, оставил)
+
+    def test_the_gate_opens_through_a_symlink_exactly_as_it_does_directly(self):
+        """Отметка стоит разрешённым путём, путь приходит через ссылку.
+
+        Сигнал — не совпадение текстов (в них входит сам путь), а то, что след
+        запуска ОТЛИЧАЕТСЯ от следа при закрытом гейте. Без этого сравнения
+        тест зеленел бы на двух одинаково молчащих запусках, то есть на
+        полностью выключенной системе.
+        """
+        for hook in AUTO_HOOKS:
+            with self.subTest(hook=hook.name):
+                (self.state / "projects").write_text("", encoding="utf-8")
+                закрыт = self._след(hook, self.через_ссылку)
+                (self.state / "projects").write_text(
+                    str(self.настоящий.resolve()) + "\n", encoding="utf-8")
+                через_ссылку = self._след(hook, self.через_ссылку)
+                напрямую = self._след(hook, self.настоящий)
+                self.assertNotEqual(
+                    через_ссылку, закрыт,
+                    f"{hook.name} не отличил открытый гейт от закрытого — "
+                    "отметка стоит разрешённым путём, а путь пришёл через "
+                    "симлинк, и они не сопоставились")
+                self.assertEqual(
+                    через_ссылку, напрямую,
+                    f"{hook.name} ведёт себя по-разному под двумя именами "
+                    "одного каталога")
+
+    def test_a_mark_written_unresolved_is_still_found(self):
+        """Обратная сторона: отметка записана НЕразрешённой.
+
+        Так выглядит файл, правленный руками или оставшийся от прежней версии.
+        Сверять только одну сторону значит починить свой случай и сломать
+        соседний — что и произошло: первая правка уронила существующий тест.
+        """
+        (self.state / "projects").write_text(
+            str(self.через_ссылку) + "\n", encoding="utf-8")
+        сказал, _, _ = self._след(PKG / "hooks" / "session-lesson.sh",
+                                  self.настоящий)
+        self.assertTrue(сказал, "отметка неразрешённым путём перестала "
+                                "находиться — починили одну сторону, сломав "
+                                "другую")
+
+
 class TestTheGateIsInEveryAutomaticHook(unittest.TestCase):
     """Новый автоматический хук без этого гейта вернёт ровно ту болезнь, и
     заметят её опять только по жалобе из чужого проекта."""

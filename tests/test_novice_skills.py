@@ -34,6 +34,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import re
 import os
 import subprocess
 import sys
@@ -124,9 +125,13 @@ class TestSkillsPassTheGate(unittest.TestCase):
         v = self._review("fix")
         self.assertEqual(v["status"], "clean", msg=json.dumps(v, ensure_ascii=False))
 
+    def test_stop_is_clean(self):
+        v = self._review("stop")
+        self.assertEqual(v["status"], "clean", msg=json.dumps(v, ensure_ascii=False))
+
     def test_frontmatter_name_is_literal(self):
         """Карта плана ищет буквально «name: what» / «name: oops» / «name: fix»."""
-        for name in ("what", "oops", "fix"):
+        for name in ("what", "oops", "fix", "stop"):
             text = (SKILLS / name / "SKILL.md").read_text(encoding="utf-8")
             with self.subTest(skill=name):
                 self.assertIn(f"name: {name}", text)
@@ -136,12 +141,61 @@ class TestSkillsPassTheGate(unittest.TestCase):
     def test_description_names_a_trigger_not_a_function(self):
         """«Когда брать», а не «что делает» — проверяется тем же check_when,
         которым живёт настоящий гейт, не отдельной эвристикой теста."""
-        for name in ("what", "oops", "fix"):
+        for name in ("what", "oops", "fix", "stop"):
             s = skill_test.load(SKILLS / name, skill_test.LISTING_BUDGET_CHARS,
                                 PKG)
             c = skill_test.check_when(s)
             with self.subTest(skill=name):
                 self.assertEqual(c.state, "pass", msg=c.detail)
+
+
+class TestTheBrakeWorksFromAPhrase(unittest.TestCase):
+    """Тормоз обязан срабатывать со слов, а не с команды в терминале.
+
+    Повод — не теория. Выключателей было два, `SUPERSTACK_DISABLE=1` и
+    `tools/pause.sh on`, и оба требуют терминала. То есть у человека, которому
+    гейт верификации не даёт закрыть ход, тормоза не было вовсе: чтобы
+    остановить систему, ему полагалось набрать команду, которую он набирать не
+    умеет. Установка без терминала при этом была сделана честно — продукт
+    впускал легко и не выпускал.
+    """
+
+    def setUp(self):
+        self.t = (SKILLS / "stop" / "SKILL.md").read_text("utf-8")
+        self.gate = (PKG / "hooks" / "verify-gate.sh").read_text("utf-8")
+
+    def test_the_description_carries_the_words_a_stuck_person_says(self):
+        """Скилл выбирается по description. Слова берутся человеческие —
+        те, что человек напишет в панике, а не имя команды."""
+        описание = self.t.split("---")[1]
+        for слово in ("останови", "выключи", "не могу закрыть ход", "включи"):
+            with self.subTest(слово=слово):
+                self.assertIn(слово, описание.lower(),
+                              f"фразы «{слово}» нет в description — скилл не "
+                              "подтянется, когда его позовут этими словами")
+
+    def test_the_brake_calls_the_script_that_confirms_the_flag(self):
+        self.assertIn('"$CLAUDE_PLUGIN_ROOT/tools/pause.sh" on', self.t)
+        self.assertIn('"$CLAUDE_PLUGIN_ROOT/tools/pause.sh" off', self.t)
+
+    def test_the_block_message_names_the_way_out(self):
+        """Выход назван ТАМ, где человек застрял.
+
+        Документация здесь не считается: текст блока — единственное, что
+        человек читает в момент, когда система его не отпускает.
+        """
+        self.assertIn("останови суперстек", self.gate,
+                      "блок гейта не называет фразу выхода — человек читает "
+                      "«ход не закрывается» и не знает, что с этим делать")
+
+    def test_the_block_message_does_not_hand_out_shell_commands(self):
+        блок = self.gate[self.gate.rindex("printf '{\"decision\":\"block\""):]
+        for команда in ("SUPERSTACK_DISABLE=1", "pause.sh on"):
+            with self.subTest(команда=команда):
+                self.assertNotIn(команда, блок,
+                                 "в блоке предлагается команда оболочки — "
+                                 "это возвращает человека ровно в ту точку, "
+                                 "из-за которой тормоз и переписан")
 
 
 class TestGateHasARedPair(unittest.TestCase):
@@ -161,7 +215,10 @@ class TestGateHasARedPair(unittest.TestCase):
     def _copy_skill_with_broken_path(self, name: str) -> Path:
         """Копия реального скилла с ОДНОЙ порчей: путь на несуществующий файл."""
         src = (SKILLS / name / "SKILL.md").read_text(encoding="utf-8")
-        broken = src.replace(f"tools/{name}.py", "tools/does-not-exist.py")
+        первый = re.search(r"tools/([\w.-]+\.(?:py|sh))", src)
+        self.assertIsNotNone(
+            первый, f"{name} не зовёт ни одного инструмента — ломать нечего")
+        broken = src.replace(первый.group(0), "tools/does-not-exist.py", 1)
         self.assertNotEqual(src, broken, "подмена не сработала — тест ничего не проверяет")
         dst_dir = self.root / "skills" / name
         dst_dir.mkdir(parents=True)
@@ -169,7 +226,7 @@ class TestGateHasARedPair(unittest.TestCase):
         return dst_dir
 
     def test_broken_tool_path_fails_the_gate(self):
-        for name in ("what", "oops", "fix"):
+        for name in ("what", "oops", "fix", "stop"):
             with self.subTest(skill=name):
                 dst = self._copy_skill_with_broken_path(name)
                 s = skill_test.load(dst, skill_test.LISTING_BUDGET_CHARS, self.root)

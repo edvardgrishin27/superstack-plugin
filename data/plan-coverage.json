@@ -1131,6 +1131,42 @@
     "file": "tools/gauntlet.py",
     "contains": "def зовёт"
    }
+  },
+  {
+   "id": "L1.scope-gate-resolves-symlinks",
+   "layer": "L1 конституция",
+   "mechanism": "гейт области сверяет пути с обеих сторон разрешёнными: один каталог под двумя именами ведёт себя одинаково",
+   "evidence": {
+    "file": "plugins/superstack/hooks/verify-gate.sh",
+    "contains": "real=$(CDPATH= cd -- \"$line\""
+   }
+  },
+  {
+   "id": "L6.brake-from-a-phrase",
+   "layer": "L6 пульт",
+   "mechanism": "остановка системы срабатывает с человеческой фразы, а не с команды в терминале",
+   "evidence": {
+    "file": "plugins/superstack/skills/stop/SKILL.md",
+    "contains": "name: stop"
+   }
+  },
+  {
+   "id": "L5.block-names-the-exit",
+   "layer": "L5 гарантии",
+   "mechanism": "блок гейта называет выход там, где человек застрял, — фразой, а не переменной окружения",
+   "evidence": {
+    "file": "plugins/superstack/hooks/verify-gate.sh",
+    "contains": "останови суперстек"
+   }
+  },
+  {
+   "id": "L5.gates-run-on-every-push",
+   "layer": "L5 гарантии",
+   "mechanism": "набор и быстрые ворота гоняются автоматически на каждый push; мутации — по ночам и на теге",
+   "evidence": {
+    "file": ".github/workflows/gates.yml",
+    "contains": "pytest tests/"
+   }
   }
  ]
 }
