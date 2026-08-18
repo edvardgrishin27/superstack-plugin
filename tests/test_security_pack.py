@@ -27,9 +27,9 @@ import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from paths import plug  # noqa: E402
+from paths import PKG  # noqa: E402
 
-TOOL = plug("superstack-guard") / "tools" / "security_pack.py"
+TOOL = PKG / "tools" / "security_pack.py"
 _s = importlib.util.spec_from_file_location("ss_security_pack", TOOL)
 sp = importlib.util.module_from_spec(_s)
 _s.loader.exec_module(sp)

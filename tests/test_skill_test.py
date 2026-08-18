@@ -34,7 +34,7 @@ import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from paths import REPO, at, plug  # noqa: E402
+from paths import PKG, REPO, at  # noqa: E402
 
 ROOT = REPO
 TOOL = at("tools", "skill_test.py")
@@ -556,7 +556,7 @@ class TestShippedSkillsAreParsable(unittest.TestCase):
     """
 
     def test_every_shipped_skill_gets_a_verdict(self):
-        skills = sorted(p for p in (plug("superstack-control") / "skills").iterdir() if p.is_dir())
+        skills = sorted(p for p in (PKG / "skills").iterdir() if p.is_dir())
         self.assertTrue(skills, "в плагине не нашлось ни одного скилла")
         for d in skills:
             with self.subTest(skill=d.name):

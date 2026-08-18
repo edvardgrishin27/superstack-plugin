@@ -10,35 +10,36 @@
   · за один заход сюда добавилось шесть инструментов, до которых не дотягивался
     ни один скилл;
   · а два вызова, которые в сборочном скилле БЫЛИ, указывали в пустоту: скилл
-    живёт в `superstack-build` и звал `$CLAUDE_PLUGIN_ROOT/tools/verify.py`,
-    хотя `verify.py` лежит в `superstack-guard`.
+    жил в пакете `superstack-build` и звал `$CLAUDE_PLUGIN_ROOT/tools/verify.py`,
+    хотя `verify.py` лежал в `superstack-guard`.
 
 Последнее — самый тихий из четырёх отказов. Он выглядит подключённым и падает
 «нет такого файла», то есть как поломка окружения; человек идёт чинить
 установку. Тесты его не видят: файл на месте, функции работают, набор зелёный.
 
-Ворота отвечают на оба вопроса разом: дотянется ли кто-нибудь до инструмента и
-существует ли путь, которым его зовут.
+Слияние семи пакетов в один убрало ПРИЧИНУ четвёртого отказа — чужих пакетов
+больше нет, и резолвер с картой владельцев удалены вместе с ними. Проверка
+осталась и стала строже: раньше половина вызовов пряталась за резолвером и
+воротам была не видна, теперь каждый вызов написан полным путём и читается
+ими буквально. Опечатка в имени инструмента даёт тот же тихий отказ, что и
+межпакетный путь, — поэтому ворота отвечают на оба вопроса разом: дотянется ли
+кто-нибудь до инструмента и существует ли путь, которым его зовут.
 """
 from __future__ import annotations
 
 import importlib.util
 import json
+import re
 import tempfile
 import unittest
 from pathlib import Path
 
-from paths import REPO
+from paths import PKG, REPO, packages
 
 _g = importlib.util.spec_from_file_location("gauntlet_wiring",
                                             REPO / "tools" / "gauntlet.py")
 gt = importlib.util.module_from_spec(_g)
 _g.loader.exec_module(gt)
-
-WHERE = REPO / "plugins" / "superstack-build" / "tools" / "where.py"
-_w = importlib.util.spec_from_file_location("superstack_where", WHERE)
-wh = importlib.util.module_from_spec(_w)
-_w.loader.exec_module(wh)
 
 
 class Tree(unittest.TestCase):
@@ -102,6 +103,36 @@ class TestUnreachableIsRed(Tree):
         v = gt.gate_wiring()
         self.assertEqual(v["status"], "fail")
         self.assertEqual(len(v["dead"]), 2)
+
+    def test_a_tool_reached_only_by_python_import_is_alive(self):
+        """`import derive_phase` — это вызов, хотя расширения в нём нет.
+
+        Тест написан по живому отказу: инструмент числился достижимым потому,
+        что его имя встречалось в карте владельцев внутри резолвера — то есть
+        в строке справочника, а не в вызове. Слияние пакетов удалило резолвер,
+        маска слетела, и ворота назвали мёртвым инструмент, который работает
+        на каждом прогоне панели.
+        """
+        self.tool("a", "panel.py", "import helper\n")
+        self.tool("a", "helper.py")
+        self.skill("a", "зовём panel.py")
+        self.assertEqual(gt.gate_wiring()["status"], "pass")
+
+    def test_a_bare_mention_is_not_a_call(self):
+        """Обратный контроль, без которого предыдущий тест опасен.
+
+        Если считать вызовом любое упоминание имени, ворота позеленеют на
+        строке справочника и на комментарии — то есть перестанут ловить ровно
+        ту болезнь, ради которой написаны. Именно так и вышло с картой
+        владельцев: имя было, вызова не было, ворота молчали.
+        """
+        self.tool("a", "panel.py", "# помощник живёт в helper и когда-нибудь\n"
+                                   "# пригодится: helper\n")
+        self.tool("a", "helper.py")
+        self.skill("a", "зовём panel.py")
+        v = gt.gate_wiring()
+        self.assertEqual(v["status"], "fail")
+        self.assertTrue(any("helper.py" in x for x in v["dead"]), v)
 
     def test_hooks_and_agents_count_as_entry_points(self):
         for kind, fname, body in (("hooks", "h.sh", "python3 x/tools/byhook.py"),
@@ -186,205 +217,63 @@ class TestAPathThatCannotExistIsRed(Tree):
         self.assertNotIn("dead", v)
 
 
-class TestTheResolverFindsToolsAcrossPlugins(unittest.TestCase):
-    """Предположение о раскладке пакетов живёт в ОДНОМ месте, а не в двадцати
-    строках двадцати скиллов."""
+class TestTheRealTreeCallsOnlyToolsThatExist(unittest.TestCase):
+    """Обратный контроль на ЖИВОМ дереве, а не на выдуманной фикстуре.
 
-    def setUp(self):
-        self.tmp = tempfile.TemporaryDirectory()
-        self.addCleanup(self.tmp.cleanup)
-        self.plugins = Path(self.tmp.name) / "plugins"
-        for p, names in (("build", ["own.py", "where.py"]),
-                         ("guard", ["verify.py"]),
-                         ("core", ["render_html.py"])):
-            d = self.plugins / f"superstack-{p}" / "tools"
-            d.mkdir(parents=True)
-            for n in names:
-                (d / n).write_text("x = 1\n", encoding="utf-8")
-        self.start = self.plugins / "superstack-build"
+    Классы выше доказывают, что ворота умеют краснеть на поддельном дереве.
+    Это не то же самое, что «настоящие скиллы зовут существующие файлы»:
+    ворота могли бы работать безупречно и не быть применены к настоящему
+    дереву ни разу.
 
-    def test_finds_a_tool_in_its_own_plugin(self):
-        self.assertEqual(wh.find("own.py", self.start).name, "own.py")
+    Здесь читаются все точки входа продукта и проверяется каждый вызов
+    буквально. После слияния это покрывает ВСЕ вызовы: до него половина
+    пряталась за резолвером, и написанное в скилле имя инструмента никакая
+    проверка сопоставить с диском не могла.
+    """
 
-    def test_finds_a_tool_in_a_sibling_plugin(self):
-        hit = wh.find("verify.py", self.start)
-        self.assertIsNotNone(hit)
-        self.assertIn("superstack-guard", str(hit))
+    ГЛОБЫ = ("skills/**/*.md", "hooks/*.sh", "hooks/*.json",
+             "agents/*.md", "commands/*.md")
+    ВЫЗОВ = re.compile(r"\$\{?CLAUDE_PLUGIN_ROOT\}?/tools/([\w./]+\.py)")
 
-    def test_finds_a_tool_two_plugins_over(self):
-        self.assertIsNotNone(wh.find("render_html.py", self.start))
+    def _вызовы(self):
+        out = {}
+        for pkg in packages():
+            for g in self.ГЛОБЫ:
+                for f in sorted(pkg.glob(g)):
+                    for m in self.ВЫЗОВ.finditer(f.read_text("utf-8", "replace")):
+                        out.setdefault(m.group(1), set()).add(f)
+        return out
 
-    def test_missing_tool_returns_none_not_a_guess(self):
-        """Молчаливая пустая строка дала бы `python3 ""` — ещё одну ошибку не
-        по адресу, и человек пошёл бы искать её в третьем месте."""
-        self.assertIsNone(wh.find("нетакого.py", self.start))
+    def test_every_called_tool_exists_in_the_package(self):
+        вызовы = self._вызовы()
+        self.assertTrue(вызовы, "точки входа не зовут ни одного инструмента "
+                                "полным путём — проверять нечего, и это само "
+                                "по себе отказ")
+        for имя, где in sorted(вызовы.items()):
+            with self.subTest(tool=имя):
+                кто = sorted(w.parent.parent.parent.name for w in где)
+                self.assertTrue(
+                    (PKG / "tools" / имя).is_file(),
+                    f"{имя} зовут из {кто}, а в пакете его нет")
 
-    def test_own_plugin_wins_over_a_sibling_with_the_same_name(self):
-        (self.plugins / "superstack-guard" / "tools" / "own.py").write_text(
-            "x = 2\n", encoding="utf-8")
-        self.assertIn("superstack-build", str(wh.find("own.py", self.start)))
+    def test_no_entry_point_climbs_out_of_the_package(self):
+        """Путь наружу пакета — возврат к межпакетной адресации.
 
-    def test_every_copy_of_the_resolver_is_identical(self):
-        """Резолвер лежит по копии в каждом пакете со скиллами, и это не
-        небрежность, а единственный доступный вариант.
-
-        `${CLAUDE_PLUGIN_ROOT}` — единственный надёжный якорь, который есть у
-        скилла; дотянуться до соседа можно либо зная раскладку пакетов, либо
-        имея локальный файл, который её знает. Второе строго лучше: раскладка
-        живёт в коде, который проверяется, а не в прозе, разбросанной по
-        скиллам, где ошибка молчит.
-
-        Цена варианта — расхождение копий, и оно ловится здесь. Первая же
-        правка одной из них без второй сделает часть скиллов ищущими по старым
-        правилам, и обнаружится это только у человека при установке.
+        `$CLAUDE_PLUGIN_ROOT/../superstack-guard/tools/verify.py` работает в
+        репозитории и разваливается в установке: там между пакетом и корнем
+        стоит каталог версии. Отказ тихий, поэтому запрет явный.
         """
-        copies = sorted(REPO.glob("plugins/*/tools/where.py"))
-        self.assertGreaterEqual(len(copies), 2, "копий резолвера меньше двух")
-        first = copies[0].read_bytes()
-        for c in copies[1:]:
-            with self.subTest(copy=str(c.relative_to(REPO))):
-                self.assertEqual(c.read_bytes(), first,
-                                 "копии резолвера разошлись — часть скиллов "
-                                 "ищет инструменты по другим правилам")
-
-    def test_a_plugin_reaching_for_a_sibling_tool_has_the_resolver(self):
-        """Резолвер нужен там, где скиллы тянутся ЗА ПРЕДЕЛЫ своего пакета.
-
-        Первая версия этого теста требовала резолвер у каждого пакета со
-        скиллами и покраснела на `superstack-control`, который зовёт только три
-        своих инструмента. Требовать резолвер там значило бы завести четвёртую
-        копию ради ничего — и ещё одно место, где копии разойдутся.
-
-        Правило точное: тянешься к соседу — имей резолвер; не тянешься — не
-        имей. Пакет без него, но с сиблинг-вызовом, вынужден строить путь
-        руками, то есть повторить ровно ту ошибку, ради которой резолвер и
-        появился.
-        """
-        import re
-        for skills in sorted(REPO.glob("plugins/*/skills")):
-            plug = skills.parent
-            own = {p.name for p in (plug / "tools").glob("*.py")}
-            called = set()
-            for s in skills.rglob("*.md"):
-                t = s.read_text("utf-8")
-                called |= set(re.findall(r'\$\(python3 "\$W" ([\w.]+\.py)\)', t))
-                called |= set(re.findall(
-                    r"\$\{?CLAUDE_PLUGIN_ROOT\}?/tools/([\w.]+\.py)", t))
-            foreign = called - own
-            with self.subTest(plugin=plug.name):
-                if foreign:
-                    self.assertTrue(
-                        (plug / "tools" / "where.py").is_file(),
-                        f"{plug.name} зовёт чужие инструменты "
-                        f"({', '.join(sorted(foreign)[:4])}) и не имеет резолвера")
-
-    def _cache(self, name, *pairs):
-        """Установленная раскладка: `<пакет>/<версия>/tools/`.
-
-        Искомый `verify.py` кладётся ТОЛЬКО соседям. Первая версия этой фикстуры
-        давала его и своему пакету — тогда `find` возвращала свой файл, путь
-        содержал нужную строку, и тест зеленел, ничего не проверив.
-        """
-        cache = Path(self.tmp.name) / name
-        for plug, ver in pairs:
-            d = cache / f"superstack-{plug}" / ver
-            (d / "tools").mkdir(parents=True)
-            if plug != "build":
-                (d / "tools" / "verify.py").write_text("x = 1\n", encoding="utf-8")
-            (d / ".claude-plugin").mkdir()
-            (d / ".claude-plugin" / "plugin.json").write_text(
-                '{"name": "superstack-%s", "version": "%s"}' % (plug, ver),
-                encoding="utf-8")
-        return cache
-
-    def test_a_stale_version_left_in_the_cache_does_not_win(self):
-        """Обновление плагина не удаляет прежнюю версию из кэша.
-
-        Измерено на живой установке сразу после подъёма семи пакетов до 0.2.1:
-        рядом лежали `superstack-guard/0.2.0/` и `.../0.2.1/`, резолвер брал
-        `sorted(hits)[0]` и возвращал 0.2.0. Скилл свежей версии работал по
-        инструментам прежней — и ничего при этом не падало.
-
-        Это худший вид отказа: правка выглядит не применившейся, и человек идёт
-        искать её у себя.
-        """
-        cache = self._cache("cache", ("build", "0.2.1"), ("guard", "0.2.0"),
-                            ("guard", "0.2.1"))
-        hit = wh.find("verify.py", cache / "superstack-build" / "0.2.1")
-        self.assertIsNotNone(hit)
-        self.assertIn("0.2.1", str(hit),
-                      "резолвер выбрал прежнюю версию соседа — свежий скилл "
-                      "работает по старым инструментам, и это молчит")
-
-    def test_without_a_matching_version_the_newest_wins(self):
-        """Своей версии среди соседей нет — берётся старшая, а не первая по
-        алфавиту. Иначе 0.10.0 проиграет 0.9.0, что верно как строка и неверно
-        как версия."""
-        cache = self._cache("c2", ("build", "0.3.0"), ("guard", "0.9.0"),
-                            ("guard", "0.10.0"))
-        hit = wh.find("verify.py", cache / "superstack-build" / "0.3.0")
-        self.assertIn("0.10.0", str(hit))
-
-    def test_the_repo_layout_without_version_dirs_still_resolves(self):
-        """Обратный контроль: выбор версии не должен ломать раскладку
-        репозитория, где каталога версии нет вовсе."""
-        hit = wh.find("verify.py", self.start)
-        self.assertIsNotNone(hit)
-        self.assertIn("superstack-guard", str(hit))
-
-    def test_the_real_repo_resolves_every_tool_the_skills_call(self):
-        """Обратный контроль на живом дереве: каждый инструмент, названный в
-        скиллах через резолвер, обязан находиться. Иначе проверка выше
-        доказывает работу резолвера на выдуманной раскладке."""
-        import re
-        start = REPO / "plugins" / "superstack-build"
-        called = set()
-        for s in REPO.glob("plugins/*/skills/**/*.md"):
-            called |= set(re.findall(r'\$\(python3 "\$W" ([\w.]+\.py)\)', s.read_text("utf-8")))
-        self.assertTrue(called, "скиллы не зовут инструменты через резолвер")
-        for name in sorted(called):
-            with self.subTest(tool=name):
-                self.assertIsNotNone(wh.find(name, start), name)
+        плохие = []
+        for pkg in packages():
+            for g in self.ГЛОБЫ:
+                for f in sorted(pkg.glob(g)):
+                    t = f.read_text("utf-8", "replace")
+                    if re.search(r"\$\{?CLAUDE_PLUGIN_ROOT\}?/\.\.", t):
+                        плохие.append(str(f.relative_to(REPO)))
+        self.assertEqual(плохие, [],
+                         "точка входа строит путь ЗА пределы своего пакета — "
+                         "в установленной раскладке он ведёт не туда")
 
 
 if __name__ == "__main__":
     unittest.main()
-
-
-class TestTheOwnerMapMatchesTheTree(unittest.TestCase):
-    """Карта «инструмент → пакет» в резолвере.
-
-    Нужна потому, что движок 2.1.42 не тянет зависимости между пакетами:
-    человек ставит часть набора, инструмент соседнего пакета не находится, и
-    отказ «нет такого файла» читается как поломка продукта. С картой отказ
-    называет пакет и команду.
-
-    Карта статична — в установленной раскладке спросить неоткуда, маркетплейса
-    рядом нет. Значит она обязана сверяться с деревом, иначе разойдётся молча и
-    начнёт называть не тот пакет, что хуже молчания.
-    """
-
-    def _map(self):
-        import importlib.util
-        p = REPO / "plugins" / "superstack-build" / "tools" / "where.py"
-        s = importlib.util.spec_from_file_location("_owner_map", p)
-        m = importlib.util.module_from_spec(s)
-        s.loader.exec_module(m)
-        return m.OWNER
-
-    def test_every_tool_in_the_tree_is_in_the_map(self):
-        real = {p.name: p.parts[-3] for p in REPO.glob("plugins/*/tools/*.py")}
-        missing = sorted(set(real) - set(self._map()))
-        self.assertEqual(missing, [], f"нет в карте: {missing}")
-
-    def test_the_map_names_the_right_plugin(self):
-        real = {p.name: p.parts[-3] for p in REPO.glob("plugins/*/tools/*.py")}
-        for name, plug in sorted(self._map().items()):
-            with self.subTest(tool=name):
-                self.assertEqual(real.get(name), plug,
-                                 f"{name}: карта говорит {plug}, лежит в {real.get(name)}")
-
-    def test_the_map_has_no_ghosts(self):
-        real = {p.name for p in REPO.glob("plugins/*/tools/*.py")}
-        ghosts = sorted(set(self._map()) - real)
-        self.assertEqual(ghosts, [], f"в карте есть несуществующие: {ghosts}")

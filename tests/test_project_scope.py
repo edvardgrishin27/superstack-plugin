@@ -25,9 +25,9 @@ import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from paths import REPO, plug  # noqa: E402
+from paths import PKG, REPO  # noqa: E402
 
-ENABLE = plug("superstack-core") / "tools" / "enable.py"
+ENABLE = PKG / "tools" / "enable.py"
 _s = importlib.util.spec_from_file_location("ss_enable", ENABLE)
 en = importlib.util.module_from_spec(_s)
 _s.loader.exec_module(en)
@@ -36,9 +36,9 @@ _s.loader.exec_module(en)
 #: намеренно: оно ограничено счётчиком на машине (три раза за всё время), и
 #: человеку, поставившему плагин, полезно узнать об этом хотя бы раз.
 AUTO_HOOKS = (
-    plug("superstack-brain") / "hooks" / "session-lesson.sh",
-    plug("superstack-brain") / "hooks" / "precompact.sh",
-    plug("superstack-guard") / "hooks" / "verify-gate.sh",
+    PKG / "hooks" / "session-lesson.sh",
+    PKG / "hooks" / "precompact.sh",
+    PKG / "hooks" / "verify-gate.sh",
 )
 
 
@@ -133,7 +133,7 @@ class TestHooksAreSilentInForeignProjects(unittest.TestCase):
         позвали, — иначе он лечит шум ценой продукта."""
         (self.state / "projects").write_text(str(self.foreign) + "\n",
                                              encoding="utf-8")
-        p = self._run(plug("superstack-brain") / "hooks" / "session-lesson.sh",
+        p = self._run(PKG / "hooks" / "session-lesson.sh",
                       self.foreign)
         self.assertIn("hookSpecificOutput", p.stdout)
 
@@ -154,8 +154,8 @@ class TestTheGateIsInEveryAutomaticHook(unittest.TestCase):
         """Отметку ставят скиллы, НАЧИНАЮЩИЕ работу. `/what`, `/fix`, `/oops`
         её не ставят намеренно: они диагностика и откат, включать ими систему
         в чужом проекте не за что."""
-        for rel in ("plugins/superstack-build/skills/go/SKILL.md",
-                    "plugins/superstack-core/skills/superstack/SKILL.md"):
+        for rel in ("plugins/superstack/skills/go/SKILL.md",
+                    "plugins/superstack/skills/superstack/SKILL.md"):
             with self.subTest(skill=rel):
                 self.assertIn("enable.py", (REPO / rel).read_text("utf-8"),
                               f"{rel} не отмечает проект — хуки останутся "

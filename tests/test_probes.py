@@ -24,7 +24,7 @@ import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from paths import REPO, at, plug  # noqa: E402
+from paths import PKG, REPO, at  # noqa: E402
 
 ROOT = REPO
 sys.path.insert(0, str(Path(__file__).resolve().parent / "fixtures"))
@@ -306,7 +306,7 @@ class TestLoudFailure(unittest.TestCase):
     def test_coverage_is_reported(self):
         r = subprocess.run(
             [sys.executable, str(at("tools", "adjudicate.py")),
-             self._facts_file(), str(plug("superstack-core") / "rules" / "*.json")],
+             self._facts_file(), str(PKG / "rules" / "*.json")],
             capture_output=True, text=True, timeout=60, cwd=str(REPO),
             env={**os.environ, "SUPERSTACK_IGNORE_PAUSE": "1"})
         data = json.loads(r.stdout)
@@ -353,8 +353,8 @@ class TestPauseIsObeyed(unittest.TestCase):
         tools = [
             ("tools/probe/collect.py", ["--offline"]),
             ("tools/doctor.py", ["--offline"]),
-            ("tools/adjudicate.py", ["/dev/null", str(plug("superstack-core") / "rules" / "*.json")]),
-            ("tools/lint_rules.py", [str(plug("superstack-core") / "rules" / "*.json")]),
+            ("tools/adjudicate.py", ["/dev/null", str(PKG / "rules" / "*.json")]),
+            ("tools/lint_rules.py", [str(PKG / "rules" / "*.json")]),
             ("tools/render.py", ["/dev/null", "beginner"]),
             ("tools/learn.py", ["add", "--title", "x", "--check", "y",
                                 "--failure", "z", "--deadend", "w"]),
@@ -559,7 +559,7 @@ class TestUnmeasuredScopeBreaksTrust(unittest.TestCase):
         json.dump(facts, fh, ensure_ascii=False)
         fh.close()
         r = subprocess.run(
-            [sys.executable, str(at("tools", "adjudicate.py")), fh.name, str(plug("superstack-core") / "rules" / "*.json")],
+            [sys.executable, str(at("tools", "adjudicate.py")), fh.name, str(PKG / "rules" / "*.json")],
             capture_output=True, text=True, timeout=60, cwd=str(REPO),
             env={**os.environ, "SUPERSTACK_IGNORE_PAUSE": "1"})
         return json.loads(r.stdout)
@@ -706,7 +706,7 @@ class TestRuleIntegrityGate(unittest.TestCase):
             env={**os.environ, "SUPERSTACK_IGNORE_PAUSE": "1"})
 
     def test_shipped_rules_are_intact(self):
-        r = self._lint(str(plug("superstack-core") / "rules"))
+        r = self._lint(str(PKG / "rules"))
         self.assertEqual(r.returncode, 0, r.stderr)
 
     def test_typo_in_fact_name_is_caught(self):
@@ -1173,7 +1173,7 @@ class TestProvenanceReachesTheFinding(unittest.TestCase):
         json.dump(self.facts, fh, ensure_ascii=False)
         fh.close()
         r = subprocess.run(
-            [sys.executable, str(at("tools", "adjudicate.py")), fh.name, str(plug("superstack-core") / "rules" / "*.json")],
+            [sys.executable, str(at("tools", "adjudicate.py")), fh.name, str(PKG / "rules" / "*.json")],
             capture_output=True, text=True, timeout=60, cwd=str(REPO),
             env={**os.environ, "SUPERSTACK_IGNORE_PAUSE": "1"})
         findings = json.loads(r.stdout)["findings"]
@@ -1193,7 +1193,7 @@ class TestFailedProbeBreaksTrust(unittest.TestCase):
         json.dump(facts, fh, ensure_ascii=False)
         fh.close()
         r = subprocess.run(
-            [sys.executable, str(at("tools", "adjudicate.py")), fh.name, str(plug("superstack-core") / "rules" / "*.json")],
+            [sys.executable, str(at("tools", "adjudicate.py")), fh.name, str(PKG / "rules" / "*.json")],
             capture_output=True, text=True, timeout=60, cwd=str(REPO),
             env={**os.environ, "SUPERSTACK_IGNORE_PAUSE": "1"})
         return json.loads(r.stdout)
@@ -1296,7 +1296,7 @@ class TestCoverageWarningOnEveryDepth(unittest.TestCase):
         json.dump(wrapped, fh, ensure_ascii=False)
         fh.close()
         r = subprocess.run(
-            [sys.executable, str(at("tools", "adjudicate.py")), fh.name, str(plug("superstack-core") / "rules" / "*.json")],
+            [sys.executable, str(at("tools", "adjudicate.py")), fh.name, str(PKG / "rules" / "*.json")],
             capture_output=True, text=True, timeout=60, cwd=str(REPO),
             env={**os.environ, "SUPERSTACK_IGNORE_PAUSE": "1"})
         return json.loads(r.stdout)
@@ -1435,7 +1435,7 @@ class TestFailureLooksLikeFailure(unittest.TestCase):
         }
         fp = Path(tmp.name) / "f.json"
         fp.write_text(json.dumps(facts), encoding="utf-8")
-        r = self._run("tools/adjudicate.py", str(fp), str(plug("superstack-core") / "rules" / "*.json"))
+        r = self._run("tools/adjudicate.py", str(fp), str(PKG / "rules" / "*.json"))
         data = json.loads(r.stdout)
         tmp.cleanup()
         hit = [f for f in data["findings"] if f["id"] == "sec.secret-in-settings"]
@@ -1447,7 +1447,7 @@ class TestFailureLooksLikeFailure(unittest.TestCase):
     def test_missing_ledger_is_announced(self):
         """Отсутствие реестра — отказ оси, а не «ничего вытесненного нет»."""
         import shutil
-        led = plug("superstack-brain") / "data" / "supersession.json"
+        led = PKG / "data" / "supersession.json"
         bak = led.with_suffix(".testbak")
         shutil.move(str(led), str(bak))
         try:

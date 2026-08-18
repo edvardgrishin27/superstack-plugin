@@ -20,7 +20,7 @@ import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from paths import REPO, at, plug  # noqa: E402
+from paths import REPO, at  # noqa: E402
 
 ROOT = REPO
 # Счётчик попыток (tools/verify.py::apply_attempt_ceiling) пишет на диск —
@@ -486,12 +486,16 @@ class TestSkillContract(unittest.TestCase):
     def test_skill_calls_the_gate(self):
         """Проверяется ВЫЗОВ, а не буквальная строка пути.
 
-        Прежняя версия требовала `tools/verify.py` — и тем закрепляла ровно
-        сломанный путь: скилл живёт в superstack-build, а verify.py лежит в
-        superstack-guard, так что `$CLAUDE_PLUGIN_ROOT/tools/verify.py`
-        указывал в пустоту. Тест был зелёным всё это время.
+        Версия до разделения требовала `tools/verify.py` и тем закрепляла
+        сломанный путь: скилл жил в пакете `superstack-build`, а verify.py — в
+        `superstack-guard`, так что `$CLAUDE_PLUGIN_ROOT/tools/verify.py`
+        указывал в пустоту. Тест был зелёным всё это время. Версия после
+        разделения требовала вызов через резолвер. Пакет теперь один, и
+        буквальная строка снова верна — но верна она не сама по себе, а
+        потому, что ворота проводки сверяют её с диском.
         """
-        self.assertRegex(self.text, r'\$\(python3 "\$W" verify\.py\)')
+        self.assertRegex(self.text,
+                         r'"\$CLAUDE_PLUGIN_ROOT/tools/verify\.py"')
 
     def test_skill_does_not_build_sibling_paths_from_its_own_root(self):
         """Единственная форма, которой здесь быть не должно: она выглядит

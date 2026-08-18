@@ -50,7 +50,7 @@ from contextlib import redirect_stderr
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from paths import REPO, at, plug  # noqa: E402
+from paths import REPO, at  # noqa: E402
 
 ROOT = REPO
 TOOL = at("tools", "log.py")

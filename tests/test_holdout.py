@@ -27,7 +27,7 @@ import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from paths import plug  # noqa: E402
+from paths import PKG  # noqa: E402
 
 
 def _load(name, path):
@@ -37,8 +37,8 @@ def _load(name, path):
     return m
 
 
-ho = _load("ss_handoff_hold", plug("superstack-build") / "tools" / "handoff.py")
-pr = _load("ss_progress_hold", plug("superstack-build") / "tools" / "progress.py")
+ho = _load("ss_handoff_hold", PKG / "tools" / "handoff.py")
+pr = _load("ss_progress_hold", PKG / "tools" / "progress.py")
 
 HIDDEN = "галерея с нулём работ показывает текст, а не пустую сетку"
 

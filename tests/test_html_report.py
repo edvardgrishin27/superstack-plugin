@@ -19,7 +19,7 @@ import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from paths import REPO, at, plug  # noqa: E402
+from paths import PKG, REPO, at  # noqa: E402
 
 ROOT = REPO
 ENV = {**os.environ, "SUPERSTACK_IGNORE_PAUSE": "1"}
@@ -305,7 +305,7 @@ class TestCli(unittest.TestCase):
         fh.close()
         fi = subprocess.run(
             [sys.executable, str(at("tools", "adjudicate.py")), fh.name,
-             str(plug("superstack-core") / "rules" / "*.json")], capture_output=True, text=True, timeout=60,
+             str(PKG / "rules" / "*.json")], capture_output=True, text=True, timeout=60,
             cwd=str(REPO), env=ENV)
         fh2 = tempfile.NamedTemporaryFile("w", suffix=".json", delete=False,
                                           encoding="utf-8")

@@ -34,11 +34,11 @@ import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from paths import REPO, at, plug  # noqa: E402
+from paths import PKG, REPO, at  # noqa: E402
 
 ROOT = REPO
 HOOK = at("hooks", "precompact.sh")
-HOOKS_JSON = plug("superstack-brain") / "hooks" / "hooks.json"
+HOOKS_JSON = PKG / "hooks" / "hooks.json"
 
 
 class PrecompactFixture(unittest.TestCase):
@@ -235,24 +235,44 @@ class TestHooksJsonDeclaresPreCompact(unittest.TestCase):
     """Проверяет, что PreCompact добавлен РЯДОМ с уже существующими
     SessionStart и Stop, а не вместо них, и что JSON остался валидным."""
 
-    def test_each_hook_lives_with_its_own_script(self):
-        """После разделения на пакеты хук обязан лежать там же, где его скрипт.
+    def test_every_declared_hook_points_at_a_script_that_exists(self):
+        """Команда хука обязана указывать на существующий файл.
 
-        ${CLAUDE_PLUGIN_ROOT} указывает на СВОЙ пакет: Stop-гейт, объявленный
-        в install, искал бы verify-gate.sh у себя и молча не находил. Один
-        общий hooks.json тут не просто неудобен — он неработоспособен.
+        Раньше это охраняло разделение на пакеты: `${CLAUDE_PLUGIN_ROOT}`
+        указывает на СВОЙ пакет, и Stop-гейт, объявленный в install, искал бы
+        verify-gate.sh у себя и молча не находил. Пакет теперь один, а
+        проверка осталась — потому что опечатка в имени скрипта даёт ровно тот
+        же отказ и такой же тихий: хук просто не делает ничего.
         """
-        owners = {"SessionStart": "superstack-install", "Stop": "superstack-guard",
-                  "PreCompact": "superstack-brain"}
-        for event, owner in owners.items():
-            with self.subTest(event=event):
-                cfg = json.loads((plug(owner) / "hooks" / "hooks.json")
-                                 .read_text("utf-8"))["hooks"]
-                self.assertIn(event, cfg, f"{event} объявлен не у {owner}")
-                cmd = cfg[event][0]["hooks"][0]["command"]
-                script = re.search(r'hooks/([\w.-]+)', cmd).group(1)
-                self.assertTrue((plug(owner) / "hooks" / script).is_file(),
-                                f"{event} зовёт {script}, которого нет в {owner}")
+        cfg = json.loads(HOOKS_JSON.read_text("utf-8"))["hooks"]
+        self.assertTrue(cfg, "hooks.json не объявляет ни одного события")
+        for event, entries in sorted(cfg.items()):
+            for entry in entries:
+                for h in entry["hooks"]:
+                    script = re.search(r'hooks/([\w.-]+)', h["command"]).group(1)
+                    with self.subTest(event=event, script=script):
+                        self.assertTrue(
+                            (PKG / "hooks" / script).is_file(),
+                            f"{event} зовёт {script}, которого нет в пакете")
+
+    def test_every_hook_script_is_declared_by_some_event(self):
+        """Скрипт, на который не указывает ни один хук, — мёртвый.
+
+        Этот отказ рождён слиянием и до него был невозможен: три hooks.json
+        сводились в один, и потерянная при сведении строка выключила бы целый
+        механизм НАСМЕРТЬ, не уронив ни одного теста. Файл на месте, код
+        рабочий, набор зелёный — и гейт верификации просто больше не
+        вызывается. Ровно эта болезнь у проекта уже была трижды, поэтому
+        проверка идёт в обе стороны, а не в одну.
+        """
+        cfg = json.loads(HOOKS_JSON.read_text("utf-8"))["hooks"]
+        названы = {re.search(r'hooks/([\w.-]+)', h["command"]).group(1)
+                   for entries in cfg.values() for e in entries for h in e["hooks"]}
+        на_диске = {f.name for f in (PKG / "hooks").glob("*.sh")}
+        self.assertEqual(
+            на_диске - названы, set(),
+            "скрипты лежат в hooks/, но их не зовёт ни одно событие — "
+            "механизм выключен, и об этом ничто не сообщит")
 
     def test_precompact_command_points_at_the_new_script(self):
         data = json.loads(HOOKS_JSON.read_text(encoding="utf-8"))

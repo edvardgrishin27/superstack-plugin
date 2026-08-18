@@ -56,12 +56,12 @@ import time
 from pathlib import Path
 
 
-# log.py живёт в superstack-core: инструмент из другого пакета обязан найти его
-# по структуре репозитория, а не по относительному прыжку через ".." — прыжок
-# ломается при любом перемещении и делает это без единого сообщения.
-_CORE = Path(__file__).resolve().parents[1] / "plugins" / "superstack-core" / "tools"
-if _CORE.is_dir() and str(_CORE) not in sys.path:
-    sys.path.insert(0, str(_CORE))
+# log.py лежит в пакете, а планка — в корне репозитория: путь считается от
+# структуры дерева, а не относительным прыжком через ".." — прыжок ломается при
+# любом перемещении и делает это без единого сообщения.
+_TOOLS = Path(__file__).resolve().parents[1] / "plugins" / "superstack" / "tools"
+if _TOOLS.is_dir() and str(_TOOLS) not in sys.path:
+    sys.path.insert(0, str(_TOOLS))
 
 
 from log import event as _log_event  # noqa: E402
@@ -460,11 +460,10 @@ def _mutate_all(muts: list) -> dict:
 
 
 def gate_rules() -> dict:
-    # Правила разъехались по пакетам: core держит ядро и дисциплину, brain —
-    # эволюцию. Линт по одному каталогу молча проверял бы два файла из трёх и
-    # печатал «правила целы» — то есть врал бы ровно тем способом, против
-    # которого написан.
-    linter = PLUG / "plugins" / "superstack-core" / "tools" / "lint_rules.py"
+    # Каталоги правил перечисляются глобом, а не именем: линт по одному
+    # каталогу молча проверял бы часть файлов и печатал «правила целы» — то
+    # есть врал бы ровно тем способом, против которого написан.
+    linter = PLUG / "plugins" / "superstack" / "tools" / "lint_rules.py"
     globs = [str(d / "*.json") for d in sorted((PLUG / "plugins").glob("*/rules"))]
     if not globs:
         return {"status": "unknown", "detail": "ни одного каталога правил не найдено"}
@@ -719,15 +718,36 @@ def gate_wiring() -> dict:
             text[f] = ""
 
     by_name = {t.name: t for t in tools}
+
+    def зовёт(где: str, имя: str) -> bool:
+        """Вызов инструмента — это и путь к файлу, и питоновский импорт.
+
+        Проверка только по «имя.py» пропускает `import derive_phase`: модуль
+        пишется без расширения, и на глаз разницы нет. Один такой инструмент
+        уже числился достижимым по ложной причине — его имя встречалось в
+        карте владельцев внутри резолвера, то есть в строке справочника, а не
+        в вызове. Слияние удалило резолвер, маска слетела, и ворота показали
+        мёртвым инструмент, который на самом деле работает каждый прогон.
+
+        Обратная ошибка тоже возможна и хуже: искать голое имя без границ
+        значило бы считать вызовом любое упоминание в комментарии. Поэтому
+        импорт распознаётся формой оператора, а не подстрокой.
+        """
+        if имя in где:
+            return True
+        мод = имя[:-3]
+        return re.search(rf"^\s*(?:import|from)\s+{re.escape(мод)}\b",
+                         где, re.M) is not None
+
     # Достижимое от точек входа, потом транзитивно через сами инструменты.
     reached = {n for n in by_name
-               if any(n in text[e] for e in entries) or n in declared}
+               if any(зовёт(text[e], n) for e in entries) or n in declared}
     for _ in range(len(by_name) + 1):
         grown = set(reached)
         for n, t in by_name.items():
             if n in reached:
                 continue
-            if any(n in text[by_name[r]] for r in reached if r in by_name):
+            if any(зовёт(text[by_name[r]], n) for r in reached if r in by_name):
                 grown.add(n)
         if grown == reached:
             break
@@ -754,8 +774,8 @@ def gate_wiring() -> dict:
         return {"status": "fail",
                 "detail": f"пути в пустоту: {len(wrong)} — {wrong[0]}",
                 "wrong_paths": sorted(set(wrong)),
-                "next": "искать инструмент соседнего пакета по имени "
-                        "(tools/where.py), а не строить путь от своего корня"}
+                "next": "поправить имя инструмента: все они лежат в "
+                        "plugins/superstack/tools, и путь от корня пакета верен"}
 
     if dead:
         return {"status": "fail",

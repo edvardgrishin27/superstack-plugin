@@ -28,9 +28,9 @@ import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from paths import plug  # noqa: E402
+from paths import PKG  # noqa: E402
 
-TOOL = plug("superstack-control") / "tools" / "installed_drift.py"
+TOOL = PKG / "tools" / "installed_drift.py"
 _s = importlib.util.spec_from_file_location("ss_installed_drift", TOOL)
 dr = importlib.util.module_from_spec(_s)
 _s.loader.exec_module(dr)

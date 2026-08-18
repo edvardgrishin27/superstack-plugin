@@ -18,10 +18,10 @@ import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from paths import plug  # noqa: E402
+from paths import PKG  # noqa: E402
 
-TOOL = plug("superstack-build") / "tools" / "progress.py"
-RENDER = plug("superstack-core") / "tools" / "render_html.py"
+TOOL = PKG / "tools" / "progress.py"
+RENDER = PKG / "tools" / "render_html.py"
 ENV = {**os.environ, "SUPERSTACK_IGNORE_PAUSE": "1"}
 
 

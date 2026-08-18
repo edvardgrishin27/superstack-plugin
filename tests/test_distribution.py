@@ -33,13 +33,13 @@ import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from paths import REPO, at, every, plug  # noqa: E402
+from paths import PKG, REPO, at, packages  # noqa: E402
 
 ROOT = REPO
 HOOK = at("hooks", "first-run.sh")
 GATE = at("hooks", "verify-gate.sh")
 SKILL = at("skills", "superstack", "SKILL.md")
-MANIFESTS = every(".claude-plugin", "plugin.json")
+MANIFESTS = [d / ".claude-plugin" / "plugin.json" for d in packages()]
 ENV = {**os.environ, "SUPERSTACK_IGNORE_PAUSE": "1"}
 
 #: команда отказа, как она напечатана в подсказке. Путь может содержать
@@ -879,7 +879,7 @@ class TestVerifyGateHook(unittest.TestCase):
 
 class TestHookWiring(unittest.TestCase):
     def test_manifest_is_valid_and_points_at_the_script(self):
-        cfg = json.loads((plug("superstack-install") / "hooks" / "hooks.json").read_text("utf-8"))
+        cfg = json.loads((PKG / "hooks" / "hooks.json").read_text("utf-8"))
         entries = cfg["hooks"]["SessionStart"]
         self.assertEqual([e["matcher"] for e in entries], ["startup"],
                          "resume и compact — тот же человек посреди работы, не новый")
@@ -896,7 +896,7 @@ class TestHookWiring(unittest.TestCase):
         Объявление живёт у guard: ${CLAUDE_PLUGIN_ROOT} указывает на СВОЙ пакет,
         и Stop, объявленный в install, искал бы verify-gate.sh у себя.
         """
-        cfg = json.loads((plug("superstack-guard") / "hooks" / "hooks.json").read_text("utf-8"))
+        cfg = json.loads((PKG / "hooks" / "hooks.json").read_text("utf-8"))
         self.assertIn("Stop", cfg["hooks"], "гейт не подключён ни к чему")
         cmds = [h["command"] for e in cfg["hooks"]["Stop"] for h in e["hooks"]]
         self.assertTrue(any("verify-gate.sh" in c for c in cmds), cmds)
@@ -908,7 +908,7 @@ class TestHookWiring(unittest.TestCase):
         """Обратный контроль: правка одного хука не имеет права стереть другой.
         После разделения на пакеты они лежат в разных файлах — тем важнее
         проверить, что SessionStart на месте у своего владельца."""
-        cfg = json.loads((plug("superstack-install") / "hooks" / "hooks.json").read_text("utf-8"))
+        cfg = json.loads((PKG / "hooks" / "hooks.json").read_text("utf-8"))
         cmds = [h["command"] for e in cfg["hooks"]["SessionStart"] for h in e["hooks"]]
         self.assertTrue(any("first-run.sh" in c for c in cmds), cmds)
 
@@ -919,9 +919,17 @@ class TestHookWiring(unittest.TestCase):
         «не смог проверить» не будет напечатано никогда: хук умрёт молча, и
         человек прочитает тишину как пройденный гейт.
         """
-        cfg = json.loads((plug("superstack-guard") / "hooks" / "hooks.json").read_text("utf-8"))
-        outer = min(h.get("timeout", 600)
-                    for e in cfg["hooks"]["Stop"] for h in e["hooks"])
+        cfg = json.loads((PKG / "hooks" / "hooks.json").read_text("utf-8"))
+        # Именно хук ГЕЙТА, а не самый короткий из Stop-хуков. Раньше это было
+        # одно и то же: Stop-хук был один на пакет. После слияния рядом встал
+        # session-lesson со своими законными 10 секундами, и «самый короткий»
+        # стал измерять не тот механизм — тест падал на верной конфигурации.
+        сроки = [h.get("timeout", 600) for e in cfg["hooks"]["Stop"]
+                 for h in e["hooks"] if "verify-gate.sh" in h["command"]]
+        self.assertEqual(len(сроки), 1,
+                         "гейт объявлен не один раз — сроки перестают быть "
+                         f"сравнимыми: {сроки}")
+        outer = сроки[0]
         budget = int(re.search(r'SUPERSTACK_GATE_TIMEOUT:-(\d+)',
                                GATE.read_text("utf-8")).group(1))
         self.assertGreater(outer, budget + 2,
@@ -933,6 +941,27 @@ class TestHookWiring(unittest.TestCase):
         for m in MANIFESTS:
             with self.subTest(plugin=m.parent.parent.name):
                 self.assertNotIn("hooks", json.loads(m.read_text("utf-8")))
+
+    def test_the_set_ships_as_exactly_one_package(self):
+        """Пакет один — и это утверждение, а не наблюдение.
+
+        До 0.3.0 пакетов было семь. Разделение оправдано, когда пакеты ставят
+        и обновляют по отдельности; не случилось ни того, ни другого, а платой
+        была межпакетная адресация — скилл звал инструмент через путь, которого
+        в его пакете нет. Так однажды оказались недостижимы 14 инструментов из
+        29, и оба вызова единственного сборочного скилла несколько заходов
+        указывали в пустоту.
+
+        Второй пакет вернёт этот класс отказов целиком и сделает это тихо:
+        всё соберётся, все тесты останутся зелёными, и обнаружится это на
+        машине человека фразой «нет такого файла». Поэтому число пакетов
+        зафиксировано здесь, а не подразумевается.
+        """
+        names = [d.name for d in packages()]
+        self.assertEqual(
+            names, ["superstack"],
+            "пакетов должно быть ровно один; появился второй — вместе с ним "
+            "вернулась межпакетная адресация, а резолвера больше нет")
 
     def test_declared_agents_are_files_that_exist(self):
         """Валидатор принимает только явные пути к файлам, не каталоги."""
@@ -1089,7 +1118,7 @@ class TestVersionFloor(unittest.TestCase):
                           "rt.versions_installed": {"npm": "2.1.42"},
                           "rt.entrypoint": "cli"})
         r = subprocess.run([sys.executable, str(at("tools", "adjudicate.py")),
-                            src, str(plug("superstack-core") / "rules" / "discipline.rules.json")],
+                            src, str(PKG / "rules" / "discipline.rules.json")],
                            capture_output=True, text=True, timeout=60,
                            cwd=str(REPO), env=ENV)
         self.assertEqual(r.returncode, 0, r.stderr)

@@ -27,7 +27,7 @@ import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from paths import REPO, plug  # noqa: E402
+from paths import PKG, REPO  # noqa: E402
 
 
 def _load(name, path):
@@ -37,9 +37,9 @@ def _load(name, path):
     return m
 
 
-pr = _load("ss_progress", plug("superstack-build") / "tools" / "progress.py")
-mf = _load("ss_manifest", plug("superstack-spec") / "tools" / "manifest.py")
-MANIFEST = plug("superstack-spec") / "tools" / "manifest.py"
+pr = _load("ss_progress", PKG / "tools" / "progress.py")
+mf = _load("ss_manifest", PKG / "tools" / "manifest.py")
+MANIFEST = PKG / "tools" / "manifest.py"
 
 
 class TestSkillsHaveNoPositionalParameters(unittest.TestCase):
@@ -78,10 +78,18 @@ class TestSkillsHaveNoPositionalParameters(unittest.TestCase):
                                   + "; ".join(bad))
 
     def test_the_go_skill_still_resolves_tools(self):
-        """Обратный контроль: убрав функцию, вызовы не должны остаться битыми."""
-        t = (REPO / "plugins/superstack-build/skills/go/SKILL.md").read_text("utf-8")
+        """Обратный контроль: убрав сокращение, вызовы не остались битыми.
+
+        Сокращений здесь было два и оба удалены: функция `T` (падала на
+        подстановке аргумента слэш-команды) и резолвер `$W` (стал не нужен,
+        когда пакет остался один). Каждое удаление могло оставить полбитого
+        вызова, поэтому проверяется не отсутствие старой формы, а НАЛИЧИЕ
+        новой в том же количестве.
+        """
+        t = (PKG / "skills" / "go" / "SKILL.md").read_text("utf-8")
         self.assertNotIn('$(T ', t, "остался вызов через удалённую функцию")
-        self.assertGreaterEqual(t.count('$(python3 "$W" '), 20)
+        self.assertNotIn('"$W"', t, "остался вызов через удалённый резолвер")
+        self.assertGreaterEqual(t.count('"$CLAUDE_PLUGIN_ROOT/tools/'), 20)
 
 
 class TestBothParentFlagsWork(unittest.TestCase):
@@ -243,7 +251,7 @@ class TestWritingIsNotAVerdict(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
         self.f = Path(self.tmp.name) / "review.json"
-        self.tool = plug("superstack-guard") / "tools" / "review.py"
+        self.tool = PKG / "tools" / "review.py"
 
     def _run(self, *args):
         return subprocess.run([sys.executable, str(self.tool), *args],
@@ -272,7 +280,7 @@ class TestTheLessonWatchdogIgnoresTheSystemsOwnNoise(unittest.TestCase):
     коротких реплик, ради выхода из которой критерий и вводился.
     """
 
-    HOOK = plug("superstack-brain") / "hooks" / "session-lesson.sh"
+    HOOK = PKG / "hooks" / "session-lesson.sh"
 
     def test_the_hook_is_silent_while_mutations_run(self):
         t = self.HOOK.read_text("utf-8")

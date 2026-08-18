@@ -26,20 +26,20 @@ import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from paths import plug  # noqa: E402
+from paths import PKG  # noqa: E402
 
-TOOL = plug("superstack-core") / "tools" / "derive_phase.py"
+TOOL = PKG / "tools" / "derive_phase.py"
 _s = importlib.util.spec_from_file_location("ss_derive_phase", TOOL)
 dp = importlib.util.module_from_spec(_s)
 _s.loader.exec_module(dp)
 
 _l = importlib.util.spec_from_file_location(
-    "ss_live_panel_derive", plug("superstack-core") / "tools" / "live_panel.py")
+    "ss_live_panel_derive", PKG / "tools" / "live_panel.py")
 lp = importlib.util.module_from_spec(_l)
 _l.loader.exec_module(lp)
 
 _p = importlib.util.spec_from_file_location(
-    "ss_progress_derive", plug("superstack-build") / "tools" / "progress.py")
+    "ss_progress_derive", PKG / "tools" / "progress.py")
 pr = importlib.util.module_from_spec(_p)
 _p.loader.exec_module(pr)
 
@@ -236,7 +236,7 @@ class TestTheAnswerCarriesItsGrounds(unittest.TestCase):
     def test_the_reason_speaks_plain_russian(self):
         import importlib.util as iu
         s = iu.spec_from_file_location(
-            "ss_plain_derive", plug("superstack-core") / "tools" / "plain_ru.py")
+            "ss_plain_derive", PKG / "tools" / "plain_ru.py")
         ru = iu.module_from_spec(s)
         s.loader.exec_module(ru)
         with tempfile.TemporaryDirectory() as t:

@@ -26,15 +26,15 @@ import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from paths import plug  # noqa: E402
+from paths import PKG  # noqa: E402
 
-TOOL = plug("superstack-build") / "tools" / "report.py"
+TOOL = PKG / "tools" / "report.py"
 _s = importlib.util.spec_from_file_location("ss_report", TOOL)
 rp = importlib.util.module_from_spec(_s)
 _s.loader.exec_module(rp)
 
 _r = importlib.util.spec_from_file_location(
-    "ss_review_report", plug("superstack-guard") / "tools" / "review.py")
+    "ss_review_report", PKG / "tools" / "review.py")
 rv = importlib.util.module_from_spec(_r)
 _r.loader.exec_module(rv)
 

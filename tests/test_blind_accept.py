@@ -20,9 +20,9 @@ import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from paths import REPO, at, plug  # noqa: E402
+from paths import PKG  # noqa: E402
 
-TOOL = plug("superstack-guard") / "tools" / "blind_accept.py"
+TOOL = PKG / "tools" / "blind_accept.py"
 ENV = {**os.environ, "SUPERSTACK_IGNORE_PAUSE": "1"}
 
 
@@ -201,7 +201,7 @@ class TestCommandLine(unittest.TestCase):
 
 class TestAgentContract(unittest.TestCase):
     def setUp(self):
-        self.text = (plug("superstack-guard") / "agents"
+        self.text = (PKG / "agents"
                      / "blind-acceptance.md").read_text("utf-8")
         self.fm = self.text.split("---")[1]
         self.flat = " ".join(self.text.split())

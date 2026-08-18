@@ -25,20 +25,20 @@ import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from paths import plug  # noqa: E402
+from paths import PKG  # noqa: E402
 
-TOOL = plug("superstack-core") / "tools" / "plain_ru.py"
+TOOL = PKG / "tools" / "plain_ru.py"
 _s = importlib.util.spec_from_file_location("ss_plain_ru", TOOL)
 ru = importlib.util.module_from_spec(_s)
 _s.loader.exec_module(ru)
 
 _p = importlib.util.spec_from_file_location(
-    "ss_progress_ru", plug("superstack-build") / "tools" / "progress.py")
+    "ss_progress_ru", PKG / "tools" / "progress.py")
 pr = importlib.util.module_from_spec(_p)
 _p.loader.exec_module(pr)
 
 _l = importlib.util.spec_from_file_location(
-    "ss_live_panel_ru", plug("superstack-core") / "tools" / "live_panel.py")
+    "ss_live_panel_ru", PKG / "tools" / "live_panel.py")
 lp = importlib.util.module_from_spec(_l)
 _l.loader.exec_module(lp)
 
@@ -159,7 +159,7 @@ class TestTheSkillKeepsItPlain(unittest.TestCase):
 
     def setUp(self):
         from paths import REPO
-        self.t = (REPO / "plugins" / "superstack-build" / "skills" / "go"
+        self.t = (PKG / "skills" / "go"
                   / "SKILL.md").read_text("utf-8")
 
     def test_the_skill_names_the_plain_russian_check(self):

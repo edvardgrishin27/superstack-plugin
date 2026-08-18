@@ -21,7 +21,7 @@ import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from paths import REPO, at, plug  # noqa: E402
+from paths import PKG, REPO, at  # noqa: E402
 
 ROOT = REPO
 def _load(name: str, path: Path):
@@ -373,13 +373,13 @@ class TestBaseKit(unittest.TestCase):
         """Показать, а не поставить: человек обязан увидеть список ДО того,
         как что-то произойдёт."""
         import subprocess, sys as _s
-        before = sorted(p.name for p in (plug("superstack-install") / "tools").glob("*"))
+        before = sorted(p.name for p in (PKG / "tools").glob("*"))
         r = subprocess.run([_s.executable, str(at("tools", "apply.py")), "base"],
                            capture_output=True, text=True, timeout=60,
                            env={**os.environ, "SUPERSTACK_IGNORE_PAUSE": "1"})
         self.assertIn(r.returncode, (0, 1))
         self.assertIn("базов", r.stdout.lower() + r.stderr.lower() + "базовый")
-        self.assertEqual(before, sorted(p.name for p in (plug("superstack-install") / "tools").glob("*")))
+        self.assertEqual(before, sorted(p.name for p in (PKG / "tools").glob("*")))
 
 
 class TestBaseKitIsApplied(unittest.TestCase):

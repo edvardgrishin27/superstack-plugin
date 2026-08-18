@@ -17,10 +17,10 @@ import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from paths import REPO, at, plug  # noqa: E402
+from paths import PKG, REPO, at  # noqa: E402
 
 ROOT = REPO
-sys.path.insert(0, str(plug("superstack-core") / "tools"))
+sys.path.insert(0, str(PKG / "tools"))
 sys.path.insert(0, str(at("tests", "fixtures")))
 
 from adjudicate import RuleError, evaluate, substitute  # noqa: E402
@@ -188,7 +188,7 @@ class TestSubstitution(unittest.TestCase):
 class TestEndToEnd(unittest.TestCase):
     """Прогон настоящих правил из репозитория на синтетических машинах."""
 
-    RULES = str(str(plug("superstack-core") / "rules" / "*.json"))
+    RULES = str(str(PKG / "rules" / "*.json"))
 
     def _run(self, values: dict) -> list[dict]:
         facts = {k: {"value": v, "probe": "test"} for k, v in values.items()}
@@ -356,7 +356,7 @@ class TestRuleFilesAreWellFormed(unittest.TestCase):
 
     def setUp(self):
         self.docs = [json.loads(p.read_text(encoding="utf-8"))
-                     for p in sorted((plug("superstack-core") / "rules").glob("*.json"))]
+                     for p in sorted((PKG / "rules").glob("*.json"))]
         self.rules = [r for d in self.docs for r in (d or {}).get("rules", [])]
 
     def test_rules_exist(self):
@@ -444,7 +444,7 @@ class TestProvenanceIsHonest(unittest.TestCase):
     def test_finding_carries_the_warning(self):
         """Находка обязана нести флаг, если построена на догадке."""
         run = fake_machine_run("populated")
-        data = adjudicate(run["raw"], str(str(plug("superstack-core") / "rules" / "*.json")), run["env"])
+        data = adjudicate(run["raw"], str(str(PKG / "rules" / "*.json")), run["env"])
         findings = data["findings"]
         # Проверка по пустому списку проходит, ничего не проверив. Подставная
         # машина собрана так, чтобы находки БЫЛИ, — молчание здесь означает,

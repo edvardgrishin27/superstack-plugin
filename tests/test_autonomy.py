@@ -20,10 +20,10 @@ import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from paths import plug  # noqa: E402
+from paths import PKG  # noqa: E402
 
 _s = importlib.util.spec_from_file_location(
-    "ss_autonomy", plug("superstack-guard") / "tools" / "autonomy.py")
+    "ss_autonomy", PKG / "tools" / "autonomy.py")
 au = importlib.util.module_from_spec(_s)
 _s.loader.exec_module(au)
 

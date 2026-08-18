@@ -42,11 +42,11 @@ import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from paths import REPO, at, plug  # noqa: E402
+from paths import PKG, REPO  # noqa: E402
 
 ROOT = REPO
-SKILLS = plug("superstack-control") / "skills"
-TOOLS = plug("superstack-control") / "tools"
+SKILLS = PKG / "skills"
+TOOLS = PKG / "tools"
 
 
 def _load(name: str, path: Path):
@@ -62,7 +62,7 @@ def _load(name: str, path: Path):
 # инструменты под своими именами, и совпадение имени модуля перезаписало бы
 # чужую запись в sys.modules при совместном прогоне полного набора.
 skill_test = _load("ss_novice_skill_test",
-                   plug("superstack-brain") / "tools" / "skill_test.py")
+                   PKG / "tools" / "skill_test.py")
 what_mod = _load("ss_novice_what", TOOLS / "what.py")
 oops_mod = _load("ss_novice_oops", TOOLS / "oops.py")
 fix_mod = _load("ss_novice_fix", TOOLS / "fix.py")
@@ -109,7 +109,7 @@ class TestSkillsPassTheGate(unittest.TestCase):
 
     def _review(self, name: str) -> dict:
         s = skill_test.load(SKILLS / name, skill_test.LISTING_BUDGET_CHARS,
-                                plug("superstack-control"))
+                                PKG)
         return skill_test.review(s)
 
     def test_what_is_clean(self):
@@ -138,7 +138,7 @@ class TestSkillsPassTheGate(unittest.TestCase):
         которым живёт настоящий гейт, не отдельной эвристикой теста."""
         for name in ("what", "oops", "fix"):
             s = skill_test.load(SKILLS / name, skill_test.LISTING_BUDGET_CHARS,
-                                plug("superstack-control"))
+                                PKG)
             c = skill_test.check_when(s)
             with self.subTest(skill=name):
                 self.assertEqual(c.state, "pass", msg=c.detail)

@@ -28,9 +28,9 @@ import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from paths import plug  # noqa: E402
+from paths import PKG  # noqa: E402
 
-TOOL = plug("superstack-spec") / "tools" / "design_brief.py"
+TOOL = PKG / "tools" / "design_brief.py"
 _s = importlib.util.spec_from_file_location("ss_design_brief", TOOL)
 db = importlib.util.module_from_spec(_s)
 _s.loader.exec_module(db)
@@ -214,7 +214,7 @@ class TestTheSkillSendsThePersonOutAndWaits(unittest.TestCase):
 
     def setUp(self):
         from paths import REPO
-        self.t = (REPO / "plugins" / "superstack-build" / "skills" / "go"
+        self.t = (PKG / "skills" / "go"
                   / "SKILL.md").read_text("utf-8")
 
     def test_the_skill_calls_the_tool(self):

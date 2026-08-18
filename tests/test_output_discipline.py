@@ -19,10 +19,10 @@ import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from paths import REPO  # noqa: E402
+from paths import PKG, REPO  # noqa: E402
 
-GO = REPO / "plugins" / "superstack-build" / "skills" / "go" / "SKILL.md"
-INSTALL = REPO / "plugins" / "superstack-core" / "skills" / "superstack" / "SKILL.md"
+GO = PKG / "skills" / "go" / "SKILL.md"
+INSTALL = PKG / "skills" / "superstack" / "SKILL.md"
 
 #: Скиллы, ведущие ДИАЛОГ с человеком. `/what`, `/fix`, `/oops` отвечают на
 #: конкретный вопрос и разговора не ведут — бюджеты им не нужны.
@@ -188,7 +188,7 @@ class TestTheRunLeavesASummaryInTheProject(unittest.TestCase):
 
     def test_the_summary_goes_to_project_memory(self):
         self.assertIn("Сводка остаётся в проекте", self.t)
-        self.assertIn('memory_file.py)" set .', self.t)
+        self.assertIn('memory_file.py" set .', self.t)
 
     def test_it_names_what_belongs_in_it(self):
         for part in ("что теперь существует", "что ждёт человека",

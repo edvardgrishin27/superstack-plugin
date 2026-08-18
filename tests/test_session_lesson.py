@@ -19,10 +19,10 @@ import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from paths import plug  # noqa: E402
+from paths import PKG  # noqa: E402
 
-HOOK = plug("superstack-brain") / "hooks" / "session-lesson.sh"
-LEARN = plug("superstack-brain") / "tools" / "learn.py"
+HOOK = PKG / "hooks" / "session-lesson.sh"
+LEARN = PKG / "tools" / "learn.py"
 
 
 def run(state: Path, script: Path = HOOK, disable: str = "") -> subprocess.CompletedProcess:
@@ -176,7 +176,7 @@ class TestHookIsWired(unittest.TestCase):
     def test_stop_hook_is_declared_by_its_owner(self):
         """Механизм, не подключённый в hooks.json, — файл, который никто
         никогда не вызовет. Именно так журнал и простоял пустым."""
-        cfg = json.loads((plug("superstack-brain") / "hooks" / "hooks.json")
+        cfg = json.loads((PKG / "hooks" / "hooks.json")
                          .read_text("utf-8"))["hooks"]
         cmds = [h["command"] for e in cfg.get("Stop", []) for h in e["hooks"]]
         self.assertTrue(any("session-lesson.sh" in c for c in cmds),

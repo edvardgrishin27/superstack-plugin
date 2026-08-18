@@ -17,7 +17,7 @@ import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from paths import REPO, at, plug  # noqa: E402
+from paths import PKG, REPO, at  # noqa: E402
 
 ROOT = REPO
 ENV = {**os.environ, "SUPERSTACK_IGNORE_PAUSE": "1"}
@@ -65,7 +65,7 @@ class TestRuleEngineEdges(unittest.TestCase):
 
     def test_overlapping_globs_do_not_duplicate_findings(self):
         r = run("tools/adjudicate.py", facts_file({"host.git": False, "host.gh": False}),
-                str(plug("superstack-core") / "rules" / "core.rules.json"), str(plug("superstack-core") / "rules" / "*.json"))
+                str(PKG / "rules" / "core.rules.json"), str(PKG / "rules" / "*.json"))
         data = json.loads(r.stdout)
         ids = [f["id"] for f in data["findings"]]
         self.assertEqual(len(ids), len(set(ids)), f"находки продублированы: {ids}")
@@ -75,7 +75,7 @@ class TestRuleEngineEdges(unittest.TestCase):
         """Падение при сборке находки давало ноль отчёта вместо частичного."""
         r = run("tools/adjudicate.py",
                 facts_file({"sec.secret_matches": "не-список", "cc.allow_count": 1}),
-                str(plug("superstack-core") / "rules" / "*.json"))
+                str(PKG / "rules" / "*.json"))
         self.assertEqual(r.returncode, 0, r.stderr[:400])
         self.assertTrue(r.stdout, "отчёт пуст — прогон умер целиком")
         json.loads(r.stdout)
@@ -90,7 +90,7 @@ class TestMalformedInputIsNamed(unittest.TestCase):
                 self.assertIn("нужен", r.stderr)
 
     def test_missing_file_is_a_message(self):
-        for tool, args in (("tools/adjudicate.py", ("/нет.json", str(plug("superstack-core") / "rules" / "*.json"))),
+        for tool, args in (("tools/adjudicate.py", ("/нет.json", str(PKG / "rules" / "*.json"))),
                            ("tools/render.py", ("/нет.json", "beginner"))):
             with self.subTest(tool=tool):
                 r = run(tool, *args)
@@ -119,7 +119,7 @@ class TestMalformedInputIsNamed(unittest.TestCase):
                                          encoding="utf-8")
         json.dump(wrapped, fh, ensure_ascii=False)
         fh.close()
-        return json.loads(run("tools/adjudicate.py", fh.name, str(plug("superstack-core") / "rules" / "*.json")).stdout)
+        return json.loads(run("tools/adjudicate.py", fh.name, str(PKG / "rules" / "*.json")).stdout)
 
     def test_full_facts_are_trustworthy(self):
         """Контроль: без него следующий тест ничего не доказывает —
@@ -143,7 +143,7 @@ class TestMalformedInputIsNamed(unittest.TestCase):
         json.dump({"кривой": {"нет_value": 1},
                    "host.os": {"value": "darwin", "provenance": "EXTRACTED"}}, fh)
         fh.close()
-        r = run("tools/adjudicate.py", fh.name, str(plug("superstack-core") / "rules" / "*.json"))
+        r = run("tools/adjudicate.py", fh.name, str(PKG / "rules" / "*.json"))
         fh2 = tempfile.NamedTemporaryFile("w", suffix=".json", delete=False, encoding="utf-8")
         fh2.write(r.stdout)
         fh2.close()

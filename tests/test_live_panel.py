@@ -27,20 +27,20 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from paths import REPO, plug  # noqa: E402
+from paths import PKG, REPO  # noqa: E402
 
-TOOL = plug("superstack-core") / "tools" / "live_panel.py"
+TOOL = PKG / "tools" / "live_panel.py"
 _s = importlib.util.spec_from_file_location("ss_live_panel", TOOL)
 lp = importlib.util.module_from_spec(_s)
 _s.loader.exec_module(lp)
 
 _p = importlib.util.spec_from_file_location(
-    "ss_progress_panel", plug("superstack-build") / "tools" / "progress.py")
+    "ss_progress_panel", PKG / "tools" / "progress.py")
 pr = importlib.util.module_from_spec(_p)
 _p.loader.exec_module(pr)
 
 _r = importlib.util.spec_from_file_location(
-    "ss_plain_ru_panel", plug("superstack-core") / "tools" / "plain_ru.py")
+    "ss_plain_ru_panel", PKG / "tools" / "plain_ru.py")
 plain_ru = importlib.util.module_from_spec(_r)
 _r.loader.exec_module(plain_ru)
 
@@ -259,14 +259,14 @@ class TestTheSkillOpensThePanel(unittest.TestCase):
     """Панель, которую никто не открывает, — это файл на диске, а не панель."""
 
     def test_the_go_skill_starts_it(self):
-        t = (REPO / "plugins" / "superstack-build" / "skills" / "go"
+        t = (PKG / "skills" / "go"
              / "SKILL.md").read_text("utf-8")
         self.assertIn("live_panel.py", t)
 
     def test_the_skill_records_the_phase(self):
-        t = (REPO / "plugins" / "superstack-build" / "skills" / "go"
+        t = (PKG / "skills" / "go"
              / "SKILL.md").read_text("utf-8")
-        self.assertIn("progress.py)\" phase", t,
+        self.assertIn('progress.py" phase', t,
                       "фаза нигде не записывается — панель покажет «не начато» "
                       "весь прогон")
 

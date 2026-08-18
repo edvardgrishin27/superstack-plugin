@@ -9,7 +9,7 @@
    "layer": "L0 рантайм",
    "mechanism": "активная версия движка определяется, а не угадывается",
    "evidence": {
-    "file": "plugins/superstack-core/tools/probe/collect.py",
+    "file": "plugins/superstack/tools/probe/collect.py",
     "contains": "def probe_runtime"
    }
   },
@@ -18,7 +18,7 @@
    "layer": "L0 рантайм",
    "mechanism": "порог маршрутизации субагентов по модели: ниже него проверка молча деградирует",
    "evidence": {
-    "file": "plugins/superstack-core/tools/probe/collect.py",
+    "file": "plugins/superstack/tools/probe/collect.py",
     "contains": "MODEL_ROUTING_FLOOR"
    }
   },
@@ -27,7 +27,7 @@
    "layer": "L0 рантайм",
    "mechanism": "тормоз-файл, работающий, когда агент не отвечает",
    "evidence": {
-    "file": "plugins/superstack-core/tools/pause.sh",
+    "file": "plugins/superstack/tools/pause.sh",
     "contains": "PAUSE"
    }
   },
@@ -36,7 +36,7 @@
    "layer": "L1 конституция",
    "mechanism": "все файлы настроек по всем скоупам, а не один",
    "evidence": {
-    "file": "plugins/superstack-core/tools/probe/collect.py",
+    "file": "plugins/superstack/tools/probe/collect.py",
     "contains": "def _settings_files"
    }
   },
@@ -45,7 +45,7 @@
    "layer": "L1 конституция",
    "mechanism": "правило: режим прав задан явно, а не унаследован от вендора",
    "evidence": {
-    "file": "plugins/superstack-core/rules/core.rules.json",
+    "file": "plugins/superstack/rules/core.rules.json",
     "contains": "ctx.default-mode-unset"
    }
   },
@@ -54,7 +54,7 @@
    "layer": "L1 конституция",
    "mechanism": "бюджет листинга скиллов измеряется: описания сверх бюджета молча выбрасываются",
    "evidence": {
-    "file": "plugins/superstack-core/rules/core.rules.json",
+    "file": "plugins/superstack/rules/core.rules.json",
     "contains": "ctx.skill-listing-over-budget"
    }
   },
@@ -63,7 +63,7 @@
    "layer": "L2 память",
    "mechanism": "индекс памяти сверх лимита загрузки обрезается молча — это ловится",
    "evidence": {
-    "file": "plugins/superstack-core/rules/core.rules.json",
+    "file": "plugins/superstack/rules/core.rules.json",
     "contains": "mem.index-over-limit"
    }
   },
@@ -72,7 +72,7 @@
    "layer": "L2 память",
    "mechanism": "наблюдение за сессиями включено, а не просто установлено",
    "evidence": {
-    "file": "plugins/superstack-core/rules/core.rules.json",
+    "file": "plugins/superstack/rules/core.rules.json",
     "contains": "mem.instincts-dormant"
    }
   },
@@ -81,7 +81,7 @@
    "layer": "L2 память",
    "mechanism": "планка продвижения в память: пройденная проверка + названный паттерн отказа + отброшенный тупик",
    "evidence": {
-    "file": "plugins/superstack-brain/tools/learn.py",
+    "file": "plugins/superstack/tools/learn.py",
     "contains": "failure_pattern"
    }
   },
@@ -90,7 +90,7 @@
    "layer": "L2 память",
    "mechanism": "у каждого факта источник; факт без источника — слух",
    "evidence": {
-    "file": "plugins/superstack-core/tools/probe/collect.py",
+    "file": "plugins/superstack/tools/probe/collect.py",
     "contains": "AMBIGUOUS"
    }
   },
@@ -99,7 +99,7 @@
    "layer": "L2 память",
    "mechanism": "линт памяти: индекс, дубли, битые ссылки, факты без источника",
    "evidence": {
-    "file": "plugins/superstack-brain/tools/memory_lint.py",
+    "file": "plugins/superstack/tools/memory_lint.py",
     "contains": "def load"
    }
   },
@@ -108,7 +108,7 @@
    "layer": "L3 проектирование",
    "mechanism": "вход в стройку через спеку и блокирующий гейт плана",
    "evidence": {
-    "file": "plugins/superstack-build/skills/go/SKILL.md",
+    "file": "plugins/superstack/skills/go/SKILL.md",
     "contains": "Код не пишется, пока человек не сказал «да»"
    }
   },
@@ -117,7 +117,7 @@
    "layer": "L3 проектирование",
    "mechanism": "структуру спеки проверяет скрипт: агентский markdown гниёт молча",
    "evidence": {
-    "file": "plugins/superstack-spec/tools/spec_lint.py",
+    "file": "plugins/superstack/tools/spec_lint.py",
     "contains": "def has_verifiable_claim"
    }
   },
@@ -126,7 +126,7 @@
    "layer": "L4 исполнение",
    "mechanism": "критерий приёмки формулируется ДО работы, а не после",
    "evidence": {
-    "file": "plugins/superstack-build/skills/go/SKILL.md",
+    "file": "plugins/superstack/skills/go/SKILL.md",
     "contains": "как проверить"
    }
   },
@@ -135,7 +135,7 @@
    "layer": "L5 гарантии",
    "mechanism": "гейт верификации решает кодом возврата, а не словами",
    "evidence": {
-    "file": "plugins/superstack-guard/tools/verify.py",
+    "file": "plugins/superstack/tools/verify.py",
     "contains": "def verdict"
    }
   },
@@ -144,7 +144,7 @@
    "layer": "L5 гарантии",
    "mechanism": "отсутствие тестов — не зелёный: иначе гейт мотивирует удалять тесты",
    "evidence": {
-    "file": "plugins/superstack-guard/tools/verify.py",
+    "file": "plugins/superstack/tools/verify.py",
     "contains": "EMPTY_MARKERS"
    }
   },
@@ -153,7 +153,7 @@
    "layer": "L5 гарантии",
    "mechanism": "Stop-хук сам гоняет гейт: правило без принуждения — пожелание",
    "evidence": {
-    "file": "plugins/superstack-guard/hooks/hooks.json",
+    "file": "plugins/superstack/hooks/hooks.json",
     "contains": "Stop"
    }
   },
@@ -162,7 +162,7 @@
    "layer": "L5 гарантии",
    "mechanism": "второе мнение другой модели, только чтение, запрет самоаттестации",
    "evidence": {
-    "file": "plugins/superstack-guard/agents/second-opinion.md",
+    "file": "plugins/superstack/agents/second-opinion.md",
     "contains": "model: fable"
    }
   },
@@ -171,7 +171,7 @@
    "layer": "L5 гарантии",
    "mechanism": "тихая деградация второго мнения ловится правилом",
    "evidence": {
-    "file": "plugins/superstack-core/rules/discipline.rules.json",
+    "file": "plugins/superstack/rules/discipline.rules.json",
     "contains": "ass.second-opinion-degraded"
    }
   },
@@ -180,7 +180,7 @@
    "layer": "L5 гарантии",
    "mechanism": "судья с правом записи опознаётся: он чинит вместо того, чтобы находить",
    "evidence": {
-    "file": "plugins/superstack-core/rules/discipline.rules.json",
+    "file": "plugins/superstack/rules/discipline.rules.json",
     "contains": "disc.verifier-theater"
    }
   },
@@ -189,7 +189,7 @@
    "layer": "L5 гарантии",
    "mechanism": "секреты ищутся и в конфигах, и в инструкциях, которые агент исполняет",
    "evidence": {
-    "file": "plugins/superstack-core/tools/probe/collect.py",
+    "file": "plugins/superstack/tools/probe/collect.py",
     "contains": "def _text_assets"
    }
   },
@@ -207,7 +207,7 @@
    "layer": "L6 наблюдаемость",
    "mechanism": "вердикт страницей: целевой человек в терминал не заходит",
    "evidence": {
-    "file": "plugins/superstack-core/tools/render_html.py",
+    "file": "plugins/superstack/tools/render_html.py",
     "contains": "def build"
    }
   },
@@ -216,7 +216,7 @@
    "layer": "L6 наблюдаемость",
    "mechanism": "блок охвата печатается ПЕРВЫМ: «не смотрел» отличается от «не нашёл»",
    "evidence": {
-    "file": "plugins/superstack-core/tools/render_html.py",
+    "file": "plugins/superstack/tools/render_html.py",
     "contains": "def coverage_block"
    }
   },
@@ -225,7 +225,7 @@
    "layer": "L6 наблюдаемость",
    "mechanism": "отчёт ведёт к действию: кто решает, что дальше и одна следующая вещь",
    "evidence": {
-    "file": "plugins/superstack-core/tools/render_html.py",
+    "file": "plugins/superstack/tools/render_html.py",
     "contains": "def next_block"
    }
   },
@@ -234,7 +234,7 @@
    "layer": "L6 наблюдаемость",
    "mechanism": "расход виден: без него бюджетные пороги считаются от самооценки модели",
    "evidence": {
-    "file": "plugins/superstack-core/rules/core.rules.json",
+    "file": "plugins/superstack/rules/core.rules.json",
     "contains": "obs.no-cost-metrics"
    }
   },
@@ -243,7 +243,7 @@
    "layer": "L7 эволюция",
    "mechanism": "доктор актуальности: версии, вытеснение нативом, протухание апстрима",
    "evidence": {
-    "file": "plugins/superstack-brain/tools/doctor.py",
+    "file": "plugins/superstack/tools/doctor.py",
     "contains": "def axis_supersession"
    }
   },
@@ -252,7 +252,7 @@
    "layer": "L7 эволюция",
    "mechanism": "реестр вытеснения нативом: что выбросить и с какой версии",
    "evidence": {
-    "file": "plugins/superstack-brain/data/supersession.json",
+    "file": "plugins/superstack/data/supersession.json",
     "contains": "\"entries\""
    }
   },
@@ -261,7 +261,7 @@
    "layer": "L7 эволюция",
    "mechanism": "скиллы проверяются сценарием: делает ли скилл то, что заявлено",
    "evidence": {
-    "file": "plugins/superstack-brain/tools/skill_test.py",
+    "file": "plugins/superstack/tools/skill_test.py",
     "contains": "def check_frontmatter"
    }
   },
@@ -270,7 +270,7 @@
    "layer": "L7 эволюция",
    "mechanism": "потолок: новое входит, только вытесняя старое — иначе накопление, а не улучшение",
    "evidence": {
-    "file": "plugins/superstack-brain/rules/evolution.rules.json",
+    "file": "plugins/superstack/rules/evolution.rules.json",
     "contains": "ev.no-budget-ceiling"
    }
   },
@@ -279,7 +279,7 @@
    "layer": "L7 эволюция",
    "mechanism": "эталонные задачи: правка, ухудшившая метрику, откатывается",
    "evidence": {
-    "file": "plugins/superstack-brain/tools/baseline.py",
+    "file": "plugins/superstack/tools/baseline.py",
     "contains": "def build_metrics"
    }
   },
@@ -288,7 +288,7 @@
    "layer": "дистрибуция",
    "mechanism": "вход для того, кто не знает про команды: система заговаривает первой, но спрашивает",
    "evidence": {
-    "file": "plugins/superstack-install/hooks/first-run.sh",
+    "file": "plugins/superstack/hooks/first-run.sh",
     "contains": "additionalContext"
    }
   },
@@ -297,7 +297,7 @@
    "layer": "дистрибуция",
    "mechanism": "потолок напоминаний и выключатель по отказу",
    "evidence": {
-    "file": "plugins/superstack-install/hooks/first-run.sh",
+    "file": "plugins/superstack/hooks/first-run.sh",
     "contains": "MAX=3"
    }
   },
@@ -315,7 +315,7 @@
    "layer": "установщик",
    "mechanism": "бэкап до первого изменения, путь печатается ДО правок",
    "evidence": {
-    "file": "plugins/superstack-install/tools/apply.py",
+    "file": "plugins/superstack/tools/apply.py",
     "contains": "def make_backup"
    }
   },
@@ -324,7 +324,7 @@
    "layer": "установщик",
    "mechanism": "удаление запрещено: карантин и возврат одной командой",
    "evidence": {
-    "file": "plugins/superstack-install/tools/apply.py",
+    "file": "plugins/superstack/tools/apply.py",
     "contains": "QUARANTINE"
    }
   },
@@ -333,7 +333,7 @@
    "layer": "установщик",
    "mechanism": "секрет не копируется в бэкап: иначе починка удваивает утечку",
    "evidence": {
-    "file": "plugins/superstack-install/tools/apply.py",
+    "file": "plugins/superstack/tools/apply.py",
     "contains": "def redact"
    }
   },
@@ -342,7 +342,7 @@
    "layer": "установщик",
    "mechanism": "система САМА подкладывает падающий тест: зелёное, нарисованное себе, не считается",
    "evidence": {
-    "file": "plugins/superstack-guard/tools/prove.py",
+    "file": "plugins/superstack/tools/prove.py",
     "contains": "planted_failure"
    }
   },
@@ -351,7 +351,7 @@
    "layer": "установщик",
    "mechanism": "три негативных контроля: секрет→блок, самоодобрение→блок, красные тесты→блок",
    "evidence": {
-    "file": "plugins/superstack-guard/tools/prove.py",
+    "file": "plugins/superstack/tools/prove.py",
     "contains": "negative_control"
    }
   },
@@ -360,7 +360,7 @@
    "layer": "установщик",
    "mechanism": "install_state выставляется только скриптами-ассертами, никогда моделью",
    "evidence": {
-    "file": "plugins/superstack-guard/tools/state.py",
+    "file": "plugins/superstack/tools/state.py",
     "contains": "proven-local"
    }
   },
@@ -369,7 +369,7 @@
    "layer": "установщик",
    "mechanism": "базовый набор ПРИМЕНЯЕТСЯ, а не только перечисляется: диагностика без применения оставляет человека там же, где нашла",
    "evidence": {
-    "file": "plugins/superstack-install/tools/apply.py",
+    "file": "plugins/superstack/tools/apply.py",
     "contains": "def act_base_item"
    }
   },
@@ -378,7 +378,7 @@
    "layer": "интерфейс",
    "mechanism": "«где я и что дальше» — команда, которую можно спросить в любой момент",
    "evidence": {
-    "file": "plugins/superstack-control/skills/what/SKILL.md",
+    "file": "plugins/superstack/skills/what/SKILL.md",
     "contains": "name: what"
    }
   },
@@ -387,7 +387,7 @@
    "layer": "интерфейс",
    "mechanism": "отменить последнее одной командой",
    "evidence": {
-    "file": "plugins/superstack-control/skills/oops/SKILL.md",
+    "file": "plugins/superstack/skills/oops/SKILL.md",
     "contains": "name: oops"
    }
   },
@@ -396,7 +396,7 @@
    "layer": "интерфейс",
    "mechanism": "«что-то сломалось» — вход в диагностику без знания терминов",
    "evidence": {
-    "file": "plugins/superstack-control/skills/fix/SKILL.md",
+    "file": "plugins/superstack/skills/fix/SKILL.md",
     "contains": "name: fix"
    }
   },
@@ -405,7 +405,7 @@
    "layer": "интерфейс",
    "mechanism": "интервью фронтиром: весь текущий срез вопросов разом, с приложенной рекомендацией",
    "evidence": {
-    "file": "plugins/superstack-build/skills/go/SKILL.md",
+    "file": "plugins/superstack/skills/go/SKILL.md",
     "contains": "фронтир"
    }
   },
@@ -414,7 +414,7 @@
    "layer": "L2 память",
    "mechanism": "raw/ неизменяемые источники и wiki/ порождаемое: Document против Memory",
    "evidence": {
-    "file": "plugins/superstack-brain/tools/memory_lint.py",
+    "file": "plugins/superstack/tools/memory_lint.py",
     "contains": "raw/"
    }
   },
@@ -423,7 +423,7 @@
    "layer": "L2 память",
    "mechanism": "знание маршрутизируется в три адресата: память, правила с paths, скилл",
    "evidence": {
-    "file": "plugins/superstack-brain/tools/learn.py",
+    "file": "plugins/superstack/tools/learn.py",
     "contains": "def route"
    }
   },
@@ -432,7 +432,7 @@
    "layer": "L2 память",
    "mechanism": "PreCompact-страховка: момент компакции — единственный шанс сохранить детали",
    "evidence": {
-    "file": "plugins/superstack-brain/hooks/hooks.json",
+    "file": "plugins/superstack/hooks/hooks.json",
     "contains": "PreCompact"
    }
   },
@@ -441,7 +441,7 @@
    "layer": "L3 проектирование",
    "mechanism": "граф артефактов: циклы, битые ссылки, спека без тестов — с кодом возврата",
    "evidence": {
-    "file": "plugins/superstack-spec/tools/artifact_graph.py",
+    "file": "plugins/superstack/tools/artifact_graph.py",
     "contains": "def validate"
    }
   },
@@ -450,7 +450,7 @@
    "layer": "L4 исполнение",
    "mechanism": "лимит попыток с явной сдачей: цикл ревью-фикс за ночь сжигает подписку",
    "evidence": {
-    "file": "plugins/superstack-guard/tools/verify.py",
+    "file": "plugins/superstack/tools/verify.py",
     "contains": "MAX_ATTEMPTS"
    }
   },
@@ -459,7 +459,7 @@
    "layer": "L6 наблюдаемость",
    "mechanism": "единый журнал: что делал инструмент, сколько занял, чем кончил",
    "evidence": {
-    "file": "plugins/superstack-core/tools/log.py",
+    "file": "plugins/superstack/tools/log.py",
     "contains": "def event"
    }
   },
@@ -468,7 +468,7 @@
    "layer": "L6 наблюдаемость",
    "mechanism": "секрет не попадает в журнал: место и отпечаток, никогда значение",
    "evidence": {
-    "file": "plugins/superstack-core/tools/log.py",
+    "file": "plugins/superstack/tools/log.py",
     "contains": "redact"
    }
   },
@@ -486,7 +486,7 @@
    "layer": "L7 эволюция",
    "mechanism": "протухание апстрима: архивирован ли репозиторий, когда последний коммит",
    "evidence": {
-    "file": "plugins/superstack-brain/tools/doctor.py",
+    "file": "plugins/superstack/tools/doctor.py",
     "contains": "def axis_upstream"
    }
   },
@@ -495,7 +495,7 @@
    "layer": "L7 эволюция",
    "mechanism": "расхождение объявленного и подключённого",
    "evidence": {
-    "file": "plugins/superstack-brain/tools/doctor.py",
+    "file": "plugins/superstack/tools/doctor.py",
     "contains": "def axis_drift"
    }
   },
@@ -504,7 +504,7 @@
    "layer": "L7 эволюция",
    "mechanism": "доктор проверяет сам себя: для какой версии собран против установленной",
    "evidence": {
-    "file": "plugins/superstack-brain/tools/doctor.py",
+    "file": "plugins/superstack/tools/doctor.py",
     "contains": "def axis_self"
    }
   },
@@ -513,7 +513,7 @@
    "layer": "дисциплина",
    "mechanism": "раскладка по тирам: механическое не оплачивается по высшей ставке",
    "evidence": {
-    "file": "plugins/superstack-core/rules/discipline.rules.json",
+    "file": "plugins/superstack/rules/discipline.rules.json",
     "contains": "disc.all-agents-top-tier"
    }
   },
@@ -522,7 +522,7 @@
    "layer": "дисциплина",
    "mechanism": "аварийный выключатель первой строкой КАЖДОГО хука, а не одного",
    "evidence": {
-    "file": "plugins/superstack-guard/hooks/verify-gate.sh",
+    "file": "plugins/superstack/hooks/verify-gate.sh",
     "contains": "SUPERSTACK_DISABLE"
    }
   },
@@ -531,7 +531,7 @@
    "layer": "L5 гарантии",
    "mechanism": "слепая приёмка: судья видит исходную просьбу и результат, но не спеку — безупречно сделанное НЕ ТО иначе проходит все ворота",
    "evidence": {
-    "file": "plugins/superstack-guard/tools/blind_accept.py",
+    "file": "plugins/superstack/tools/blind_accept.py",
     "contains": "def is_retelling"
    }
   },
@@ -549,7 +549,7 @@
    "layer": "L6 наблюдаемость",
    "mechanism": "панель хода: «доказано» требует кода возврата гейта, шкалу двигает только оно — полоску нельзя не увидеть, и зелёное по слову агента читается как факт",
    "evidence": {
-    "file": "plugins/superstack-build/tools/progress.py",
+    "file": "plugins/superstack/tools/progress.py",
     "contains": "if status == PROVEN and exit_code != 0"
    }
   },
@@ -558,7 +558,7 @@
    "layer": "L6 наблюдаемость",
    "mechanism": "«что осталось закрыть» адресовано человеку, а «никто не проверял» не выдаётся за «проверено, чисто»",
    "evidence": {
-    "file": "plugins/superstack-build/tools/progress.py",
+    "file": "plugins/superstack/tools/progress.py",
     "contains": "def review_debt"
    }
   },
@@ -567,7 +567,7 @@
    "layer": "L7 эволюция",
    "mechanism": "вопрос «что забрать навсегда» задаётся ХУКОМ в конце хода: журнал был построен целиком и стоял пустым, потому что его никто не вызывал",
    "evidence": {
-    "file": "plugins/superstack-brain/hooks/session-lesson.sh",
+    "file": "plugins/superstack/hooks/session-lesson.sh",
     "contains": "hookEventName"
    }
   },
@@ -576,7 +576,7 @@
    "layer": "L3 проектирование",
    "mechanism": "требования человека держатся дословно, и цитата обязана находиться в брифе",
    "evidence": {
-    "file": "plugins/superstack-spec/tools/manifest.py",
+    "file": "plugins/superstack/tools/manifest.py",
     "contains": "def quote_is_in_brief"
    }
   },
@@ -585,7 +585,7 @@
    "layer": "L3 проектирование",
    "mechanism": "бриф не редактируется — отпечаток сверяется на каждой операции",
    "evidence": {
-    "file": "plugins/superstack-spec/tools/manifest.py",
+    "file": "plugins/superstack/tools/manifest.py",
     "contains": "def brief_intact"
    }
   },
@@ -594,7 +594,7 @@
    "layer": "L3 проектирование",
    "mechanism": "снять требование можно только словами человека, и они сохраняются",
    "evidence": {
-    "file": "plugins/superstack-spec/tools/manifest.py",
+    "file": "plugins/superstack/tools/manifest.py",
     "contains": "def drop"
    }
   },
@@ -603,7 +603,7 @@
    "layer": "L5 гарантии",
    "mechanism": "покрытие спеки подтверждает не тот, кто её писал; незапущенная сверка — провал",
    "evidence": {
-    "file": "plugins/superstack-spec/tools/gates.py",
+    "file": "plugins/superstack/tools/gates.py",
     "contains": "def gate_g2"
    }
   },
@@ -612,7 +612,7 @@
    "layer": "L5 гарантии",
    "mechanism": "трассируемость в обе стороны: и требование без таска, и таск без требования",
    "evidence": {
-    "file": "plugins/superstack-spec/tools/gates.py",
+    "file": "plugins/superstack/tools/gates.py",
     "contains": "def gate_g3"
    }
   },
@@ -621,7 +621,7 @@
    "layer": "L5 гарантии",
    "mechanism": "расхождение манифеста со слепой приёмкой вычисляется, а не переписывается из отчёта",
    "evidence": {
-    "file": "plugins/superstack-spec/tools/gates.py",
+    "file": "plugins/superstack/tools/gates.py",
     "contains": "def drift"
    }
   },
@@ -630,7 +630,7 @@
    "layer": "L4 исполнение",
    "mechanism": "волны считаются из зависимостей, а не прикидываются",
    "evidence": {
-    "file": "plugins/superstack-build/tools/crew.py",
+    "file": "plugins/superstack/tools/crew.py",
     "contains": "def compute_waves"
    }
   },
@@ -639,7 +639,7 @@
    "layer": "L4 исполнение",
    "mechanism": "пересечение зон внутри волны — вложенность считается пересечением",
    "evidence": {
-    "file": "plugins/superstack-build/tools/crew.py",
+    "file": "plugins/superstack/tools/crew.py",
     "contains": "def zones_overlap"
    }
   },
@@ -648,7 +648,7 @@
    "layer": "L4 исполнение",
    "mechanism": "последовательный полёт волны ловится по отметкам старта",
    "evidence": {
-    "file": "plugins/superstack-build/tools/crew.py",
+    "file": "plugins/superstack/tools/crew.py",
     "contains": "def serial_flight"
    }
   },
@@ -657,7 +657,7 @@
    "layer": "L4 исполнение",
    "mechanism": "ярус и потолок нарезки: мелкая нарезка покупает расход, не надёжность",
    "evidence": {
-    "file": "plugins/superstack-build/tools/crew.py",
+    "file": "plugins/superstack/tools/crew.py",
     "contains": "def tier_check"
    }
   },
@@ -666,7 +666,7 @@
    "layer": "L4 исполнение",
    "mechanism": "промпт исполнителю собирает код: обязательное вложено, неполный таск не уходит",
    "evidence": {
-    "file": "plugins/superstack-build/tools/handoff.py",
+    "file": "plugins/superstack/tools/handoff.py",
     "contains": "TESTING_CONTRACT"
    }
   },
@@ -675,7 +675,7 @@
    "layer": "L4 исполнение",
    "mechanism": "код пишет отдельный агент на Sonnet в свежем контексте, один таск — один контекст",
    "evidence": {
-    "file": "plugins/superstack-build/agents/builder.md",
+    "file": "plugins/superstack/agents/builder.md",
     "contains": "model: sonnet"
    }
   },
@@ -693,7 +693,7 @@
    "layer": "L3 проектирование",
    "mechanism": "архитектурные решения обязательны с яруса T2 и только с отвергнутым вариантом",
    "evidence": {
-    "file": "plugins/superstack-spec/tools/adr.py",
+    "file": "plugins/superstack/tools/adr.py",
     "contains": "def check"
    }
   },
@@ -702,7 +702,7 @@
    "layer": "L3 проектирование",
    "mechanism": "решение, чья зона исчезла из кода, протухло и краснеет",
    "evidence": {
-    "file": "plugins/superstack-spec/tools/adr.py",
+    "file": "plugins/superstack/tools/adr.py",
     "contains": "if not (root / z.rstrip(\"/\")).exists():"
    }
   },
@@ -711,7 +711,7 @@
    "layer": "L4 исполнение",
    "mechanism": "решение вкладывается в промпт того, кто пишет в его зоне — смотреть обязан",
    "evidence": {
-    "file": "plugins/superstack-build/tools/handoff.py",
+    "file": "plugins/superstack/tools/handoff.py",
     "contains": "def governing_adrs"
    }
   },
@@ -720,7 +720,7 @@
    "layer": "L2 память",
    "mechanism": "файл памяти выбирается детекцией, существующий бьёт признаки",
    "evidence": {
-    "file": "plugins/superstack-brain/tools/memory_file.py",
+    "file": "plugins/superstack/tools/memory_file.py",
     "contains": "def detect"
    }
   },
@@ -729,7 +729,7 @@
    "layer": "L2 память",
    "mechanism": "чужой текст вне маркеров сверяется отпечатком до и после записи",
    "evidence": {
-    "file": "plugins/superstack-brain/tools/memory_file.py",
+    "file": "plugins/superstack/tools/memory_file.py",
     "contains": "def write_block"
    }
   },
@@ -738,7 +738,7 @@
    "layer": "L2 память",
    "mechanism": "путь, которого нет в репозитории, делает файл памяти красным",
    "evidence": {
-    "file": "plugins/superstack-brain/tools/memory_file.py",
+    "file": "plugins/superstack/tools/memory_file.py",
     "contains": "def check"
    }
   },
@@ -747,7 +747,7 @@
    "layer": "L5 гарантии",
    "mechanism": "три оси ревью, отчёт раздельный — одна не маскирует другую",
    "evidence": {
-    "file": "plugins/superstack-guard/tools/review.py",
+    "file": "plugins/superstack/tools/review.py",
     "contains": "def verdict"
    }
   },
@@ -756,7 +756,7 @@
    "layer": "L5 гарантии",
    "mechanism": "находка маршрутизируется вопросом «мог ли исполнитель знать»",
    "evidence": {
-    "file": "plugins/superstack-guard/tools/review.py",
+    "file": "plugins/superstack/tools/review.py",
     "contains": "def route"
    }
   },
@@ -765,7 +765,7 @@
    "layer": "L5 гарантии",
    "mechanism": "каждый ревьюер получает только материал своей оси, изъятое называется",
    "evidence": {
-    "file": "plugins/superstack-guard/tools/review.py",
+    "file": "plugins/superstack/tools/review.py",
     "contains": "def pack"
    }
   },
@@ -774,7 +774,7 @@
    "layer": "L5 гарантии",
    "mechanism": "два дозапроса потолок, дальше свежий контекст и смена подхода",
    "evidence": {
-    "file": "plugins/superstack-guard/tools/review.py",
+    "file": "plugins/superstack/tools/review.py",
     "contains": "def followup_allowed"
    }
   },
@@ -783,7 +783,7 @@
    "layer": "L5 гарантии",
    "mechanism": "ревьюер переживает таск; смена внутри волны — дефект процесса",
    "evidence": {
-    "file": "plugins/superstack-guard/tools/review.py",
+    "file": "plugins/superstack/tools/review.py",
     "contains": "def reviewer_continuity"
    }
   },
@@ -792,7 +792,7 @@
    "layer": "L3 проектирование",
    "mechanism": "семь вопросов к задаче; проход не имеет права ничего вычеркнуть",
    "evidence": {
-    "file": "plugins/superstack-spec/tools/premortem.py",
+    "file": "plugins/superstack/tools/premortem.py",
     "contains": "def add"
    }
   },
@@ -801,7 +801,7 @@
    "layer": "L3 проектирование",
    "mechanism": "меньше трёх находок — признак прохода для галочки",
    "evidence": {
-    "file": "plugins/superstack-spec/tools/premortem.py",
+    "file": "plugins/superstack/tools/premortem.py",
     "contains": "MIN_FINDINGS"
    }
   },
@@ -824,20 +824,11 @@
    }
   },
   {
-   "id": "L0.tool-resolver",
-   "layer": "L0 рантайм",
-   "mechanism": "инструмент соседнего пакета находится по имени, предположение о раскладке в одном месте",
-   "evidence": {
-    "file": "plugins/superstack-build/tools/where.py",
-    "contains": "def find"
-   }
-  },
-  {
    "id": "L4.plan-feeds-the-crew",
    "layer": "L4 исполнение",
    "mechanism": "состояние стройки несёт блокеры, зоны и отметки старта — расчёт волн читает их оттуда",
    "evidence": {
-    "file": "plugins/superstack-build/tools/progress.py",
+    "file": "plugins/superstack/tools/progress.py",
     "contains": "entry[\"blockedBy\"]"
    }
   },
@@ -846,7 +837,7 @@
    "layer": "L4 исполнение",
    "mechanism": "таск несёт критерии, цель и цитаты — передача собирается из них и не теряет их при перезаписи",
    "evidence": {
-    "file": "plugins/superstack-build/tools/progress.py",
+    "file": "plugins/superstack/tools/progress.py",
     "contains": "(\"goal\", goal), (\"acceptance\", acceptance)"
    }
   },
@@ -855,7 +846,7 @@
    "layer": "L4 исполнение",
    "mechanism": "исполнителю уходят только названные разделы спеки, не спека целиком",
    "evidence": {
-    "file": "plugins/superstack-build/tools/handoff.py",
+    "file": "plugins/superstack/tools/handoff.py",
     "contains": "def extract_sections"
    }
   },
@@ -864,7 +855,7 @@
    "layer": "L4 исполнение",
    "mechanism": "контракт возврата разбирается кодом; «DONE» при красных тестах — противоречие",
    "evidence": {
-    "file": "plugins/superstack-build/tools/contract.py",
+    "file": "plugins/superstack/tools/contract.py",
     "contains": "def check"
    }
   },
@@ -873,7 +864,7 @@
    "layer": "L4 исполнение",
    "mechanism": "ответ без блока контракта не считается законченным таском",
    "evidence": {
-    "file": "plugins/superstack-build/tools/contract.py",
+    "file": "plugins/superstack/tools/contract.py",
     "contains": "\"STATUS\" not in f"
    }
   },
@@ -882,7 +873,7 @@
    "layer": "L5 гарантии",
    "mechanism": "тесты проекта человека доказываются поломкой: зелёное при внесённой поломке — находка",
    "evidence": {
-    "file": "plugins/superstack-guard/tools/prove_tests.py",
+    "file": "plugins/superstack/tools/prove_tests.py",
     "contains": "def run"
    }
   },
@@ -891,7 +882,7 @@
    "layer": "L5 гарантии",
    "mechanism": "заглушка зависимости с той же формой ответа — не зависящий от языка способ убить интеграцию",
    "evidence": {
-    "file": "plugins/superstack-guard/tools/prove_tests.py",
+    "file": "plugins/superstack/tools/prove_tests.py",
     "contains": "\"stub\" in m"
    }
   },
@@ -900,7 +891,7 @@
    "layer": "L5 гарантии",
    "mechanism": "ноль зарегистрированных поломок — «не проверяли», а не «тесты держат»",
    "evidence": {
-    "file": "plugins/superstack-guard/tools/prove_tests.py",
+    "file": "plugins/superstack/tools/prove_tests.py",
     "contains": "if not muts:"
    }
   },
@@ -909,7 +900,7 @@
    "layer": "L3 проектирование",
    "mechanism": "основание требования и причина статуса — разные поля; смена статуса не стирает смысл строки",
    "evidence": {
-    "file": "plugins/superstack-spec/tools/manifest.py",
+    "file": "plugins/superstack/tools/manifest.py",
     "contains": "r[\"reason\"] = reason"
    }
   },
@@ -934,19 +925,10 @@
   {
    "id": "DIST.no-manifest-dependencies",
    "layer": "L0 рантайм",
-   "mechanism": "проводка соседей идёт по раскладке, а не по полю, которого движок не знает",
+   "mechanism": "соседние инструменты лежат в том же каталоге: поля dependencies движок не знает, а раскладку искать больше не у кого — пакет один",
    "evidence": {
-    "file": "plugins/superstack-control/tools/what.py",
-    "contains": "def _wire_siblings"
-   }
-  },
-  {
-   "id": "DIST.owner-map",
-   "layer": "L0 рантайм",
-   "mechanism": "отказ резолвера называет пакет, которого не хватает, и команду установки",
-   "evidence": {
-    "file": "plugins/superstack-build/tools/where.py",
-    "contains": "OWNER.get(argv[0])"
+    "file": "plugins/superstack/tools/what.py",
+    "contains": "sys.path.insert(0, str(Path(__file__).resolve().parent))"
    }
   },
   {
@@ -963,7 +945,7 @@
    "layer": "интерфейс",
    "mechanism": "ступень подтверждений: сколько раз система останавливается — выбор человека, но гейты, слепая приёмка и G4 не отключаются ни на одной",
    "evidence": {
-    "file": "plugins/superstack-build/skills/go/SKILL.md",
+    "file": "plugins/superstack/skills/go/SKILL.md",
     "contains": "Ступень подтверждений"
    }
   },
@@ -972,7 +954,7 @@
    "layer": "интерфейс",
    "mechanism": "направление интерфейса выбирается до кода и переводится в проверяемые числа; ориентир человека не вычёркивается",
    "evidence": {
-    "file": "plugins/superstack-build/skills/go/SKILL.md",
+    "file": "plugins/superstack/skills/go/SKILL.md",
     "contains": "Фаза 2.5 — НАПРАВЛЕНИЕ"
    }
   },
@@ -981,7 +963,7 @@
    "layer": "интерфейс",
    "mechanism": "дизайн делает человек во внешнем инструменте: система собирает ему промпт со списком того, что принести обратно, и ждёт; код до этого не пишется",
    "evidence": {
-    "file": "plugins/superstack-build/skills/go/SKILL.md",
+    "file": "plugins/superstack/skills/go/SKILL.md",
     "contains": "Код в это время не пишется"
    }
   },
@@ -990,7 +972,7 @@
    "layer": "интерфейс",
    "mechanism": "промпт для внешнего дизайн-инструмента не показывается, пока не записана свежая сверка с его документацией с названными источниками",
    "evidence": {
-    "file": "plugins/superstack-spec/tools/design_brief.py",
+    "file": "plugins/superstack/tools/design_brief.py",
     "contains": "DOCS_FRESH_DAYS"
    }
   },
@@ -999,7 +981,7 @@
    "layer": "интерфейс",
    "mechanism": "живая панель хода: этап и держатель хода видны постоянно, обновление стоит одной записи состояния; этап следует из работы — переход части в running двигает его сам",
    "evidence": {
-    "file": "plugins/superstack-build/tools/progress.py",
+    "file": "plugins/superstack/tools/progress.py",
     "contains": "data = set_phase(data, BUILD_PHASE, \"исполнитель\", detail, now=keep,"
    },
    "note": "Улика указывает на запись состояния, а не на разметку: разметка и её JS живут в строковом литерале live_panel.py, а ворота вырезают из .py прозу и литералы целиком — там любая улика невидима. Отображение держат тесты test_live_panel.py и мутации panel.*, они по литералу работают."
@@ -1009,7 +991,7 @@
    "layer": "интерфейс",
    "mechanism": "человеческий русский на всём, что видит человек: словарь жаргона с заменами, роли и этапы с пояснениями, надписи вне кода; подпись с жаргоном не записывается вовсе",
    "evidence": {
-    "file": "plugins/superstack-build/tools/progress.py",
+    "file": "plugins/superstack/tools/progress.py",
     "contains": "bad = _jargon_in(detail) if plain else []"
    }
   },
@@ -1018,7 +1000,7 @@
    "layer": "интерфейс",
    "mechanism": "«сколько ещё ждать» считается только по замеренному: конец части отмечается, оценка берёт середину ряда прошлых длительностей; замеров нет — оценки нет, и об этом говорится прямо",
    "evidence": {
-    "file": "plugins/superstack-build/tools/progress.py",
+    "file": "plugins/superstack/tools/progress.py",
     "contains": "elif keep and keep.get(\"status\") == RUNNING and \"finished\" not in entry:"
    },
    "note": "Улика на ЗАМЕР, а не на его показ: без отметки конца показывать нечего, а сам показ проверяется тестами панели."
@@ -1028,7 +1010,7 @@
    "layer": "L5 гарантии",
    "mechanism": "каталог из 571 проверки по первоисточникам (OWASP Top 10 2025, ASVS 5.0, CWE Top 25, NIST 800-63B, OWASP LLM и Agentic, NIST AI 100-2e2025, MCP): три уровня важности, десять тем, 472 пункта с числовым порогом",
    "evidence": {
-    "file": "plugins/superstack-guard/data/checks-catalog.json",
+    "file": "plugins/superstack/data/checks-catalog.json",
     "contains": "superstack.checks-catalog.v1"
    }
   },
@@ -1037,7 +1019,7 @@
    "layer": "L5 гарантии",
    "mechanism": "набор отбирается двумя осями: тип продукта И что в нём есть (вход, платежи, ии, файлы, фон, объёмы, роли, перс-данные); тема без своей возможности не показывается — лендингу 33 обязательные вместо 104",
    "evidence": {
-    "file": "plugins/superstack-guard/tools/security_pack.py",
+    "file": "plugins/superstack/tools/security_pack.py",
     "contains": "def needed_topics(has: list, data: dict = None) -> list:"
    }
   },
@@ -1046,7 +1028,7 @@
    "layer": "L5 гарантии",
    "mechanism": "проверка «это ещё каркас»: считает видимые заглушки и пустые блоки, отказывается признавать страницу результатом и печатает список вопросов к человеку",
    "evidence": {
-    "file": "plugins/superstack-guard/tools/page_check.py",
+    "file": "plugins/superstack/tools/page_check.py",
     "contains": "caркас = len(seen) > PLACEHOLDER_LIMIT"
    }
   },
@@ -1055,7 +1037,7 @@
    "layer": "L4 исполнение",
    "mechanism": "передача работы при исчерпании контекста: статус HANDOFF, потолок в две передачи, запрет передавать красное, обязательная строка «на чём остановился»",
    "evidence": {
-    "file": "plugins/superstack-build/tools/contract.py",
+    "file": "plugins/superstack/tools/contract.py",
     "contains": "MAX_HANDOFFS = 2"
    }
   },
@@ -1064,7 +1046,7 @@
    "layer": "L5 гарантии",
    "mechanism": "лестница починки: недоделка идёт тому же исполнителю, отказ — сразу в свежий контекст, дальше другой подход; четыре попытки, пятой нет; причина называется до починки",
    "evidence": {
-    "file": "plugins/superstack-guard/tools/review.py",
+    "file": "plugins/superstack/tools/review.py",
     "contains": "def repair_route(data: dict, kind: str, reason: str = \"\") -> dict:"
    }
   },
@@ -1073,7 +1055,7 @@
    "layer": "L6 наблюдаемость",
    "mechanism": "сверка «то ли запускается, что правишь»: файл за файлом по отпечатку между репозиторием и установленной копией — нашла семь разошедшихся пакетов при зелёном наборе",
    "evidence": {
-    "file": "plugins/superstack-control/tools/installed_drift.py",
+    "file": "plugins/superstack/tools/installed_drift.py",
     "contains": "def compare(repo: Path, name: str) -> dict:"
    }
   },
@@ -1082,7 +1064,7 @@
    "layer": "L4 исполнение",
    "mechanism": "финальный отчёт собирается из файлов прогона, а не по памяти: доказанное отделено от заявленного, закрытые находки не смешиваются с открытыми, «что ждёт человека» идёт раньше готового",
    "evidence": {
-    "file": "plugins/superstack-build/tools/report.py",
+    "file": "plugins/superstack/tools/report.py",
     "contains": "if f.get(\"blocking\") and not f.get(\"closed\")]"
    }
   },
@@ -1091,7 +1073,7 @@
    "layer": "интерфейс",
    "mechanism": "движение на странице обязательно, но не является условием видимости: запрет на движение сужен до нажатия, prefers-reduced-motion выключает всё, страховка показывает содержимое, если наблюдатель молчит",
    "evidence": {
-    "file": "plugins/superstack-core/tools/plain_ru.py",
+    "file": "plugins/superstack/tools/plain_ru.py",
     "contains": "def find_jargon(text: str, data: dict = None) -> list:"
    },
    "note": "механизм живёт в проекте-образце (керамика), здесь закреплена только его языковая часть; поведение проверяется тестами проекта"
@@ -1101,7 +1083,7 @@
    "layer": "L4 исполнение",
    "mechanism": "замок на файл состояния держится всю операцию «прочитал, изменил, записал»: волна из двух помощников — два процесса, и без него второй затирает отметку первого молча, с кодом возврата 0",
    "evidence": {
-    "file": "plugins/superstack-build/tools/progress.py",
+    "file": "plugins/superstack/tools/progress.py",
     "contains": "class _Lock:"
    }
   },
@@ -1110,8 +1092,44 @@
    "layer": "L4 исполнение",
    "mechanism": "ненулевой код возврата не всегда провал: гейт, доказавший работу отказом, помечается дословно «ожидаемый отказ», и пометка снимает только тот прогон, рядом с которым стоит",
    "evidence": {
-    "file": "plugins/superstack-build/tools/contract.py",
+    "file": "plugins/superstack/tools/contract.py",
     "contains": "_EXPECTED = re.compile(r\"ожидаемый отказ\", re.I)"
+   }
+  },
+  {
+   "id": "DIST.single-package",
+   "layer": "L0 рантайм",
+   "mechanism": "весь набор ставится одной записью маркетплейса; межпакетной адресации нет, потому что нет второго пакета",
+   "evidence": {
+    "file": "tests/test_distribution.py",
+    "contains": "test_the_set_ships_as_exactly_one_package"
+   }
+  },
+  {
+   "id": "DIST.calls-checked-literally",
+   "layer": "L0 рантайм",
+   "mechanism": "каждый вызов инструмента написан полным путём и сверяется с диском — сокращение переменной сделало бы его невидимым для ворот",
+   "evidence": {
+    "file": "tests/test_wiring.py",
+    "contains": "test_every_called_tool_exists_in_the_package"
+   }
+  },
+  {
+   "id": "L5.hook-scripts-declared",
+   "layer": "L5 гарантии",
+   "mechanism": "скрипт хука, на который не указывает ни одно событие, — мёртвый механизм; проверка идёт в обе стороны",
+   "evidence": {
+    "file": "tests/test_precompact.py",
+    "contains": "test_every_hook_script_is_declared_by_some_event"
+   }
+  },
+  {
+   "id": "DIST.import-is-a-call",
+   "layer": "L0 рантайм",
+   "mechanism": "достижимость считается и по пути к файлу, и по питоновскому импорту, но не по голому упоминанию имени",
+   "evidence": {
+    "file": "tools/gauntlet.py",
+    "contains": "def зовёт"
    }
   }
  ]

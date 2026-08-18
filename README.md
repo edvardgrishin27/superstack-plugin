@@ -9,24 +9,14 @@
 Вставьте этот текст своему агенту — Claude Code, Cursor, Codex. Он всё сделает сам:
 
 ```
-Поставь мне SUPERSTACK. Выполни в терминале ровно эти команды, по одной:
+Поставь мне SUPERSTACK. Выполни в терминале ровно эти две команды, по одной:
 
 CLAUDECODE= claude plugin marketplace add edvardgrishin27/superstack-plugin
-CLAUDECODE= claude plugin install superstack-core@superstack
-CLAUDECODE= claude plugin install superstack-install@superstack
-CLAUDECODE= claude plugin install superstack-spec@superstack
-CLAUDECODE= claude plugin install superstack-guard@superstack
-CLAUDECODE= claude plugin install superstack-build@superstack
-CLAUDECODE= claude plugin install superstack-brain@superstack
-CLAUDECODE= claude plugin install superstack-control@superstack
+CLAUDECODE= claude plugin install superstack@superstack
 
 Префикс `CLAUDECODE=` обязателен: без него `claude` откажется запускаться
 изнутри сессии («cannot be launched inside another Claude Code session»),
 и это не поломка — это защита от вложенных сессий.
-
-Ставь все семь. Поставить часть нельзя: движок пока не тянет зависимости между
-пакетами, а инструменты зовут друг друга через пакеты. Неполный набор даёт
-рабочий на вид `/go`, который падает на первом же гейте.
 
 Больше ничего не устанавливай. Когда закончишь — напиши одной строкой, что
 готово, и напомни перезапустить сессию: плагины читаются при старте.
@@ -36,12 +26,30 @@ CLAUDECODE= claude plugin install superstack-control@superstack
 
 ```bash
 claude plugin marketplace add edvardgrishin27/superstack-plugin
-for p in core install spec guard build brain control; do
-  claude plugin install "superstack-$p@superstack"
-done
+claude plugin install superstack@superstack
 ```
 
 Здесь префикс не нужен — вы уже вне сессии.
+
+### Если стояли семь пакетов
+
+До версии 0.3.0 система ставилась семью пакетами (`superstack-core`,
+`-install`, `-spec`, `-guard`, `-build`, `-brain`, `-control`). Теперь пакет
+один, и старые семь надо снять — иначе рядом окажутся две копии одних и тех же
+скиллов, и по описанию подтянется любая из них.
+
+В десктопном приложении: **настройки → плагины**, у каждого из семи старых —
+удалить, затем у маркетплейса `superstack` — обновить и поставить `superstack`.
+Порядок важен: пока старые на месте, новый пакет с ними спорит.
+
+Почему разделения больше нет. Семь пакетов имели смысл, если бы их ставили и
+обновляли по отдельности. Ни того, ни другого не случилось ни разу: ставилась
+связка целиком, обновлялась тоже целиком — семью одинаковыми действиями подряд.
+Платой была межпакетная адресация: скилл из одного пакета звал инструмент из
+другого через путь, который в его пакете не существует. Так однажды оказались
+недостижимы 14 инструментов из 29, и оба вызова единственного сборочного скилла
+несколько заходов указывали в пустоту. Один пакет убирает этот класс отказов
+целиком, а не чинит его очередной проверкой.
 
 **Слэш-команда `/plugin` не подойдёт.** Она есть только в терминальном Claude
 Code; в десктопном приложении её нет, и попытка выполнить её там отвечает

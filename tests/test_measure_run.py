@@ -34,9 +34,9 @@ import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from paths import plug  # noqa: E402
+from paths import PKG  # noqa: E402
 
-TOOL = plug("superstack-control") / "tools" / "measure_run.py"
+TOOL = PKG / "tools" / "measure_run.py"
 _s = importlib.util.spec_from_file_location("ss_measure_run", TOOL)
 mr = importlib.util.module_from_spec(_s)
 _s.loader.exec_module(mr)
@@ -157,7 +157,7 @@ class TestTheReportSpeaksPlainRussian(unittest.TestCase):
     def test_the_human_report_has_no_jargon(self):
         import importlib.util as iu
         s = iu.spec_from_file_location(
-            "ss_plain_measure", plug("superstack-core") / "tools" / "plain_ru.py")
+            "ss_plain_measure", PKG / "tools" / "plain_ru.py")
         ru = iu.module_from_spec(s)
         s.loader.exec_module(ru)
         with tempfile.TemporaryDirectory() as t:

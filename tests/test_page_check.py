@@ -28,9 +28,9 @@ import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from paths import plug  # noqa: E402
+from paths import PKG  # noqa: E402
 
-TOOL = plug("superstack-guard") / "tools" / "page_check.py"
+TOOL = PKG / "tools" / "page_check.py"
 _s = importlib.util.spec_from_file_location("ss_page_check", TOOL)
 pc = importlib.util.module_from_spec(_s)
 _s.loader.exec_module(pc)
@@ -119,7 +119,7 @@ class TestItSaysWhatToAsk(unittest.TestCase):
     def test_questions_are_asked_in_plain_russian(self):
         import importlib.util as iu
         s = iu.spec_from_file_location(
-            "ss_plain_page", plug("superstack-core") / "tools" / "plain_ru.py")
+            "ss_plain_page", PKG / "tools" / "plain_ru.py")
         ru = iu.module_from_spec(s)
         s.loader.exec_module(ru)
         with tempfile.TemporaryDirectory() as t:
