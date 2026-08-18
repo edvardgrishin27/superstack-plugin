@@ -23,7 +23,8 @@ on:
   workflow_dispatch:
 
 jobs:
-  набор:
+  suite:
+    name: набор
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -36,7 +37,8 @@ jobs:
       - name: герметичность — тот же набор при чужом HOME
         run: HOME="$(mktemp -d)" python -m pytest tests/ -q
 
-  ворота:
+  gates:
+    name: ворота
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -66,7 +68,8 @@ jobs:
               sys.exit(1)
           PY
 
-  мутации:
+  mutations:
+    name: мутации
     # Только по ночам, на теге и по кнопке: 347 поломок × прогон набора.
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest

@@ -1167,6 +1167,15 @@
     "file": ".github/workflows/gates.yml",
     "contains": "pytest tests/"
    }
+  },
+  {
+   "id": "L5.workflow-is-acceptable-to-github",
+   "layer": "L5 гарантии",
+   "mechanism": "рабочий процесс проверяется на приемлемость для движка, а не только на наличие прогона внутри",
+   "evidence": {
+    "file": "tests/test_distribution.py",
+    "contains": "test_the_workflow_is_one_github_will_actually_accept"
+   }
   }
  ]
 }
