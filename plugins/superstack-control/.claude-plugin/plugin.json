@@ -1,6 +1,6 @@
 {
   "name": "superstack-control",
-  "version": "0.2.6",
+  "version": "0.2.7",
   "description": "Словарь новичка: /what — где я и что дальше, /oops — отменить последнее, /fix — что-то сломалось.",
   "author": {
     "name": "Edvard Grishin"

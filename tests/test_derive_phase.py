@@ -317,3 +317,26 @@ class TestCommandLine(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestClosedFindingsDoNotHoldTheTurn(unittest.TestCase):
+    """Починенная находка не должна держать ход на человеке: «сейчас нужен ты»
+    там, где от него ничего не нужно, — ложная тревога, а после пары таких
+    панель перестают читать целиком."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+
+    def test_an_open_finding_hands_the_turn_over(self):
+        r = (Run(self.tmp.name).brief().spec()
+             .tasks(task("01", "claimed")).returned().blocking_finding())
+        self.assertEqual(r.phase()["owner"], dp.HUMAN)
+
+    def test_a_closed_finding_does_not(self):
+        r = Run(self.tmp.name).brief().spec().tasks(task("01", "claimed")).returned()
+        (Path(self.tmp.name) / "review-01.json").write_text(
+            json.dumps({"findings": [{"axis": "manifest", "blocking": True,
+                                      "closed": "часть 09: починено"}]}),
+            encoding="utf-8")
+        self.assertEqual(r.phase()["owner"], dp.SYSTEM)

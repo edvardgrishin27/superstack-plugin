@@ -2340,6 +2340,62 @@
    "find": "        return {\"plugin\": name, \"status\": \"unknown\", \"installed\": None,",
    "replace": "        return {\"plugin\": name, \"status\": \"pass\", \"installed\": None,",
    "why": "«пакет не установлен» выдаётся за «установленное совпадает»: человек читает зелёное там, где сравнивать было не с чем"
+  },
+  {
+   "id": "report.claimed-counts-as-done",
+   "file": "plugins/superstack-build/tools/report.py",
+   "find": "        \"проверено\": [t for t in tasks if t.get(\"status\") == PROVEN],",
+   "replace": "        \"проверено\": [t for t in tasks if t.get(\"status\") in (PROVEN, CLAIMED)],",
+   "why": "«со слов помощника» попадает в раздел готового: человек читает отчёт, где обещанное неотличимо от проверенного, и планирует по нему как по факту"
+  },
+  {
+   "id": "report.closed-findings-stay-in-the-open-list",
+   "file": "plugins/superstack-build/tools/report.py",
+   "find": "                if f.get(\"blocking\") and not f.get(\"closed\")]",
+   "replace": "                if f.get(\"blocking\")]",
+   "why": "починенное перечисляется наравне с открытым: в первом же живом отчёте из одиннадцати строк шесть были уже закрыты — список, где половина неверна, теряет доверие целиком"
+  },
+  {
+   "id": "review.closing-without-a-reason",
+   "file": "plugins/superstack-guard/tools/review.py",
+   "find": "    if not by.strip():",
+   "replace": "    if False:",
+   "why": "находку можно снять молча: снятая без основания, она отличается от забытой только словом, и отчёт становится чище ровно настолько, насколько стал неправдивее"
+  },
+  {
+   "id": "security.unknown-kind-gets-a-generic-pack",
+   "file": "plugins/superstack-guard/tools/security_pack.py",
+   "find": "    if kind not in m:\n        raise ValueError(f\"неизвестный тип продукта: {kind} — есть \"",
+   "replace": "    if False:\n        raise ValueError(f\"неизвестный тип продукта: {kind} — есть \"",
+   "why": "неизвестный тип продукта молча получает случайный набор: неполная проверка выдаётся за полную, и человек считает закрытым то, чего никто не смотрел"
+  },
+  {
+   "id": "security.done-without-evidence",
+   "file": "plugins/superstack-guard/tools/security_pack.py",
+   "find": "    if not where.strip():",
+   "replace": "    if False:",
+   "why": "«проверено» ставится без ссылки на место в коде: отметка звучит ровно так же, как непроверенное, и отличить их потом нечем"
+  },
+  {
+   "id": "derive.closed-findings-still-hold-the-turn",
+   "file": "plugins/superstack-core/tools/derive_phase.py",
+   "find": "        if any(x.get(\"blocking\") and not x.get(\"closed\")",
+   "replace": "        if any(x.get(\"blocking\")",
+   "why": "починенная находка продолжает держать ход на человеке: панель говорит «сейчас нужен ты», когда от него ничего не нужно, и после пары таких ложных тревог её перестают читать целиком"
+  },
+  {
+   "id": "security.capability-filter-does-nothing",
+   "file": "plugins/superstack-guard/tools/security_pack.py",
+   "find": "    if has is not None:\n        ok = set(needed_topics(has, data))\n        out = [c for c in out if c.get(\"тема\") in ok]",
+   "replace": "    if False:\n        ok = set(needed_topics(has, data))\n        out = [c for c in out if c.get(\"тема\") in ok]",
+   "why": "лендингу снова требуют двухфакторку и защиту платёжного вебхука: человек видит набор не про свой продукт и закрывает его целиком, вместе с теми проверками, которые ему были нужны"
+  },
+  {
+   "id": "security.topics-without-capabilities-are-dropped",
+   "file": "plugins/superstack-guard/tools/security_pack.py",
+   "find": "    return [t for t, need in rules.items() if not need or (set(need) & have)]",
+   "replace": "    return [t for t, need in rules.items() if set(need) & have]",
+   "why": "темы, нужные всегда — ввод, секреты, инфраструктура, скорость, — исчезают у продукта без особых возможностей: страница из одного экрана остаётся вообще без проверок"
   }
  ]
 }

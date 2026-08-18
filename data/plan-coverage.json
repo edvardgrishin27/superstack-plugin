@@ -1022,6 +1022,79 @@
     "contains": "elif keep and keep.get(\"status\") == RUNNING and \"finished\" not in entry:"
    },
    "note": "Улика на ЗАМЕР, а не на его показ: без отметки конца показывать нечего, а сам показ проверяется тестами панели."
+  },
+  {
+   "id": "GUARD.checks-catalog",
+   "layer": "L5 гарантии",
+   "mechanism": "каталог из 571 проверки по первоисточникам (OWASP Top 10 2025, ASVS 5.0, CWE Top 25, NIST 800-63B, OWASP LLM и Agentic, NIST AI 100-2e2025, MCP): три уровня важности, десять тем, 472 пункта с числовым порогом",
+   "evidence": {
+    "file": "plugins/superstack-guard/data/checks-catalog.json",
+    "contains": "superstack.checks-catalog.v1"
+   }
+  },
+  {
+   "id": "GUARD.pack-by-capability",
+   "layer": "L5 гарантии",
+   "mechanism": "набор отбирается двумя осями: тип продукта И что в нём есть (вход, платежи, ии, файлы, фон, объёмы, роли, перс-данные); тема без своей возможности не показывается — лендингу 33 обязательные вместо 104",
+   "evidence": {
+    "file": "plugins/superstack-guard/tools/security_pack.py",
+    "contains": "def needed_topics(has: list, data: dict = None) -> list:"
+   }
+  },
+  {
+   "id": "GUARD.page-is-not-a-frame",
+   "layer": "L5 гарантии",
+   "mechanism": "проверка «это ещё каркас»: считает видимые заглушки и пустые блоки, отказывается признавать страницу результатом и печатает список вопросов к человеку",
+   "evidence": {
+    "file": "plugins/superstack-guard/tools/page_check.py",
+    "contains": "caркас = len(seen) > PLACEHOLDER_LIMIT"
+   }
+  },
+  {
+   "id": "BUILD.handoff-instead-of-lying",
+   "layer": "L4 исполнение",
+   "mechanism": "передача работы при исчерпании контекста: статус HANDOFF, потолок в две передачи, запрет передавать красное, обязательная строка «на чём остановился»",
+   "evidence": {
+    "file": "plugins/superstack-build/tools/contract.py",
+    "contains": "MAX_HANDOFFS = 2"
+   }
+  },
+  {
+   "id": "GUARD.repair-ladder",
+   "layer": "L5 гарантии",
+   "mechanism": "лестница починки: недоделка идёт тому же исполнителю, отказ — сразу в свежий контекст, дальше другой подход; четыре попытки, пятой нет; причина называется до починки",
+   "evidence": {
+    "file": "plugins/superstack-guard/tools/review.py",
+    "contains": "def repair_route(data: dict, kind: str, reason: str = \"\") -> dict:"
+   }
+  },
+  {
+   "id": "CONTROL.installed-drift",
+   "layer": "L6 наблюдаемость",
+   "mechanism": "сверка «то ли запускается, что правишь»: файл за файлом по отпечатку между репозиторием и установленной копией — нашла семь разошедшихся пакетов при зелёном наборе",
+   "evidence": {
+    "file": "plugins/superstack-control/tools/installed_drift.py",
+    "contains": "def compare(repo: Path, name: str) -> dict:"
+   }
+  },
+  {
+   "id": "BUILD.report-from-files",
+   "layer": "L4 исполнение",
+   "mechanism": "финальный отчёт собирается из файлов прогона, а не по памяти: доказанное отделено от заявленного, закрытые находки не смешиваются с открытыми, «что ждёт человека» идёт раньше готового",
+   "evidence": {
+    "file": "plugins/superstack-build/tools/report.py",
+    "contains": "if f.get(\"blocking\") and not f.get(\"closed\")]"
+   }
+  },
+  {
+   "id": "UX.motion-is-not-a-condition",
+   "layer": "интерфейс",
+   "mechanism": "движение на странице обязательно, но не является условием видимости: запрет на движение сужен до нажатия, prefers-reduced-motion выключает всё, страховка показывает содержимое, если наблюдатель молчит",
+   "evidence": {
+    "file": "plugins/superstack-core/tools/plain_ru.py",
+    "contains": "def find_jargon(text: str, data: dict = None) -> list:"
+   },
+   "note": "механизм живёт в проекте-образце (керамика), здесь закреплена только его языковая часть; поведение проверяется тестами проекта"
   }
  ]
 }

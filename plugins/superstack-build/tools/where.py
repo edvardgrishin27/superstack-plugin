@@ -87,6 +87,8 @@ OWNER = {
     "measure_run.py": "superstack-control",
     "page_check.py": "superstack-guard",
     "installed_drift.py": "superstack-control",
+    "report.py": "superstack-build",
+    "security_pack.py": "superstack-guard",
     "log.py": "superstack-core",
     "manifest.py": "superstack-spec",
     "memory_file.py": "superstack-brain",

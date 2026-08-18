@@ -243,6 +243,28 @@ def count_repair(data: dict, step: str) -> dict:
     return data
 
 
+
+def close_finding(data: dict, index: int, by: str) -> dict:
+    """Отметить находку закрытой — с указанием, ЧЕМ закрыта.
+
+    Без этой отметки отчёт перечисляет починенное наравне с открытым: человек
+    читает список «найдено и не закрыто», где половина строк уже неверна, и
+    перестаёт верить всему списку. Проверено на живом отчёте — из одиннадцати
+    строк открытыми были три.
+
+    «Чем закрыта» обязательно: находка, снятая без основания, отличается от
+    забытой только словом.
+    """
+    fs = data.get("findings") or []
+    if not 0 <= index < len(fs):
+        raise ValueError(f"нет находки {index}: их {len(fs)}")
+    if not by.strip():
+        raise ValueError("нужно сказать, ЧЕМ закрыта находка — снятая без "
+                         "основания неотличима от забытой")
+    fs[index]["closed"] = by.strip()
+    return data
+
+
 def reviewer_continuity(data: dict, axis: str, who: str, wave: int) -> dict:
     """Не сменился ли ревьюер посреди волны.
 
@@ -285,7 +307,7 @@ def halt_if_paused() -> None:
 
 
 _TAKES = {"--axis", "--where", "--what", "--must", "--who", "--wave",
-          "--kind", "--reason"}
+          "--kind", "--reason", "--by"}
 
 
 def _one(argv, name, default=""):
@@ -305,7 +327,7 @@ def main() -> int:
             skip = True
         elif not a.startswith("--"):
             plain.append(a)
-    if len(plain) < 2 or plain[0] not in ("find", "route", "show", "followup", "repair"):
+    if len(plain) < 2 or plain[0] not in ("find", "route", "show", "followup", "repair", "close"):
         print("вызов: review.py find|route|show|followup|repair <файл> ...",
               file=sys.stderr)
         return 3
@@ -325,6 +347,13 @@ def main() -> int:
                 save(path, data)
             print(json.dumps(r, ensure_ascii=False, indent=1))
             return 0 if r["allowed"] else 1
+        elif cmd == "close":
+            if len(plain) < 3:
+                raise ValueError("нужен номер находки")
+            data = close_finding(data, int(plain[2]), _one(argv, "--by") or "")
+            save(path, data)
+            print(json.dumps({"closed": int(plain[2])}, ensure_ascii=False))
+            return 0
         elif cmd == "repair":
             kind = _one(argv, "--kind") or SHORTFALL
             r = repair_route(data, kind, _one(argv, "--reason") or "")

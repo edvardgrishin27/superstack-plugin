@@ -88,7 +88,11 @@ def _blocking(run: Path) -> bool:
             d = json.loads(f.read_text("utf-8"))
         except (OSError, ValueError):
             continue
-        if any(x.get("blocking") for x in d.get("findings", [])):
+        # Закрытая находка ход человеку не передаёт: она уже починена, и
+        # «нужен ты» на экране становится ложной тревогой — самой дорогой из
+        # возможных, потому что после пары таких панель перестают читать.
+        if any(x.get("blocking") and not x.get("closed")
+               for x in d.get("findings", [])):
             return True
     return False
 
