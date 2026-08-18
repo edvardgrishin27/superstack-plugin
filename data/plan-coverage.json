@@ -963,7 +963,7 @@
    "layer": "интерфейс",
    "mechanism": "дизайн делает человек во внешнем инструменте: система собирает ему промпт со списком того, что принести обратно, и ждёт; код до этого не пишется",
    "evidence": {
-    "file": "plugins/superstack/skills/go/SKILL.md",
+    "file": "plugins/superstack/skills/go/phases/direction.md",
     "contains": "Код в это время не пишется"
    }
   },
@@ -1184,6 +1184,15 @@
    "evidence": {
     "file": "tools/gauntlet.py",
     "contains": "мутация {n}/{всего}"
+   }
+  },
+  {
+   "id": "L4.conditional-phases-load-on-demand",
+   "layer": "L4 исполнение",
+   "mechanism": "условные фазы вынесены из сборочного скилла и читаются только при своём условии; заглушка обязана нести условие и веление прочесть",
+   "evidence": {
+    "file": "tests/test_wiring.py",
+    "contains": "test_every_phase_file_is_named_with_an_order_to_read_it"
    }
   }
  ]

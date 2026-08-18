@@ -275,5 +275,59 @@ class TestTheRealTreeCallsOnlyToolsThatExist(unittest.TestCase):
                          "в установленной раскладке он ведёт не туда")
 
 
+class TestExtractedPhasesAreReachable(unittest.TestCase):
+    """Файл фазы, который SKILL.md не велит прочесть, — мёртвый текст.
+
+    Разрезка большого скилла экономит контекст и создаёт новый способ тихо
+    сломаться: вынесенное перестаёт исполняться, а выглядит написанным. Это
+    та же болезнь, из-за которой существуют ворота проводки, только этажом
+    выше — там инструмент без точки входа, здесь инструкция без неё.
+
+    Проверяется не упоминание имени, а ВЕЛЕНИЕ ПРОЧЕСТЬ: ссылка в скобках
+    посреди абзаца оставляет чтение на усмотрение, и половину прогонов фаза
+    не выполнится.
+    """
+
+    def test_every_phase_file_is_named_with_an_order_to_read_it(self):
+        нашлись = False
+        for skill in sorted((PKG / "skills").glob("*")):
+            фазы = sorted(skill.glob("phases/*.md"))
+            if not фазы:
+                continue
+            нашлись = True
+            текст = (skill / "SKILL.md").read_text("utf-8")
+            for f in фазы:
+                with self.subTest(skill=skill.name, phase=f.name):
+                    self.assertIn(
+                        f"phases/{f.name}", текст,
+                        f"{skill.name}: файл фазы {f.name} не назван в "
+                        "SKILL.md — он не будет прочитан никогда")
+                    место = текст.index(f"phases/{f.name}")
+                    рядом = текст[max(0, место - 400):место]
+                    self.assertIn(
+                        "прочти файл целиком", рядом,
+                        f"{skill.name}/{f.name}: путь назван, но прочесть не "
+                        "велено — чтение остаётся на усмотрение, и фаза "
+                        "выполнится через раз")
+        self.assertTrue(нашлись, "ни у одного скилла нет вынесенных фаз — "
+                                 "проверка ничего не проверяет")
+
+    def test_the_stub_still_says_when_the_phase_applies(self):
+        """Условие обязано остаться в SKILL.md, а не уехать в вынесенный файл.
+
+        Иначе решение «нужна ли фаза» требует сначала прочитать файл — то есть
+        ровно тот контекст, ради экономии которого фазу и выносили.
+        """
+        for skill in sorted((PKG / "skills").glob("*")):
+            текст_путь = skill / "SKILL.md"
+            for f in sorted(skill.glob("phases/*.md")):
+                with self.subTest(skill=skill.name, phase=f.name):
+                    место = текст_путь.read_text("utf-8").index(f"phases/{f.name}")
+                    рядом = текст_путь.read_text("utf-8")[max(0, место - 400):место]
+                    self.assertIn("Нужна, если", рядом,
+                                  f"{skill.name}/{f.name}: в SKILL.md не "
+                                  "сказано, при каком условии фаза нужна")
+
+
 if __name__ == "__main__":
     unittest.main()

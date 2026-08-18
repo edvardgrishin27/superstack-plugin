@@ -28,7 +28,7 @@ import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from paths import PKG  # noqa: E402
+from paths import PKG, skill_text  # noqa: E402
 
 TOOL = PKG / "tools" / "design_brief.py"
 _s = importlib.util.spec_from_file_location("ss_design_brief", TOOL)
@@ -214,8 +214,7 @@ class TestTheSkillSendsThePersonOutAndWaits(unittest.TestCase):
 
     def setUp(self):
         from paths import REPO
-        self.t = (PKG / "skills" / "go"
-                  / "SKILL.md").read_text("utf-8")
+        self.t = skill_text("go")
 
     def test_the_skill_calls_the_tool(self):
         self.assertIn("design_brief.py", self.t)
