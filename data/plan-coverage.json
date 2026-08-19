@@ -1194,6 +1194,15 @@
     "file": "tests/test_wiring.py",
     "contains": "test_every_phase_file_is_named_with_an_order_to_read_it"
    }
+  },
+  {
+   "id": "DIST.readme-checked-against-manifests",
+   "layer": "L0 рантайм",
+   "mechanism": "ключ установки в витрине сверяется с именами из маркетплейса, а инструкция покрывает машину с прошлой установкой",
+   "evidence": {
+    "file": "tests/test_distribution.py",
+    "contains": "test_the_install_key_in_the_readme_matches_the_manifests"
+   }
   }
  ]
 }

@@ -986,6 +986,44 @@ class TestHookWiring(unittest.TestCase):
         self.assertRegex(текст, r"\bpush\b",
                          "рабочий процесс не привязан к push")
 
+    def test_the_install_key_in_the_readme_matches_the_manifests(self):
+        """Ключ установки в витрине сверяется с манифестами, а не с памятью.
+
+        `superstack@superstack` — это `<имя пакета>@<имя маркетплейса>`, и оба
+        имени живут в JSON. Переименуй любое — и README продолжит печатать
+        прежнее, а человек получит «plugin not found» и прочитает это как
+        поломку продукта. Витрина обязана ломаться здесь, а не у него.
+        """
+        mk = json.loads((REPO / ".claude-plugin" / "marketplace.json")
+                        .read_text("utf-8"))
+        ключи = {f'{e["name"]}@{mk["name"]}' for e in mk["plugins"]}
+        readme = (REPO / "README.md").read_text("utf-8")
+        названы = set(re.findall(r"claude plugin install (\S+)", readme))
+        self.assertTrue(названы, "README не показывает ни одной команды установки")
+        self.assertEqual(
+            названы - ключи, set(),
+            f"README ставит {sorted(названы - ключи)}, а маркетплейс объявляет "
+            f"{sorted(ключи)} — команда из витрины не сработает")
+
+    def test_the_readme_covers_the_machine_that_already_had_it(self):
+        """Проверка ФОРМУЛИРОВКИ, а не поведения — и названа так честно.
+
+        Повод не теоретический. `marketplace add` на машине, где SUPERSTACK уже
+        стоял, отказывает с кодом 1, и агент, ведомый прежним текстом из двух
+        команд, на этом останавливался. Хуже: если бы он не остановился, то
+        поставил бы пакет по СТАРОМУ списку из кэша — зелёная команда, не та
+        версия. Спасает только `marketplace update`, и его в тексте не было.
+        """
+        readme = (REPO / "README.md").read_text("utf-8")
+        mk = json.loads((REPO / ".claude-plugin" / "marketplace.json")
+                        .read_text("utf-8"))["name"]
+        self.assertIn(f"marketplace update {mk}", readme,
+                      "витрина не велит обновлять маркетплейс — на машине с "
+                      "прошлой установкой поставится версия из старого кэша")
+        self.assertIn("already installed", readme,
+                      "витрина не предупреждает про отказ первой команды — "
+                      "агент остановится на нём, решив, что установка провалена")
+
     def test_the_workflow_is_one_github_will_actually_accept(self):
         """Проверять, что файл есть, — мало. Он должен ЗАПУСТИТЬСЯ.
 

@@ -2473,6 +2473,27 @@
    "find": "**Нужна, если у продукта есть интерфейс** — сайт, приложение, панель.",
    "replace": "Про условие написано в самом файле фазы.",
    "why": "условие «нужна ли фаза» уезжает в вынесенный файл — чтобы решить, читать ли его, придётся сначала его прочитать, и экономия контекста обнуляется вместе со смыслом разрезки"
+  },
+  {
+   "id": "readme.update-step-dropped",
+   "file": "README.md",
+   "find": "CLAUDECODE= claude plugin marketplace update superstack",
+   "replace": "CLAUDECODE= claude plugin marketplace list",
+   "why": "из инструкции пропадает обновление маркетплейса — на машине с прошлой установкой ставится версия по СТАРОМУ списку из кэша. Команда зелёная, плагин установлен, версия не та, и отличить это по выводу нельзя"
+  },
+  {
+   "id": "readme.silent-about-the-red-first-command",
+   "file": "README.md",
+   "find": "already installed",
+   "replace": "успешно добавлен",
+   "why": "витрина перестаёт предупреждать, что первая команда на повторной установке краснеет — агент останавливается на ней и сообщает человеку, что установка провалилась, хотя провала нет"
+  },
+  {
+   "id": "readme.install-key-drifts-from-the-manifest",
+   "file": ".claude-plugin/marketplace.json",
+   "find": "      \"name\": \"superstack\",\n      \"source\": \"./plugins/superstack\",",
+   "replace": "      \"name\": \"superstack-all\",\n      \"source\": \"./plugins/superstack\",",
+   "why": "имя пакета в маркетплейсе расходится с ключом установки в README — команда из витрины отвечает «plugin not found», и человек читает это как поломку продукта, а не как опечатку в документации"
   }
  ]
 }
