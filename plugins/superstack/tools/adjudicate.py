@@ -88,7 +88,15 @@ def _walk(node, env: dict):
         fn = _BIN.get(type(node.op))
         if fn is None:
             raise RuleError("неподдерживаемая арифметика")
-        return fn(_walk(node.left, env), _walk(node.right, env))
+        значение = fn(_walk(node.left, env), _walk(node.right, env))
+        # Статическая проверка ниже ловит ОДИН большой множитель. Цепочку из
+        # нескольких допустимых она пропускает: 9999*9999 — сто мегабайт, и
+        # каждый множитель в пределах. Предел ставится и на результат.
+        if isinstance(значение, (str, bytes, list, tuple)) \
+                and len(значение) > MAX_REPEAT:
+            raise RuleError(f"результат длиной {len(значение)} превышает предел "
+                            f"{MAX_REPEAT}: правило может исчерпать память")
+        return значение
 
     if isinstance(node, ast.Compare):
         left = _walk(node.left, env)
@@ -256,7 +264,24 @@ def _fail(msg: str, code: int = 2) -> None:
     raise SystemExit(code)
 
 
+
+def _utf8_stdio() -> None:
+    """Печать по-русски не должна зависеть от локали.
+
+    В окружении без UTF-8 — минимальный контейнер, cron с урезанным env,
+    `PYTHONCOERCECLOCALE=0` — кодировка вывода оказывается ascii, и первый же
+    русский символ роняет инструмент целиком. Человек получает не «проверка не
+    прошла», а трейсбек вместо любого ответа. На macOS по умолчанию это не
+    воспроизводится: интерпретатор сам приводит локаль C к C.UTF-8.
+    """
+    for поток in (sys.stdout, sys.stderr):
+        кодировка = (getattr(поток, "encoding", "") or "").lower().replace("-", "")
+        if кодировка != "utf8" and hasattr(поток, "reconfigure"):
+            поток.reconfigure(encoding="utf-8", errors="replace")
+
+
 def main() -> None:
+    _utf8_stdio()
     halt_if_paused()
     if len(sys.argv) < 3:
         _fail("нужен файл фактов и маска правил:\n"
@@ -276,6 +301,12 @@ def main() -> None:
     # стектрейс: пропускаем и говорим, сколько пропустили.
     values, malformed = {}, []
     for k, v in facts_raw.items():
+        # Пустой ключ превращает подстановку «{}» в замену пустой строки —
+        # то есть в мусор по всему тексту правила, и все правила уходят в
+        # skipped. Аудита нет, а баннер при этом честный.
+        if not isinstance(k, str) or not k.strip():
+            malformed.append(repr(k))
+            continue
         if isinstance(v, dict) and "value" in v:
             values[k] = v["value"]
         else:

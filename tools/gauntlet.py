@@ -66,6 +66,12 @@ if _TOOLS.is_dir() and str(_TOOLS) not in sys.path:
 
 from log import event as _log_event  # noqa: E402
 
+# Планка и отметка о сверке лежат рядом, в корневом `tools/`. Импорт НЕ
+# оборачивается в `except`: молча выключенная проверка отвечает «всё чисто» и
+# этим хуже отсутствующей — так уже случилось с вычиткой подписи этапа.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import plan_stamp  # noqa: E402
+
 PLUG = Path(__file__).resolve().parent.parent
 SUITE_TIMEOUT = 900
 MUTATION_TIMEOUT = 600
@@ -343,10 +349,22 @@ def gate_mutations() -> dict:
     held = acquire_lock()
     if held:
         return {"status": "unknown", "detail": held}
+    копия = None
     try:
-        v = _mutate_all(muts)
+        # Одноразовая копия целиком: 25 МБ и секунда времени против того, что
+        # обрыв прогона больше не оставляет сломанный файл в рабочем дереве и
+        # не мешает ни редактировать, ни выкладывать, пока идёт измерение.
+        копия = Path(tempfile.mkdtemp(prefix="superstack-мутации-"))/ "дерево"
+        shutil.copytree(PLUG, копия, ignore=shutil.ignore_patterns(
+            "__pycache__", "*.pyc", ".pytest_cache", ".mutation-backup",
+            ".mutation-lock"))
+        v = _mutate_all(muts, копия)
+    except OSError as e:
+        v = {"status": "unknown", "detail": f"копию сделать не удалось: {e}"}
     finally:
         release_lock()
+        if копия is not None:
+            shutil.rmtree(копия.parent, ignore_errors=True)
 
     if picked is not None:
         # Подмножество не имеет права выглядеть взятой планкой: «проверено 3»
@@ -404,7 +422,13 @@ def unstash(mid: str) -> None:
             pass
 
 
-def _mutate_all(muts: list) -> dict:
+def _mutate_all(muts: list, корень: Path = None) -> dict:
+    # Корень подаётся снаружи: ломается ОДНОРАЗОВАЯ копия, а не
+    # рабочее дерево человека. Прежде ломалось живое, и дважды
+    # прерванный прогон оставлял в нём `if False:` — восемь красных
+    # тестов в четырёх файлах, ни один из которых не был дефектом.
+    в_копии = корень is not None
+    корень = корень or PLUG
     survived, checked, broken = [], 0, []
     всего = len(muts)
     т0 = time.monotonic()
@@ -421,7 +445,7 @@ def _mutate_all(muts: list) -> dict:
         print(f"  мутация {n}/{всего}  {m['id'][:44]:<44}"
               + (f"  ещё ~{осталось / 60:.0f} мин" if n > 1 else ""),
               file=sys.stderr, flush=True)
-        target = PLUG / m["file"]
+        target = корень / m["file"]
         if not target.is_file():
             broken.append(f"{m['id']}: нет файла {m['file']}")
             continue
@@ -430,7 +454,8 @@ def _mutate_all(muts: list) -> dict:
         if m["find"] not in text:
             broken.append(f"{m['id']}: якорь не найден в {m['file']}")
             continue
-        stash(m["id"], target, original)
+        if not в_копии:
+            stash(m["id"], target, original)
         try:
             target.write_text(text.replace(m["find"], m["replace"], 1), encoding="utf-8")
             # Кэш байткода сносится ПЕРЕД каждым прогоном, а не один раз на
@@ -442,7 +467,7 @@ def _mutate_all(muts: list) -> dict:
             # конца на заведомо сломанном коде — платить минутами за то, что
             # уже известно.
             code, _ = _sh([sys.executable, "-m", "pytest", "tests/", "-q", "-x"],
-                          MUTATION_TIMEOUT,
+                          MUTATION_TIMEOUT, cwd=корень,
                           # Сторож в conftest обязан молчать ИМЕННО здесь. Он
                           # обрывает набор, увидев мутацию в дереве, — а тут она
                           # применена намеренно. Без этого флага pytest вышел бы
@@ -463,7 +488,8 @@ def _mutate_all(muts: list) -> dict:
             target.write_bytes(original)
             # Отложенное снимается только ПОСЛЕ удачного возврата: пока файл не
             # восстановлен, единственная целая копия — эта.
-            unstash(m["id"])
+            if not в_копии:
+                unstash(m["id"])
         checked += 1
         if not caught:
             survived.append({"id": m["id"], "why": m["why"]})
@@ -691,6 +717,77 @@ ENTRY_GLOBS = ("*/skills/**/*.md", "*/hooks/*.sh", "*/hooks/*.json",
                "*/agents/*.md", "*/commands/*.md")
 
 
+def gate_reconciled(карта_путь: Path = None) -> dict:
+    """Карта сверялась с ПЛАНОМ, и после сверки план не менялся.
+
+    Все остальные ворота проверяют соответствие КАРТЕ. Полнота самой карты им
+    невидима: её пишет та же модель, которая по ней строит, и однажды «34 из
+    34» горело зелёным поверх 14 групп пропусков. Нашла их независимая сверка,
+    после которой карта выросла до 137 механизмов.
+
+    Та сверка осталась разовой. Здесь считается единственное, что тут вообще
+    можно посчитать кодом, — отпечаток плана, с которым карту сверяли.
+
+    Чем эти ворота НЕ являются, и это важнее: они не доказывают, что карта
+    полна. Полноту устанавливает чтение плана другой моделью, а отметку ставит
+    человек, и врать ей можно. Ворота не дают расхождению пройти МОЛЧА — это
+    другое утверждение, более слабое и единственное честное.
+    """
+    src = карта_путь or (PLUG / "data" / "plan-coverage.json")
+    try:
+        карта = json.loads(Path(src).read_text("utf-8"))
+    except (OSError, ValueError) as e:
+        return {"status": "unknown", "detail": f"карта не прочитана: {e}"}
+
+    отметка = карта.get("reconciled") or {}
+    if not отметка.get("digest"):
+        return {"status": "unknown",
+                "detail": "карта ни разу не сверялась с планом — полноту её "
+                          "механизмов не проверял никто",
+                "next": "прочитать план другой моделью, дополнить карту и "
+                        "отметить сверку: tools/plan_stamp.py --by <кто>"}
+
+    p = plan_stamp.plan_path()
+    if not p.is_file():
+        return {"status": "unknown",
+                "detail": f"плана нет по пути {p} — сверить не с чем",
+                "next": "положить план на место или назвать путь "
+                        f"переменной {plan_stamp.PLAN_ENV}"}
+
+    if plan_stamp.digest(p) != отметка["digest"]:
+        return {"status": "unknown",
+                "detail": "план правился после сверки — полнота карты снова "
+                          "неизвестна",
+                "reconciled": {k: отметка.get(k)
+                               for k in ("date", "by", "mechanisms")},
+                "next": "перечитать изменившееся, дополнить карту и "
+                        "переотметить: tools/plan_stamp.py --by <кто>"}
+
+    # Сверка нашла не только пропуски карты, но и механизмы, которых нет в
+    # КОДЕ. Держать их вне карты и звать это «сверено» — то же враньё
+    # умолчанием, ради которого ворота и заводились: «156 из 156» горело бы
+    # зелёным поверх двадцати трёх невыполненных обещаний плана.
+    дыры = Path(src).parent / "plan-gaps.json"
+    if дыры.is_file():
+        try:
+            список = json.loads(дыры.read_text("utf-8")).get("gaps") or []
+        except (OSError, ValueError) as e:
+            return {"status": "unknown", "detail": f"список дыр не разобран: {e}"}
+        if список:
+            return {"status": "unknown",
+                    "detail": f"карта сверена {отметка.get('date')} "
+                              f"({отметка.get('by')}), но {len(список)} механизмов "
+                              "плана не построено",
+                    "gaps": [g["plan_line"] for g in список],
+                    "next": "построить их или отказаться от них В ПЛАНЕ — "
+                            "молча удалить запись значит вернуть ту самую дыру"}
+
+    return {"status": "pass",
+            "detail": f"карта сверена с планом {отметка.get('date')} "
+                      f"({отметка.get('by')}), механизмов на тот момент "
+                      f"{отметка.get('mechanisms')}, план с тех пор не менялся"}
+
+
 def gate_wiring() -> dict:
     """Инструмент обязан быть ДОСТИЖИМ, а не просто существовать.
 
@@ -822,6 +919,7 @@ GATES = [
     ("правила", gate_rules),
     ("манифест", gate_manifest),
     ("план", gate_plan),
+    ("сверка", gate_reconciled),
 ]
 QUICK_SKIP = {"мутации", "герметичность"}
 

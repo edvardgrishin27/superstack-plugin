@@ -186,7 +186,23 @@ def halt_if_paused() -> None:
         raise SystemExit(10)
 
 
+def _utf8_stdio() -> None:
+    """Печать по-русски не должна зависеть от локали.
+
+    В окружении без UTF-8 — минимальный контейнер, cron с урезанным env,
+    `PYTHONCOERCECLOCALE=0` — кодировка вывода оказывается ascii, и первый же
+    русский символ роняет инструмент целиком. Человек получает не «проверка не
+    прошла», а трейсбек вместо любого ответа. На macOS по умолчанию это не
+    воспроизводится: интерпретатор сам приводит локаль C к C.UTF-8.
+    """
+    for поток in (sys.stdout, sys.stderr):
+        кодировка = (getattr(поток, "encoding", "") or "").lower().replace("-", "")
+        if кодировка != "utf8" and hasattr(поток, "reconfigure"):
+            поток.reconfigure(encoding="utf-8", errors="replace")
+
+
 def main() -> int:
+    _utf8_stdio()
     halt_if_paused()
     argv = sys.argv[1:]
     takes = {"--set"}

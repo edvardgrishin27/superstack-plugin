@@ -169,7 +169,9 @@
  "rt.entrypoint": "cli",
  "rt.subagent_model_routing": false,
  "rt.version_conflict": false,
- "rt.versions_installed": {"npm": "2.1.42"},
+ "rt.versions_installed": {
+  "npm": "2.1.42"
+ },
  "sec.scan_files": [
   "user",
   "user-local"
@@ -184,5 +186,6 @@
    "value_len": 64,
    "why": "пароль прямо в команде"
   }
- ]
+ ],
+ "cc.constitution_lines": 320
 }

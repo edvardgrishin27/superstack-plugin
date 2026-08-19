@@ -129,6 +129,29 @@ class TestExpressionGrammar(unittest.TestCase):
         self.assertTrue(evaluate("x.a.b == 99", facts))
 
 
+class TestResourceLimitsSurviveChaining(unittest.TestCase):
+    """Предел на память ставится и на РЕЗУЛЬТАТ, а не только на множитель.
+
+    Статическая проверка ловит одну большую константу. Цепочку из нескольких
+    допустимых она пропускает: `9999*9999` — сто мегабайт, и каждый множитель
+    в пределах. Отказ громкий (RuleError → правило в skipped), но платить
+    сотней мегабайт за него не нужно.
+    """
+
+    def test_single_huge_multiplier_is_rejected(self):
+        with self.assertRaises(RuleError):
+            evaluate("'A' * 100000", {})
+
+    def test_chain_of_allowed_multipliers_is_rejected_too(self):
+        with self.assertRaises(RuleError):
+            evaluate("'A' * 9999 * 9999", {})
+
+    def test_ordinary_arithmetic_still_works(self):
+        """Обратный контроль: предел, отвергающий всё, бесполезен."""
+        self.assertEqual(evaluate("2 * 3 + 1", {}), 7)
+        self.assertEqual(evaluate("'ок' * 3", {}), "ококок")
+
+
 class TestGrammarIsNotCodeExecution(unittest.TestCase):
     """Главное свойство безопасности: правило не может выполнить код.
 
@@ -293,7 +316,10 @@ class TestEndToEnd(unittest.TestCase):
                  "hooks.dormant.count": 0, "inv.skills.over_budget_ratio": 0.4,
                  "disc.verifier_theater": [], "disc.all_on_top_tier": False,
                  "disc.kill_switch_present": True, "disc.learned_entries": 12,
-                 "rt.subagent_model_routing": True}
+                 "rt.subagent_model_routing": True,
+                 # У здоровой машины конституция ПОМЕЩАЕТСЯ: она читается
+                 # каждой сессией целиком, и её объём — плата, а не вкус.
+                 "cc.constitution_lines": 120}
         self.assertEqual(self._run(clean), [])
 
     def test_secret_finding_never_carries_the_value(self):

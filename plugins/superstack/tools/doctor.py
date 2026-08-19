@@ -3,13 +3,16 @@
 
 Отвечает на вопрос: что обновить, что удалить, и что уже есть в самом Claude Code.
 
-Четыре независимые оси, которые НЕ смешиваются между собой — потому что
-«устарело», «умерло» и «стало ненужным» лечатся по-разному:
+Шесть независимых осей, которые НЕ смешиваются между собой — потому что
+«устарело», «умерло», «стало ненужным» и «опасно настроено» лечатся по-разному:
 
   A. ЖИВОСТЬ АПСТРИМА   репозиторий заархивирован? давно ли трогали? отстали ли мы?
   B. ВЫТЕСНЕНИЕ НАТИВОМ  это уже есть в ядре и стало лишним?
   C. РАСХОЖДЕНИЕ         объявлено одно, установлено другое?
   D. САМОПРОВЕРКА        не устарел ли сам реестр вытеснения?
+  E. ЗДОРОВЬЕ            хук указывает в никуда? MCP нечем запустить? два скилла
+                         спорят за одну просьбу?
+  F. БЕЗОПАСНОСТЬ КОНФИГУРАЦИИ  разрешение шире нужного? MCP со всеми правами?
 
 Ось D существует потому, что ось B честно неполна: сопоставить свежую нативную
 возможность со сторонним инструментом может только человек, читающий changelog.
@@ -142,6 +145,13 @@ def axis_upstream(marketplaces: dict | None = None) -> list[dict]:
                             "why": "не удалось определить репозиторий"})
                 continue
             slug = f"{m.group(1)}/{m.group(2)}"
+        # Слаг едет в путь URL. Без проверки формы `owner/name` строка вроде
+        # "../../user/repos" уводит запрос в другой эндпоинт GitHub — не
+        # эскалация, но запрос уже не тот, о котором отчитываются.
+        if not re.fullmatch(r"[\w.-]+/[\w.-]+", slug):
+            out.append({"source": name, "state": "unknown",
+                        "why": f"имя репозитория не похоже на owner/name: {slug}"})
+            continue
         if slug in seen:
             continue
         seen.add(slug)
@@ -471,6 +481,24 @@ def render(report: dict) -> str:
     out += ["", L,
             "Ничего не изменено. Доктор только смотрит.",
             "Применить: /superstack apply <id>", L]
+    out += ["", "E. ЗДОРОВЬЕ", ""]
+    здоровье = report.get("health") or []
+    if not здоровье:
+        out.append("  · хуки на месте, MCP запускаемы, имена скиллов не спорят")
+    for r in здоровье:
+        цель = r.get("file") or r.get("server") or r.get("skill") or "?"
+        out.append(f"  ! {цель:<38} {r['why']}")
+        if r.get("sources"):
+            out.append(f"      откуда: {', '.join(r['sources'])}")
+
+    out += ["", "F. БЕЗОПАСНОСТЬ КОНФИГУРАЦИИ", ""]
+    безопасность = report.get("config_security") or []
+    if not безопасность:
+        out.append("  · разрешений шире нужного и MCP со всеми правами не найдено")
+    for r in безопасность:
+        цель = r.get("rule") or r.get("server") or r.get("skill") or "?"
+        out.append(f"  ! {цель:<38} {r['why']}")
+
     return "\n".join(out)
 
 
@@ -497,7 +525,192 @@ def halt_if_paused() -> None:
         raise SystemExit(10)
 
 
+
+def _utf8_stdio() -> None:
+    """Печать по-русски не должна зависеть от локали.
+
+    В окружении без UTF-8 — минимальный контейнер, cron с урезанным env,
+    `PYTHONCOERCECLOCALE=0` — кодировка вывода оказывается ascii, и первый же
+    русский символ роняет инструмент целиком. Человек получает не «проверка не
+    прошла», а трейсбек вместо любого ответа. На macOS по умолчанию это не
+    воспроизводится: интерпретатор сам приводит локаль C к C.UTF-8.
+    """
+    for поток in (sys.stdout, sys.stderr):
+        кодировка = (getattr(поток, "encoding", "") or "").lower().replace("-", "")
+        if кодировка != "utf8" and hasattr(поток, "reconfigure"):
+            поток.reconfigure(encoding="utf-8", errors="replace")
+
+
+# ---------------------------------------------------------------- ОСЬ E
+#: Что означает «MCP нечем запустить»: первое слово команды не находится ни в
+#: PATH, ни как файл. Запускать сам сервер здесь нельзя — это минуты на ход и
+#: побочные эффекты у чужого софта; отсутствие исполнителя ловится даром.
+def _runnable(cmd: str) -> "bool | None":
+    if not cmd:
+        return None
+    from shutil import which
+    первое = cmd.split()[0]
+    if which(первое):
+        return True
+    p = Path(первое).expanduser()
+    return True if p.exists() else False
+
+
+def _skill_sources(roots: list | None = None) -> dict:
+    """{имя скилла: [откуда]}. Корни можно подать снаружи — иначе проверку
+    нечем измерить, кроме как содержимым чужой машины."""
+    если_свои = roots if roots is not None else None
+    где: dict = {}
+    корни = если_свои
+    if корни is None:
+        корни = [(CLAUDE / "skills", "личный"),
+                 (Path.cwd() / ".claude" / "skills", "проектный")]
+        кэш = CLAUDE / "plugins" / "cache"
+        if кэш.is_dir():
+            for пакет in sorted(кэш.glob("*/*/*/skills")):
+                имя, версия = пакет.parts[-3], пакет.parts[-2]
+                корни.append((пакет, f"плагин {имя}@{версия}"))
+    for корень, откуда in корни:
+        if not Path(корень).is_dir():
+            continue
+        for d in sorted(Path(корень).iterdir()):
+            if (d / "SKILL.md").is_file():
+                где.setdefault(d.name, []).append(откуда)
+    return где
+
+
+def trigger_collisions(roots: list | None = None) -> list[dict]:
+    """Два скилла с ОДНИМ именем: выигрывает случайный.
+
+    Проверка намеренно точная — совпадение имени, а не похожесть описаний.
+    Похожесть пришлось бы судить моделью, а осмотр, выносящий суждение
+    моделью, сам нуждается в осмотре.
+
+    Два случая разведены, потому что чинятся по-разному: одна и та же пачка
+    в двух версиях — это мусор в кэше, а разные источники — настоящий спор
+    за просьбу.
+    """
+    out = []
+    for имя, места in _skill_sources(roots).items():
+        if len(места) < 2:
+            continue
+        пачки = [м.split("@")[0] for м in места if м.startswith("плагин ")]
+        if len(места) == len(пачки) and len(set(пачки)) == 1:
+            out.append({"id": "stale-plugin-version", "skill": имя,
+                        "sources": места,
+                        "why": "в кэше лежит больше одной версии одной пачки — "
+                               "какая подхватится, зависит от порядка чтения"})
+        else:
+            out.append({"id": "skill-name-collision", "skill": имя,
+                        "sources": места,
+                        "why": "одну просьбу заявляют двое: какой сработает — "
+                               "не определено"})
+    return out
+
+
+def axis_health(settings: dict | None = None,
+                skill_roots: list | None = None) -> list[dict]:
+    """Живо ли то, что установлено: хуки, MCP, непересекающиеся имена скиллов.
+
+    Настройки можно подать снаружи — иначе проверка читала бы только реальный
+    ~/.claude и измеряла бы состав чужого компьютера, а не собственный код.
+    """
+    out = []
+    s = settings if settings is not None else (read_json(CLAUDE / "settings.json") or {})
+
+    for событие, записи in (s.get("hooks") or {}).items():
+        for запись in (записи if isinstance(записи, list) else []):
+            for h in (запись.get("hooks") or []):
+                cmd = str(h.get("command", ""))
+                файлы = re.findall(r"[\w./$-]+\.(?:sh|py)", cmd)
+                for f in файлы:
+                    if "$" in f:
+                        continue
+                    if not Path(f).expanduser().exists():
+                        out.append({"id": "hook-points-nowhere", "event": событие,
+                                    "file": f,
+                                    "why": "хук объявлен, а файла нет — он падает "
+                                           "каждый ход и молча"})
+
+    for имя, сервер in (s.get("mcpServers") or {}).items():
+        if not isinstance(сервер, dict):
+            continue
+        ок = _runnable(str(сервер.get("command", "")))
+        if ок is False:
+            out.append({"id": "mcp-not-runnable", "server": имя,
+                        "command": сервер.get("command"),
+                        "why": "исполнителя нет ни в PATH, ни на диске — сервер "
+                               "не поднимется, а выглядит подключённым"})
+
+    out += trigger_collisions(skill_roots)
+    return out
+
+
+# ---------------------------------------------------------------- ОСЬ F
+#: Разрешения, которые звучат узко и означают «исполняй что угодно». Каждое
+#: названо вместе с тем, что оно РЕАЛЬНО даёт: `Bash(node *)` читается как
+#: «работа с node», а значит «выполни любой код на этой машине».
+ШИРОКИЕ = {
+    "Bash(node *)": "любой код в node",
+    "Bash(python *)": "любой код на python",
+    "Bash(python3 *)": "любой код на python",
+    "Bash(sh *)": "любую команду оболочки",
+    "Bash(bash *)": "любую команду оболочки",
+    "Bash(npm *)": "любой скрипт пакета, включая postinstall",
+    "Bash(npx *)": "запуск любого пакета из сети",
+    "Bash(curl *)": "скачивание чего угодно откуда угодно",
+    "Bash(wget *)": "скачивание чего угодно откуда угодно",
+    "Bash(docker *)": "контейнер с любыми правами и монтированием диска",
+}
+
+#: Признаки «дай мне всё» в аргументах MCP-сервера.
+ВСЕ_ПРАВА = ("--caps all", "--allow-all", "--dangerously", "--yolo",
+             "--no-sandbox", "--full-access")
+
+
+def axis_config_security(settings: dict | None = None,
+                         skills_root: Path | None = None) -> list[dict]:
+    """Опасно ли настроено — сверх секретов, которые ищет отдельная проба."""
+    out = []
+    s = settings if settings is not None else (read_json(CLAUDE / "settings.json") or {})
+
+    allow = ((s.get("permissions") or {}).get("allow") or [])
+    for правило in (allow if isinstance(allow, list) else []):
+        что = ШИРОКИЕ.get(str(правило).strip())
+        if что:
+            out.append({"id": "permission-too-wide", "rule": правило,
+                        "grants": что,
+                        "why": f"звучит узко, а разрешает {что}"})
+
+    for имя, сервер in (s.get("mcpServers") or {}).items():
+        if not isinstance(сервер, dict):
+            continue
+        строка = " ".join(str(a) for a in (сервер.get("args") or []))
+        for признак in ВСЕ_ПРАВА:
+            if признак in строка:
+                out.append({"id": "mcp-all-caps", "server": имя, "flag": признак,
+                            "why": "сервер запрашивает все права разом — сузить "
+                                   "до того, что ему нужно"})
+                break
+
+    корень = skills_root if skills_root is not None else (CLAUDE / "skills")
+    if корень.is_dir():
+        for f in sorted(корень.glob("*/SKILL.md")):
+            try:
+                голова = f.read_text("utf-8", errors="replace")[:800]
+            except OSError:
+                continue
+            if re.search(r"(?m)^(?:command|exec|preload|onLoad|setup):", голова):
+                out.append({"id": "skill-runs-shell-on-load", "skill": f.parent.name,
+                            "file": str(f),
+                            "why": "скилл выполняет команду при загрузке — код "
+                                   "исполняется раньше, чем человек прочитал, что это"})
+    return out
+
+
+
 def main() -> None:
+    _utf8_stdio()
     halt_if_paused()
     ver, how = active_version()
     report = {
@@ -507,6 +720,8 @@ def main() -> None:
         "supersession": axis_supersession(ver),
         "drift": axis_drift(),
         "self": axis_self(),
+        "health": axis_health(),
+        "config_security": axis_config_security(),
     }
     print(json.dumps(report, ensure_ascii=False, indent=2) if AS_JSON else render(report))
 

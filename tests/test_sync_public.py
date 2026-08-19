@@ -127,6 +127,81 @@ class TestNumbersAreMeasuredNotTyped(unittest.TestCase):
             self.assertEqual((pub / "README.md").read_text("utf-8"), before)
 
 
+class TestPublicTreeCanPassItsOwnGates(unittest.TestCase):
+    """Выложенное дерево обязано проходить собственные ворота плана.
+
+    Улика механизма — файл. Если каталог с этим файлом не переносится, в
+    публичном дереве механизм ОТСУТСТВУЕТ, а карта утверждает обратное: у
+    себя зелёное, у людей красное, и заметит это тот, кто скачал. Так уже
+    вышло с планкой самого SUPERSTACK — `.superstack/bar.json` не был в
+    списке переноса, хотя карта на него ссылается.
+    """
+
+    def test_every_evidence_file_is_carried(self):
+        cov = json.loads((REPO / "data" / "plan-coverage.json").read_text("utf-8"))
+        for m in cov["mechanisms"]:
+            корень = Path(m["evidence"]["file"]).parts[0]
+            with self.subTest(m["id"]):
+                self.assertIn(корень, sp.CARRY,
+                              f"улика {m['id']} лежит в «{корень}», "
+                              "который не переносится в публичное дерево")
+
+
+class TestPublicationMeansAFreshCloneIsGreen(unittest.TestCase):
+    """«Выложено» — это зелёный прогон в СВЕЖЕМ клоне, а не код возврата push.
+
+    Код возврата push доказывает, что байты уехали. Он ничего не говорит о
+    том, что уехало целое: в рабочем дереве живут файлы, которых нет в
+    индексе, и прогон в нём проходит по ним. Репозиторий, который собирается
+    только у автора, — известный способ выложить сломанное и не узнать.
+
+    Клонер подаётся снаружи: проверка, обязательно ходящая в сеть, измеряла бы
+    чужой сервер, а не наш код.
+    """
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.pub = Path(self.tmp.name) / "публичное"
+        self.pub.mkdir()
+        subprocess.run(["git", "init", "-q"], cwd=str(self.pub), check=False)
+
+    def _origin(self, адрес: str = "https://пример.рф/репозиторий.git") -> None:
+        subprocess.run(["git", "remote", "add", "origin", адрес],
+                       cwd=str(self.pub), check=False)
+
+    def test_без_origin_проверять_нечего(self):
+        v = sp.verify_published(self.pub, lambda а, к: (0, ""))
+        self.assertEqual(v["status"], "unknown")
+
+    def test_красный_клон_роняет_публикацию(self):
+        self._origin()
+        orig = sp.run_tests
+        sp.run_tests = lambda путь: (1, 3, "1 failed")
+        try:
+            v = sp.verify_published(self.pub, lambda а, к: (0, ""))
+        finally:
+            sp.run_tests = orig
+        self.assertEqual(v["status"], "fail")
+
+    def test_зелёный_клон_подтверждает(self):
+        """Обратный контроль: проверка, никогда не зеленеющая, бесполезна."""
+        self._origin()
+        orig = sp.run_tests
+        sp.run_tests = lambda путь: (0, 1621, "")
+        try:
+            v = sp.verify_published(self.pub, lambda а, к: (0, ""))
+        finally:
+            sp.run_tests = orig
+        self.assertEqual(v["status"], "pass")
+        self.assertEqual(v["tests_passed"], 1621)
+
+    def test_несостоявшийся_клон_это_не_успех(self):
+        self._origin()
+        v = sp.verify_published(self.pub, lambda а, к: (128, "не найден"))
+        self.assertEqual(v["status"], "unknown")
+
+
 class TestCommandLine(unittest.TestCase):
     def test_non_repo_target_is_refused(self):
         with tempfile.TemporaryDirectory() as d:

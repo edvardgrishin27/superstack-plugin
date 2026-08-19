@@ -1630,8 +1630,8 @@
   {
    "id": "sync.readme-stays-behind",
    "file": "tools/sync_public.py",
-   "find": "         \".github\", \"README.md\")",
-   "replace": "         \".github\")",
+   "find": "\".superstack\", \"README.md\")",
+   "replace": "\".superstack\")",
    "why": "README перестаёт переноситься — витрина отстаёт от кода и продолжает велеть то, что уже не работает; так публичный файл несколько заходов советовал `/plugin install`, которого на десктопе нет"
   },
   {
@@ -2442,8 +2442,8 @@
   {
    "id": "ci.does-not-reach-the-public-tree",
    "file": "tools/sync_public.py",
-   "find": "         \".github\", \"README.md\")",
-   "replace": "         \"README.md\")",
+   "find": "         \".github\", \".superstack\",",
+   "replace": "         \".superstack\",",
    "why": "CI остаётся в приватном репозитории — у того, кто клонирует публичный, ворот на push нет вовсе, а по галочкам в приватном кажется, что есть"
   },
   {
@@ -2494,6 +2494,678 @@
    "find": "      \"name\": \"superstack\",\n      \"source\": \"./plugins/superstack\",",
    "replace": "      \"name\": \"superstack-all\",\n      \"source\": \"./plugins/superstack\",",
    "why": "имя пакета в маркетплейсе расходится с ключом установки в README — команда из витрины отвечает «plugin not found», и человек читает это как поломку продукта, а не как опечатку в документации"
+  },
+  {
+   "id": "bar.missing-bar-passes",
+   "file": "plugins/superstack/tools/bar.py",
+   "find": "v = {\"status\": \"unknown\", \"gates\": [], \"detail\": отказ,",
+   "replace": "v = {\"status\": \"pass\", \"gates\": [], \"detail\": отказ,",
+   "why": "отсутствие планки засчитано за взятую: проект без планки проходит лучше проекта с ней — ровно тот стимул, который её и убивает"
+  },
+  {
+   "id": "bar.empty-bar-passes",
+   "file": "plugins/superstack/tools/bar.py",
+   "find": "        return {\"status\": \"unknown\", \"gates\": [],",
+   "replace": "        return {\"status\": \"pass\", \"gates\": [],",
+   "why": "ноль ворот выглядит успехом: предъявить нечего и проверено ничего, а вердикт зелёный"
+  },
+  {
+   "id": "bar.unrunnable-passes",
+   "file": "plugins/superstack/tools/bar.py",
+   "find": "        return {**out, \"status\": \"unknown\", \"detail\": нечем}",
+   "replace": "        return {**out, \"status\": \"pass\", \"detail\": нечем}",
+   "why": "ворота, которые нечем запустить, засчитаны взятыми: планка самоопускается там, где сломался прибор, и делает это тихо"
+  },
+  {
+   "id": "bar.grey-not-counted",
+   "file": "plugins/superstack/tools/bar.py",
+   "find": "    if grey:\n",
+   "replace": "    if False:\n",
+   "why": "непроверенные ворота перестали гасить вердикт: «не мерили» снова читается как «хорошо»"
+  },
+  {
+   "id": "bar.red-loses-to-grey",
+   "file": "plugins/superstack/tools/bar.py",
+   "find": "    if red:\n",
+   "replace": "    if False:\n",
+   "why": "красное перестало перебивать серое: упавшие ворота тонут в непроверенных"
+  },
+  {
+   "id": "sync.bar-not-carried",
+   "file": "tools/sync_public.py",
+   "find": "\".github\", \".superstack\", \"README.md\")",
+   "replace": "\".github\", \"README.md\")",
+   "why": "каталог с уликой не переносится в публичное дерево: у себя зелёное, у людей красное — механизм есть в карте и отсутствует в выложенном"
+  },
+  {
+   "id": "drift.changed-plan-passes",
+   "file": "tools/gauntlet.py",
+   "find": "    if plan_stamp.digest(p) != отметка[\"digest\"]:",
+   "replace": "    if False:",
+   "why": "правка плана перестаёт гасить вердикт — карта расходится с планом молча, ровно как когда «34 из 34» горело поверх 14 групп пропусков"
+  },
+  {
+   "id": "drift.never-reconciled-passes",
+   "file": "tools/gauntlet.py",
+   "find": "    if not отметка.get(\"digest\"):",
+   "replace": "    if False:",
+   "why": "карта без единой сверки объявляется сверенной: «никто не проверял» снова читается как «всё сходится»"
+  },
+  {
+   "id": "stamp.anonymous-allowed",
+   "file": "tools/plan_stamp.py",
+   "find": "    if not кто:",
+   "replace": "    if False:",
+   "why": "отметку можно поставить без имени сверявшего — «кто-то когда-то сверял» не является утверждением"
+  },
+  {
+   "id": "pause.off-always-says-removed",
+   "file": "plugins/superstack/tools/pause.sh",
+   "find": "    if [ -f \"$F\" ]; then had=1; else had=0; fi",
+   "replace": "    had=1",
+   "why": "«снято» и «нечего было снимать» снова отвечают одинаково — подтверждение снятия перестаёт что-либо подтверждать"
+  },
+  {
+   "id": "pause.hint-not-copyable",
+   "file": "plugins/superstack/tools/pause.sh",
+   "find": "echo \"Снять: \\\"$0\\\" off\" ;;",
+   "replace": "echo \"Снять: \"$0\" off\" ;;",
+   "why": "путь в подсказке снова без кавычек: в каталоге с пробелом скопированная команда не работает — ровно когда человек торопится"
+  },
+  {
+   "id": "mem.one-bad-store-erases-all",
+   "file": "plugins/superstack/tools/probe/collect.py",
+   "find": "            except OSError:\n                # Одна нечитаемая память",
+   "replace": "            except OSError:\n                raise  # Одна нечитаемая память",
+   "why": "одна нечитаемая память снова уносит все остальные: «не нашёл проблем с памятью» становится неотличимо от «не смотрел»"
+  },
+  {
+   "id": "mem.topics-go-negative",
+   "file": "plugins/superstack/tools/probe/collect.py",
+   "find": "\"topic_files\": max(0, len(файлы) - 1),",
+   "replace": "\"topic_files\": len(файлы) - 1,",
+   "why": "пустая память снова печатает «тем: -1» — число, которого не бывает, поданное человеку с уверенным видом"
+  },
+  {
+   "id": "doctor.slug-unchecked",
+   "file": "plugins/superstack/tools/doctor.py",
+   "find": "        if not re.fullmatch(r\"[\\w.-]+/[\\w.-]+\", slug):",
+   "replace": "        if False:",
+   "why": "слаг едет в путь URL без проверки формы: запрос уходит не туда, о чём отчитывается"
+  },
+  {
+   "id": "render.utf8-guard-not-called",
+   "file": "plugins/superstack/tools/render.py",
+   "find": "    _utf8_stdio()\n",
+   "replace": "    _utf8_stdio  # вызов снят\n",
+   "why": "защита вывода объявлена, но не вызвана: под ascii-локалью первый русский символ снова роняет инструмент целиком, а счётчик упоминаний по-прежнему сходится"
+  },
+  {
+   "id": "adjudicate.utf8-guard-not-called",
+   "file": "plugins/superstack/tools/adjudicate.py",
+   "find": "    _utf8_stdio()\n",
+   "replace": "    _utf8_stdio  # вызов снят\n",
+   "why": "то же для вычислителя правил: человек получает трейсбек вместо вердикта, включая вердикт «всё хорошо»"
+  },
+  {
+   "id": "rules.result-size-unbounded",
+   "file": "plugins/superstack/tools/adjudicate.py",
+   "find": "        if isinstance(значение, (str, bytes, list, tuple)) \\\n                and len(значение) > MAX_REPEAT:",
+   "replace": "        if False:",
+   "why": "предел ставится только на множитель, но не на результат: цепочка из допустимых 9999*9999 даёт сотню мегабайт в обход проверки"
+  },
+  {
+   "id": "facts.empty-key-passes",
+   "file": "plugins/superstack/tools/adjudicate.py",
+   "find": "        if not isinstance(k, str) or not k.strip():",
+   "replace": "        if False:",
+   "why": "пустой ключ факта снова доходит до подстановки: все правила уходят в skipped, аудита нет, а баннер честный"
+  },
+  {
+   "id": "render.trim-cuts-mid-element",
+   "file": "plugins/superstack/tools/render.py",
+   "find": "    if isinstance(value, list) and value:",
+   "replace": "    if False:",
+   "why": "обрезка снова рвёт элемент посередине: из восьми задетых проектов виден один, а число остальных не названо вовсе"
+  },
+  {
+   "id": "drift.unbuilt-promises-ignored",
+   "file": "tools/gauntlet.py",
+   "find": "        if список:\n",
+   "replace": "        if False:\n",
+   "why": "невыполненные обещания плана перестают гасить вердикт: «156 из 156» горит зелёным поверх двадцати трёх механизмов, которых в продукте нет"
+  },
+  {
+   "id": "go.check-before-code-dropped",
+   "file": "plugins/superstack/skills/go/SKILL.md",
+   "find": "**Сначала в список проверяемого, потом код",
+   "replace": "**Порядок работы свободный, потом код",
+   "why": "правило «проверка раньше кода» вымывается из скилла — список снова становится отчётом задним числом, где забытое неотличимо от несуществующего"
+  },
+  {
+   "id": "deny.partial-reads-as-complete",
+   "file": "plugins/superstack/tools/deny_list.py",
+   "find": "    return [c for c in команды if c[\"pattern\"] not in есть]",
+   "replace": "    return []",
+   "why": "недостающие запреты перестают называться: «часть запретов стоит» выдаётся за «запреты стоят», и человек считает машину защищённой"
+  },
+  {
+   "id": "deny.writes-without-consent",
+   "file": "plugins/superstack/tools/deny_list.py",
+   "find": "    if not разрешено:\n",
+   "replace": "    if False:\n",
+   "why": "инструмент правит настройки человека без явного согласия — тот же захват, от которого он защищает"
+  },
+  {
+   "id": "deny.unreadable-settings-pass",
+   "file": "plugins/superstack/tools/deny_list.py",
+   "find": "        return None, f\"настройки не разобраны ({e}) — дописывать вслепую нельзя\"",
+   "replace": "        return {}, \"\"",
+   "why": "битые настройки читаются как пустые: «прочитать не смог» превращается в «запретов не хватает», а потом в тихую дозапись вслепую"
+  },
+  {
+   "id": "deny.list-can-shrink-silently",
+   "file": "plugins/superstack/data/destructive-commands.json",
+   "find": "\"rule\": \"Запись отсюда не удаляется ради удобства прогона.",
+   "replace": "\"rule\": \"Записи можно удалять по вкусу.",
+   "why": "правило против молчаливого усыхания списка вымывается — первое, что сделает оптимизирующий агент с мешающим запретом"
+  },
+  {
+   "id": "rollback.intent-counts-as-backup",
+   "file": "plugins/superstack/tools/data_rollback.py",
+   "find": "    нет = [k for k in (\"snapshot\", \"restore\") if not (d.get(k) or \"\").strip()]",
+   "replace": "    нет = []",
+   "why": "снимок без команды восстановления снова засчитывается за путь отката — файл неизвестной годности выдаётся за бэкап"
+  },
+  {
+   "id": "rollback.no-path-passes",
+   "file": "plugins/superstack/tools/data_rollback.py",
+   "find": "    if спека is None:\n",
+   "replace": "    if False:\n",
+   "why": "правка данных без объявленного пути отката проходит молча: у кода откат это git, у данных не остаётся ничего"
+  },
+  {
+   "id": "rollback.new-files-invisible",
+   "file": "plugins/superstack/tools/data_rollback.py",
+   "find": "            (\"ls-files\", \"-o\", \"--exclude-standard\"))",
+   "replace": "            )",
+   "why": "новые файлы перестают попадать в изменённое, а свежая миграция почти всегда новый файл — проверка молчит ровно там, ради чего написана"
+  },
+  {
+   "id": "rollback.nonascii-paths-lost",
+   "file": "plugins/superstack/tools/data_rollback.py",
+   "find": "        cmd = [\"git\", \"-c\", \"core.quotepath=false\", *взгляд]",
+   "replace": "        cmd = [\"git\", *взгляд]",
+   "why": "нелатинские имена файлов возвращаются в восьмеричных escape — путь, которого нет на диске, и миграция с русским именем не проверяется вовсе"
+  },
+  {
+   "id": "rollback.unknown-format-reads-as-missing",
+   "file": "plugins/superstack/tools/data_rollback.py",
+   "find": "    if any(з in текст for з in ПРЯМОЕ):\n        return False",
+   "replace": "    if False:\n        return False",
+   "why": "миграция знакомого формата без обратной уходит в серое вместо красного — тот самый случай, ради которого проверка и написана"
+  },
+  {
+   "id": "health.dead-hook-invisible",
+   "file": "plugins/superstack/tools/doctor.py",
+   "find": "                    if not Path(f).expanduser().exists():",
+   "replace": "                    if False:",
+   "why": "хук, указывающий в никуда, перестаёт называться — он падает каждый ход молча, и система выглядит подключённой"
+  },
+  {
+   "id": "health.mcp-runnability-ignored",
+   "file": "plugins/superstack/tools/doctor.py",
+   "find": "        if ок is False:\n",
+   "replace": "        if False:\n",
+   "why": "MCP без исполнителя объявляется здоровым: сервер не поднимется, а в отчёте он подключён"
+  },
+  {
+   "id": "health.stale-cache-reads-as-collision",
+   "file": "plugins/superstack/tools/doctor.py",
+   "find": "        if len(места) == len(пачки) and len(set(пачки)) == 1:",
+   "replace": "        if False:",
+   "why": "две версии одной пачки в кэше выдаются за спор двух скиллов — человека отправляют переименовывать вместо уборки кэша"
+  },
+  {
+   "id": "config.wide-permission-silent",
+   "file": "plugins/superstack/tools/doctor.py",
+   "find": "        что = ШИРОКИЕ.get(str(правило).strip())",
+   "replace": "        что = None",
+   "why": "разрешение, дающее произвольное исполнение, перестаёт называться: «Bash(node *)» читается как работа с node и молчит"
+  },
+  {
+   "id": "config.skill-shell-on-load-silent",
+   "file": "plugins/superstack/tools/doctor.py",
+   "find": "            if re.search(r\"(?m)^(?:command|exec|preload|onLoad|setup):\", голова):",
+   "replace": "            if False:",
+   "why": "скилл, исполняющий команду при загрузке, не называется — код выполняется раньше, чем человек прочитал, что это"
+  },
+  {
+   "id": "diffcov.no-report-passes",
+   "file": "plugins/superstack/tools/diff_coverage.py",
+   "find": "        return {\"status\": \"unknown\",\n                \"detail\": \"измерить нечем: отчёта о покрытии нет \"",
+   "replace": "        return {\"status\": \"pass\",\n                \"detail\": \"измерить нечем: отчёта о покрытии нет \"",
+   "why": "отсутствие отчёта о покрытии засчитывается за покрытие — проект без замера проходит гейт лучше проекта с замером"
+  },
+  {
+   "id": "diffcov.whole-project-instead-of-diff",
+   "file": "plugins/superstack/tools/diff_coverage.py",
+   "find": "    for файл, номера in правки.items():",
+   "replace": "    for файл, номера in [(f, set(s)) for f, s in отчёт.items()]:",
+   "why": "вместо покрытия правки считается покрытие всего проекта — большой зелёный репозиторий снова прячет свежую непокрытую строку"
+  },
+  {
+   "id": "diffcov.new-files-invisible",
+   "file": "plugins/superstack/tools/diff_coverage.py",
+   "find": "    новые, отказ = _sh([\"git\", \"-c\", \"core.quotepath=false\", \"ls-files\", \"-o\",\n                        \"--exclude-standard\"], root)",
+   "replace": "    новые, отказ = \"\", \"\"",
+   "why": "новые файлы перестают считаться изменением, а новый код — это чаще всего именно они"
+  },
+  {
+   "id": "diffcov.threshold-ignored",
+   "file": "plugins/superstack/tools/diff_coverage.py",
+   "find": "    if процент < порог:\n",
+   "replace": "    if False:\n",
+   "why": "порог перестаёт что-либо решать: любое покрытие правки объявляется взятым"
+  },
+  {
+   "id": "diffcov.tests-measured-as-code",
+   "file": "plugins/superstack/tools/diff_coverage.py",
+   "find": "        if any(з in \"/\" + имя for з in НЕ_СЧИТАЕМ):\n            continue",
+   "replace": "        if False:\n            continue",
+   "why": "покрытие спрашивают с самих тестов — гейт начинает требовать тесты на тесты и его выключают целиком"
+  },
+  {
+   "id": "cascade.one-layer-passes",
+   "file": "plugins/superstack/tools/scan_cascade.py",
+   "find": "    if not нет:\n",
+   "replace": "    if True:\n",
+   "why": "дырявый каскад объявляется полным: один слой обходится флагом, другой ловит секрет уже в истории — вместе они закрывали друг друга, порознь не закрывают ничего"
+  },
+  {
+   "id": "cascade.any-word-counts-as-scanner",
+   "file": "plugins/superstack/tools/scan_cascade.py",
+   "find": "    for имя in СКАНЕРЫ:\n        if имя in низ:\n            return имя",
+   "replace": "    for имя in (\"security\",):\n        if имя in низ:\n            return имя",
+   "why": "слово «security» в имени шага засчитывается за сканер — обмануть себя дешевле, чем настроить проверку"
+  },
+  {
+   "id": "cascade.no-git-reads-as-failure",
+   "file": "plugins/superstack/tools/scan_cascade.py",
+   "find": "    if not (root / \".git\").exists():\n",
+   "replace": "    if False:\n",
+   "why": "«ставить не на что» превращается в «не поставили»: проект без git обвиняется в отсутствии того, чего у него быть не может"
+  },
+  {
+   "id": "layers.undeclared-reads-as-clean",
+   "file": "plugins/superstack/tools/layer_guard.py",
+   "find": "        return None, (\"границы слоёв не объявлены: нет \" + СПЕКА +",
+   "replace": "        return [], (\"границы слоёв не объявлены: нет \" + СПЕКА +",
+   "why": "необъявленные границы читаются как «нарушений нет» — проект без архитектуры проходит гейт лучше проекта с ней"
+  },
+  {
+   "id": "layers.relative-import-escapes",
+   "file": "plugins/superstack/tools/layer_guard.py",
+   "find": "    if импорт.startswith(\".\"):\n",
+   "replace": "    if False:\n",
+   "why": "относительный импорт перестаёт считаться: граница, которую обходит `../`, границей не является"
+  },
+  {
+   "id": "layers.violation-without-address",
+   "file": "plugins/superstack/tools/layer_guard.py",
+   "find": "                номер = текст[:m.start()].count(\"\\n\") + 1",
+   "replace": "                номер = 0",
+   "why": "нарушение перестаёт называть строку — находка без адреса это мнение, а не находка"
+  },
+  {
+   "id": "layers.vendor-tree-scanned",
+   "file": "plugins/superstack/tools/layer_guard.py",
+   "find": "        if any(з in \"/\" + отн for з in ПРОПУСК):\n            continue",
+   "replace": "        if False:\n            continue",
+   "why": "чужие каталоги считаются архитектурой проекта: node_modules даёт поток ложных нарушений, и гард выключают целиком"
+  },
+  {
+   "id": "constitution.ceiling-never-fires",
+   "file": "plugins/superstack/rules/core.rules.json",
+   "find": "\"when\": \"cc.constitution_lines > 200\"",
+   "replace": "\"when\": \"cc.constitution_lines > 100000\"",
+   "why": "потолок конституции поднят до недостижимого — правило остаётся в файле и не срабатывает никогда, что хуже его отсутствия"
+  },
+  {
+   "id": "constitution.project-file-ignored",
+   "file": "plugins/superstack/tools/probe/collect.py",
+   "find": "    for файл in (CLAUDE / \"CLAUDE.md\", Path.cwd() / \"CLAUDE.md\"):",
+   "replace": "    for файл in (CLAUDE / \"CLAUDE.md\",):",
+   "why": "проектная конституция перестаёт замеряться: платит человек за обе сразу, а видит только личную"
+  },
+  {
+   "id": "interview.state-from-field",
+   "file": "plugins/superstack/tools/interview.py",
+   "find": "    if _улажен(узел):\n        return УЛАЖЕНО, []",
+   "replace": "    if узел.get(\"state\") == УЛАЖЕНО or _улажен(узел):\n        return УЛАЖЕНО, []",
+   "why": "состояние снова можно проставить словом — ярлык разойдётся с делом молча, потому что смотреть будут на ярлык"
+  },
+  {
+   "id": "interview.reopen-does-not-propagate",
+   "file": "plugins/superstack/tools/interview.py",
+   "find": "    for цель in [id_] + _зависимые(id_, d[\"nodes\"]):",
+   "replace": "    for цель in [id_]:",
+   "why": "возврат к узлу перестаёт трогать зависимые: человек уверен, что прежние решения в силе, а они уже нет — и узнаёт на сдаче"
+  },
+  {
+   "id": "interview.deadlock-is-silence",
+   "file": "plugins/superstack/tools/interview.py",
+   "find": "    if открытые and not v[ФРОНТИР]:\n",
+   "replace": "    if False:\n",
+   "why": "пустой фронтир при открытых узлах читается как «всё улажено» — тупик выдаётся за завершённое интервью"
+  },
+  {
+   "id": "interview.empty-answer-settles",
+   "file": "plugins/superstack/tools/interview.py",
+   "find": "        if not (ответ or \"\").strip():\n",
+   "replace": "        if False:\n",
+   "why": "пустой ответ улаживает узел — способ закрыть интервью, не проведя его"
+  },
+  {
+   "id": "scaffold.invents-missing-section",
+   "file": "plugins/superstack/tools/scaffold.py",
+   "find": "    нет = [р for р in РАЗДЕЛЫ[:2] if р not in разделы]",
+   "replace": "    нет = []",
+   "why": "недостающий раздел спеки перестаёт останавливать генератор — он допишет правдоподобный текст, и человек примет за своё решение то, чего не принимал"
+  },
+  {
+   "id": "scaffold.overwrites-human-work",
+   "file": "plugins/superstack/tools/scaffold.py",
+   "find": "    if занято and not force:\n",
+   "replace": "    if False:\n",
+   "why": "написанное человеком перезаписывается молча: работа человека дешевле удобства генератора"
+  },
+  {
+   "id": "scaffold.ceiling-ignored",
+   "file": "plugins/superstack/tools/scaffold.py",
+   "find": "    if строк > ПОТОЛОК:\n",
+   "replace": "    if False:\n",
+   "why": "генератор кладёт конституцию сверх потолка, который сам же и проверяет, — инструмент спорит сам с собой"
+  },
+  {
+   "id": "scaffold.unsettled-answers-leak",
+   "file": "plugins/superstack/tools/scaffold.py",
+   "find": "            for у in (d.get(\"nodes\") or []) if (у.get(\"answer\") or \"\").strip()]",
+   "replace": "            for у in (d.get(\"nodes\") or [])]",
+   "why": "в конституцию попадают неулаженные узлы интервью — незаданный вопрос выдаётся за принятое решение"
+  },
+  {
+   "id": "launch.goal-without-gate",
+   "file": "plugins/superstack/tools/launch_mode.py",
+   "find": "    if s.get(\"has_bar\") and s.get(\"stop_gate\") is False:",
+   "replace": "    if False:",
+   "why": "/goal предлагается там, где Stop-гейт не подключён — человеку выдаётся надежда под видом автономии"
+  },
+  {
+   "id": "launch.guesses-without-signals",
+   "file": "plugins/superstack/tools/launch_mode.py",
+   "find": "    return {}\n",
+   "replace": "    return {\"mode\": \"plan\", \"why\": \"по умолчанию\"}\n",
+   "why": "пустой проект получает самый популярный ответ вместо «не знаю» — угаданную маршрутизацию выполняют"
+  },
+  {
+   "id": "launch.ceiling-dropped",
+   "file": "plugins/superstack/tools/launch_mode.py",
+   "find": "            \"ceiling\": ст[\"потолок\"],",
+   "replace": "            \"ceiling\": \"\",",
+   "why": "потолок ступени исчезает из вердикта: рекомендация без того, о чём молчат, — реклама"
+  },
+  {
+   "id": "idea.number-not-required",
+   "file": "plugins/superstack/tools/idea_lint.py",
+   "find": "        if нужно_число and not ЧИСЛО.search(тело):",
+   "replace": "        if False:",
+   "why": "боль и мера принимаются без числа — «стало удобнее» нельзя ни проверить, ни опровергнуть, и приёмка превращается в спор"
+  },
+  {
+   "id": "idea.prose-counts-as-section",
+   "file": "plugins/superstack/tools/idea_lint.py",
+   "find": "        m = ЗАГОЛОВОК.match(строка)\n        if m:",
+   "replace": "        m = ЗАГОЛОВОК.match(строка) or re.match(r'(.+)', строка)\n        if m:",
+   "why": "раздел засчитывается по упоминанию в прозе — линт превращается в поиск подстроки, то есть ни во что"
+  },
+  {
+   "id": "classify.one-hint-is-a-kind",
+   "file": "plugins/superstack/tools/classify.py",
+   "find": "ПОРОГ = 2",
+   "replace": "ПОРОГ = 1",
+   "why": "один намёк объявляется видом продукта: слово «заказ» есть и у сайта с формой заявки, а половину проверок по ложному виду молча не проведут"
+  },
+  {
+   "id": "classify.picks-a-main-kind",
+   "file": "plugins/superstack/tools/classify.py",
+   "find": "    return {\"status\": \"pass\", \"kinds\": виды,",
+   "replace": "    return {\"status\": \"pass\", \"kinds\": виды[:1],",
+   "why": "из двух найденных видов выбирается «главный» — второй набор проверок безопасности пропадает молча"
+  },
+  {
+   "id": "notify.secret-leaves",
+   "file": "plugins/superstack/tools/notify.py",
+   "find": "    чистый, вырезано = redact(текст)",
+   "replace": "    чистый, вырезано = текст, 0",
+   "why": "секрет уезжает в чужой сервис открытым текстом — исходящий канал самый дешёвый способ вынести ключ с машины"
+  },
+  {
+   "id": "notify.no-channel-is-success",
+   "file": "plugins/superstack/tools/notify.py",
+   "find": "    if спека is None:\n",
+   "replace": "    if False:\n",
+   "why": "необъявленный канал читается как успешная доставка: молчание неотличимо от работы ровно до дня, когда оно понадобится"
+  },
+  {
+   "id": "notify.http-accepted",
+   "file": "plugins/superstack/tools/notify.py",
+   "find": "    if not (d.get(\"webhook\") or \"\").startswith(\"https://\"):",
+   "replace": "    if not (d.get(\"webhook\") or \"\"):",
+   "why": "принимается http: итог с содержимым работы уезжает открытым текстом через чужие сети"
+  },
+  {
+   "id": "notify.failure-reads-as-sent",
+   "file": "plugins/superstack/tools/notify.py",
+   "find": "    if код is None or код >= 400:\n",
+   "replace": "    if False:\n",
+   "why": "ответ 500 засчитывается за доставку — «отправлено» становится синонимом «вызвали функцию»"
+  },
+  {
+   "id": "schedule.installs-without-consent",
+   "file": "plugins/superstack/tools/schedule_doctor.py",
+   "find": "        if \"--yes\" not in argv:\n",
+   "replace": "        if False:\n",
+   "why": "расписание ставится в машину человека молча — та же граница, что у запретов, и она снята"
+  },
+  {
+   "id": "schedule.task-without-delivery-counts",
+   "file": "plugins/superstack/tools/schedule_doctor.py",
+   "find": "    if ДОСТАВКА not in текст:\n",
+   "replace": "    if False:\n",
+   "why": "задача без доставки итога засчитывается: доктор находит протухшее в терминале, куда никто не смотрит"
+  },
+  {
+   "id": "schedule.any-task-with-the-name-counts",
+   "file": "plugins/superstack/tools/schedule_doctor.py",
+   "find": "    if ЗОВЁМ not in текст:\n",
+   "replace": "    if False:\n",
+   "why": "любая задача с этим именем считается настроенной — «вроде настраивали» становится состоянием системы"
+  },
+  {
+   "id": "prune.brake-goes-under-the-knife",
+   "file": "plugins/superstack/tools/prune.py",
+   "find": "        if имя in МОЛЧАНИЕ_ЭТО_ХОРОШО:\n            continue",
+   "replace": "        if False:\n            continue",
+   "why": "аварийный выключатель предлагается к удалению за то, что ни разу не срабатывал, — то есть за лучшее, что можно про него сказать"
+  },
+  {
+   "id": "prune.young-log-judges",
+   "file": "plugins/superstack/tools/prune.py",
+   "find": "    if самое_старое is None or самое_старое > порог:\n",
+   "replace": "    if False:\n",
+   "why": "поставленное вчера судят за то, что не срабатывало вчера: свежая установка целиком уходит в кандидаты на удаление"
+  },
+  {
+   "id": "prune.empty-log-means-all-dead",
+   "file": "plugins/superstack/tools/prune.py",
+   "find": "    if not собрано:\n        return если_нет",
+   "replace": "    if False:\n        return если_нет",
+   "why": "пустой журнал читается как «всё лишнее» вместо «судить не по чему»"
+  },
+  {
+   "id": "sync.fresh-clone-not-checked",
+   "file": "tools/sync_public.py",
+   "find": "        if проверка[\"status\"] == \"fail\":\n",
+   "replace": "        if False:\n",
+   "why": "красный свежий клон перестаёт ронять выкладку: «выложено» снова означает «байты уехали», и разницу первым замечает скачавший"
+  },
+  {
+   "id": "sync.clone-failure-reads-as-green",
+   "file": "tools/sync_public.py",
+   "find": "            return {\"status\": \"unknown\",\n                    \"detail\": f\"склонировать выложенное не удалось: {почему}\"}",
+   "replace": "            return {\"status\": \"pass\", \"detail\": \"клон не проверялся\"}",
+   "why": "несостоявшийся клон засчитывается за проверенную публикацию — «не смог проверить» превращается в «проверено»"
+  },
+  {
+   "id": "toggles.unknown-name-silent",
+   "file": "plugins/superstack/tools/expert_toggles.py",
+   "find": "    чужие = [и for и in включено if и not in известные]",
+   "replace": "    чужие = []",
+   "why": "опечатка в имени выключателя молчит: включённым числится механизм, которого нет, а настоящий остаётся выключенным"
+  },
+  {
+   "id": "toggles.price-dropped",
+   "file": "plugins/superstack/tools/expert_toggles.py",
+   "find": "        \"on\": [{\"id\": и, \"helps\": известные[и][\"helps\"],\n                \"hurts\": известные[и][\"hurts\"]} for и in on],",
+   "replace": "        \"on\": [{\"id\": и} for и in on],",
+   "why": "включённый механизм перестаёт называть цену — выбор без цены это не выбор, а согласие вслепую"
+  },
+  {
+   "id": "quota.exhausted-only-warns",
+   "file": "plugins/superstack/tools/quota.py",
+   "find": "        if сколько >= потолок:\n            исчерпаны.append(источник)",
+   "replace": "        if False:\n            исчерпаны.append(источник)",
+   "why": "достигнутый потолок перестаёт останавливать цикл — предупреждение, которое можно проигнорировать, игнорируют, и счёт увидят потом"
+  },
+  {
+   "id": "quota.undeclared-is-unlimited",
+   "file": "plugins/superstack/tools/quota.py",
+   "find": "        return None, (f\"потолок не объявлен: нет {СПЕКА} — это «считать нечего», \"",
+   "replace": "        return {}, (f\"потолок не объявлен: нет {СПЕКА} — это «считать нечего», \"",
+   "why": "отсутствие потолка читается как безлимит: умолчание «без ограничений» — это счёт, который увидят потом"
+  },
+  {
+   "id": "mcp.extra-owner-silent",
+   "file": "plugins/superstack/tools/mcp_routing.py",
+   "find": "        for р in лишние:",
+   "replace": "        for р in []:",
+   "why": "лишний владелец тяжёлого MCP не называется: роль платит контекстом каждый ход за то, чем не пользуется"
+  },
+  {
+   "id": "mcp.missing-oracle-silent",
+   "file": "plugins/superstack/tools/mcp_routing.py",
+   "find": "        if нужна in раздача and нужна not in владеют:",
+   "replace": "        if False:",
+   "why": "оракул без браузера считается нормой — экономия убирает единственный способ посмотреть на результат, и это тихо"
+  },
+  {
+   "id": "debt.vendor-tree-counted",
+   "file": "plugins/superstack/tools/debt.py",
+   "find": "        if any(з in \"/\" + имя for з in ПРОПУСК):\n            continue",
+   "replace": "        if False:\n            continue",
+   "why": "чужие каталоги и замки пакетов попадают в счёт: node_modules и lock-файлы топят настоящие горячие места"
+  },
+  {
+   "id": "debt.rank-without-terms",
+   "file": "plugins/superstack/tools/debt.py",
+   "find": "        места.append({\"file\": имя, \"edits\": n, \"lines\": строк, \"score\": счёт})",
+   "replace": "        места.append({\"file\": имя, \"score\": счёт})",
+   "why": "рейтинг перестаёт нести слагаемые — с числом нельзя спорить, и остаётся гадание с ранжированием"
+  },
+  {
+   "id": "kit.unevaluable-swallowed",
+   "file": "plugins/superstack/tools/conditional_kit.py",
+   "find": "            пропущено.append({\"id\": a[\"id\"], \"why\": f\"условие не вычислено: {e}\"})\n            continue",
+   "replace": "            continue",
+   "why": "невычислимое условие проглатывается молча: добавка неотличима от невыполнимой, и обе выглядят как «не нужно»"
+  },
+  {
+   "id": "kit.own-grammar-copy",
+   "file": "plugins/superstack/tools/conditional_kit.py",
+   "find": "    v = proposals(d[\"additions\"], значения, _движок().evaluate)",
+   "replace": "    v = proposals(d[\"additions\"], значения, lambda в, з: bool(з))",
+   "why": "условия считает не движок правил, а своя копия — выражения выглядят одинаково и вычисляются по-разному, разницу найдут на чужой машине"
+  },
+  {
+   "id": "external.zero-additions-passes",
+   "file": "plugins/superstack/tools/external_check.py",
+   "find": "    elif добавлено <= 0:\n",
+   "replace": "    elif False:\n",
+   "why": "PR без единой добавленной строки засчитывается за доказательство работы — он открывается так же легко, как и с ними"
+  },
+  {
+   "id": "external.silence-is-consent",
+   "file": "plugins/superstack/tools/external_check.py",
+   "find": "    if ответ is None:\n",
+   "replace": "    if False:\n",
+   "why": "молчание чужой стороны толкуется в свою пользу: недоступная сеть превращается в подтверждение"
+  },
+  {
+   "id": "external.state-ignored",
+   "file": "plugins/superstack/tools/external_check.py",
+   "find": "    if состояние != \"open\":\n",
+   "replace": "    if False:\n",
+   "why": "закрытый или отклонённый PR подтверждает работу наравне с открытым"
+  },
+  {
+   "id": "commits.mixed-not-named",
+   "file": "plugins/superstack/tools/commit_plan.py",
+   "find": "        if len(тронуты) > 1:\n",
+   "replace": "        if False:\n",
+   "why": "коммит, смешавший два куска, перестаёт называться — обе записи теряют смысл, и откатить один кусок уже нельзя"
+  },
+  {
+   "id": "commits.slice-without-commit-silent",
+   "file": "plugins/superstack/tools/commit_plan.py",
+   "find": "        if к[\"id\"] not in покрыты:\n",
+   "replace": "        if False:\n",
+   "why": "объявленный и не выделенный кусок проходит молча: история разошлась с планом с первого же коммита"
+  },
+  {
+   "id": "commits.slice-without-reason-passes",
+   "file": "plugins/superstack/tools/commit_plan.py",
+   "find": "        if not (к.get(\"why\") or \"\").strip():\n",
+   "replace": "        if False:\n",
+   "why": "кусок принимается без причины — через месяц нарезка читается как случайность, и оспорить её нечем"
+  },
+  {
+   "id": "distill.document-passes-as-skill",
+   "file": "plugins/superstack/tools/distill.py",
+   "find": "            if союзы >= СОЮЗОВ or len(описание) > 400:",
+   "replace": "            if False:",
+   "why": "документ, положенный целиком, проходит за нарезанный скилл — он будет подтягиваться либо всегда, либо никогда"
+  },
+  {
+   "id": "distill.provenance-optional",
+   "file": "plugins/superstack/tools/distill.py",
+   "find": "        if not ИСТОЧНИК.search(текст):\n",
+   "replace": "        if False:\n",
+   "why": "происхождение перестаёт требоваться: через полгода переписанное из чужой статьи неотличимо от выстраданного на своих прогонах"
+  },
+  {
+   "id": "gauntlet.mutates-the-live-tree",
+   "file": "tools/gauntlet.py",
+   "find": "        v = _mutate_all(muts, копия)",
+   "replace": "        v = _mutate_all(muts)",
+   "why": "ворота снова ломают рабочее дерево человека: обрыв прогона оставляет в файле `if False:`, и восемь красных тестов в четырёх файлах выглядят настоящими дефектами"
+  },
+  {
+   "id": "stamp.absolute-home-path",
+   "file": "tools/plan_stamp.py",
+   "find": "        \"plan\": str(p).replace(str(Path.home()), \"~\"),",
+   "replace": "        \"plan\": str(p),",
+   "why": "отметка о сверке снова тащит абсолютный домашний путь в файл, который уезжает в публичный репозиторий"
   }
  ]
 }

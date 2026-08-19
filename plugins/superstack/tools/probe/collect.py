@@ -245,6 +245,25 @@ def probe_claude() -> None:
         "collect.probe_claude")
     put("cc.statusline", bool(settings.get("statusLine")), "collect.probe_claude")
 
+    # Конституция — то, что читается КАЖДОЙ сессией целиком. Её объём это не
+    # вкус, а плата: чем она длиннее, тем меньше места остаётся задаче, и тем
+    # вернее середина будет прочитана по диагонали. Потолок поэтому считается
+    # числом, а не обсуждается. Берётся максимум из личной и проектной: платит
+    # человек за обе сразу.
+    строк = 0
+    откуда = None
+    for файл in (CLAUDE / "CLAUDE.md", Path.cwd() / "CLAUDE.md"):
+        try:
+            n = len(файл.read_text("utf-8", errors="replace").splitlines())
+        except OSError:
+            continue
+        if n > строк:
+            строк, откуда = n, str(файл)
+    # Ноль без объяснения читается как «конституция пуста». Разница между
+    # «файла нет» и «файл пуст» видна только в улике, поэтому она там и стоит.
+    put("cc.constitution_lines", строк, "collect.probe_claude",
+        откуда or "ни личной, ни проектной CLAUDE.md не найдено")
+
     # hooks.wired.* считается в probe_hooks по ВСЕМ файлам настроек: хук,
     # подключённый в проектном settings.json, здесь не виден.
 
@@ -963,20 +982,35 @@ def probe_hooks() -> None:
 def probe_memory() -> None:
     root = CLAUDE / "projects"
     stores = []
+    unreadable = 0
     if root.is_dir():
         for proj in root.iterdir():
             mem = proj / "memory"
             if not mem.is_dir():
                 continue
             index = mem / "MEMORY.md"
+            try:
+                файлы = [f for f in mem.iterdir() if f.suffix == ".md"]
+                размер = index.stat().st_size if index.is_file() else 0
+            except OSError:
+                # Одна нечитаемая память не имеет права уносить ВСЕ остальные:
+                # тогда исчезают все `mem.*`, и «не нашёл проблем с памятью»
+                # становится неотличимо от «не смотрел».
+                unreadable += 1
+                continue
             stores.append({
                 "path": str(mem),
-                "index_bytes": index.stat().st_size if index.is_file() else 0,
-                "topic_files": len([f for f in mem.iterdir() if f.suffix == ".md"]) - 1,
+                "index_bytes": размер,
+                # Индекс темой не считается, отсюда «-1». Без нижней границы
+                # память без единого файла даёт «тем: -1» — число, которого не
+                # бывает, напечатанное человеку с уверенным видом.
+                "topic_files": max(0, len(файлы) - 1),
             })
     stores.sort(key=lambda s: -s["index_bytes"])
-    put("mem.stores", stores, "collect.probe_memory")
-    put("mem.store_count", len(stores), "collect.probe_memory")
+    put("mem.stores", stores, "collect.probe_memory",
+        provenance=AMBIGUOUS if unreadable else EXTRACTED)
+    put("mem.store_count", len(stores), "collect.probe_memory",
+        provenance=AMBIGUOUS if unreadable else EXTRACTED)
     biggest = stores[0]["index_bytes"] if stores else 0
     put("mem.largest_index_bytes", biggest, "collect.probe_memory")
     # Индекс грузится с ограничением ~25 КБ / 200 строк.
@@ -1439,7 +1473,24 @@ def probe_runtime() -> None:
         provenance=INFERRED if active else AMBIGUOUS)
 
 
+
+def _utf8_stdio() -> None:
+    """Печать по-русски не должна зависеть от локали.
+
+    В окружении без UTF-8 — минимальный контейнер, cron с урезанным env,
+    `PYTHONCOERCECLOCALE=0` — кодировка вывода оказывается ascii, и первый же
+    русский символ роняет инструмент целиком. Человек получает не «проверка не
+    прошла», а трейсбек вместо любого ответа. На macOS по умолчанию это не
+    воспроизводится: интерпретатор сам приводит локаль C к C.UTF-8.
+    """
+    for поток in (sys.stdout, sys.stderr):
+        кодировка = (getattr(поток, "encoding", "") or "").lower().replace("-", "")
+        if кодировка != "utf8" and hasattr(поток, "reconfigure"):
+            поток.reconfigure(encoding="utf-8", errors="replace")
+
+
 def main() -> None:
+    _utf8_stdio()
     halt_if_paused()
     for probe in (probe_host, probe_claude, probe_inventory, probe_hooks,
                   probe_memory, probe_mcp, probe_project, probe_evolution, probe_discipline, probe_runtime):

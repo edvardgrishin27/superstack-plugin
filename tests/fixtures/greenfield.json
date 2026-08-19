@@ -65,5 +65,6 @@
  "rt.versions_installed": {},
  "sec.scan_files": [],
  "sec.scan_unreadable": [],
- "sec.secret_matches": []
+ "sec.secret_matches": [],
+ "cc.constitution_lines": 45
 }

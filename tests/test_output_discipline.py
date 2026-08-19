@@ -134,6 +134,33 @@ class TestDesignDirectionIsAPhase(unittest.TestCase):
         """«Чисто и минималистично» — это отсутствие выбора, а не выбор."""
         self.assertIn("вариантом не является", self.t)
 
+class TestCheckComesBeforeCode(unittest.TestCase):
+    """Проверка заводится РАНЬШЕ кода, и это записано в скилле.
+
+    Обычный порядок — построить, потом отметить сделанным — превращает список
+    в отчёт задним числом, где забытое неотличимо от несуществующего. Ровно так
+    в этом проекте «34 из 34 механизмов на месте» горело зелёным поверх
+    четырнадцати групп пропусков: карту писал тот же, кто по ней строил.
+
+    Правило живёт прозой, и потерять его при следующей правке скилла можно
+    молча — ни один прогон от этого не покраснеет. Поэтому оно держится здесь.
+    """
+
+    def test_the_rule_is_stated_in_the_work_phase(self):
+        self.assertIn("Сначала в список проверяемого, потом код", GO_ALL)
+
+    def test_it_names_where_the_check_goes(self):
+        """Правило без адреса — лозунг: человек согласится и не сделает."""
+        адреса = ("критерий приёмки", "bar.json", "мутаций")
+        for а in адреса:
+            with self.subTest(а):
+                self.assertIn(а, GO_ALL)
+
+    def test_it_names_what_the_wrong_order_cost(self):
+        """Цена ошибки названа числом, иначе правило читается как вкусовщина."""
+        self.assertIn("34 из 34", GO_ALL)
+
+
 if __name__ == "__main__":
     unittest.main()
 
@@ -203,3 +230,52 @@ class TestTheRunLeavesASummaryInTheProject(unittest.TestCase):
         """Сводка, повторяющая отчёт и хвалящая себя, не читается никем — и
         первым перестаёт читать её следующий прогон."""
         self.assertIn("Чего в сводке не бывает", self.t)
+
+class TestRussianOutputSurvivesAnAsciiLocale(unittest.TestCase):
+    """Инструмент, говорящий по-русски, не должен зависеть от локали.
+
+    В окружении без UTF-8 — минимальный контейнер, cron с урезанным env,
+    `PYTHONCOERCECLOCALE=0` — кодировка вывода оказывается ascii, и первый же
+    русский символ роняет инструмент ЦЕЛИКОМ: человек получает трейсбек вместо
+    любого ответа, включая ответ «всё хорошо».
+
+    На macOS по умолчанию это не воспроизводится: интерпретатор приводит локаль
+    C к C.UTF-8. Проверка ставит враждебное окружение НАРОЧНО — иначе она
+    измеряла бы настройки машины, а не код.
+    """
+
+    #: Инструменты, у которых защита стоит. Список ЗАКРЫТЫЙ и проверяется
+    #: буквально: тест, обещающий «все инструменты», обещал бы то, чего не
+    #: проверяет, — и следующий добавленный инструмент прошёл бы молча.
+    ЗАЩИЩЁННЫЕ = ("render.py", "adjudicate.py", "doctor.py", "verify.py",
+                  "prove_tests.py", "project_doctor.py", "bar.py",
+                  "probe/collect.py")
+
+    #: Те из них, что печатают по-русски и завершаются мгновенно: на них
+    #: свойство проверяется ЗАПУСКОМ, а не чтением исходника.
+    БЫСТРЫЕ = ("render.py", "adjudicate.py")
+
+    ВРАЖДЕБНОЕ = {"LC_ALL": "C", "LANG": "C", "PYTHONCOERCECLOCALE": "0",
+                  "PYTHONUTF8": "0", "PYTHONIOENCODING": ""}
+
+    def test_the_guard_is_present_and_called(self):
+        for имя in self.ЗАЩИЩЁННЫЕ:
+            with self.subTest(имя):
+                текст = (PKG / "tools" / имя).read_text("utf-8")
+                self.assertEqual(текст.count("_utf8_stdio"), 2,
+                                 "защита должна быть объявлена И вызвана")
+
+    def test_they_actually_print_russian_under_ascii(self):
+        import os
+        import subprocess
+        for имя in self.БЫСТРЫЕ:
+            with self.subTest(имя):
+                p = subprocess.run(
+                    [sys.executable, str(PKG / "tools" / имя)],
+                    capture_output=True, text=True, timeout=60,
+                    env={**os.environ, **self.ВРАЖДЕБНОЕ})
+                вывод = p.stdout + p.stderr
+                self.assertNotIn("UnicodeEncodeError", вывод, вывод[-300:])
+                self.assertTrue(any(c in вывод for c in "абвгдеёжзий"),
+                                f"русский текст не напечатан вовсе: {вывод[-200:]}")
+

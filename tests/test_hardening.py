@@ -152,6 +152,45 @@ class TestMalformedInputIsNamed(unittest.TestCase):
         self.assertIn("без значения", out)
 
 
+class TestEvidenceIsTrimmedAtElementBoundaries(unittest.TestCase):
+    """Длинный факт обрезается по границе элемента, а не по счёту знаков.
+
+    Обрезка на 160-м символе рвала путь посередине слова: из восьми задетых
+    проектов человек видел один, обрывок второго — и НЕ видел числа
+    остальных. «…» на месте семи проектов и «и ещё 7» — разные сообщения,
+    и проверить можно только второе.
+    """
+
+    def setUp(self):
+        import importlib.util
+        s = importlib.util.spec_from_file_location(
+            "ss_render_trim", PKG / "tools" / "render.py")
+        self.render = importlib.util.module_from_spec(s)
+        s.loader.exec_module(self.render)
+
+    def test_long_list_names_how_many_are_hidden(self):
+        много = [{"project": f"/Users/me/очень/длинный/путь/проекта-{i}"}
+                 for i in range(8)]
+        текст = self.render._trim(много)
+        self.assertIn("и ещё", текст, текст)
+        показано = текст.count("проекта-")
+        спрятано = int(текст.rsplit("и ещё", 1)[1].strip())
+        self.assertEqual(показано + спрятано, 8,
+                         f"показано {показано}, объявлено спрятано {спрятано}")
+
+    def test_shown_elements_are_whole(self):
+        много = [{"project": f"/Users/me/очень/длинный/путь/проекта-{i}"}
+                 for i in range(8)]
+        текст = self.render._trim(много)
+        видимая_часть = текст.rsplit("]", 1)[0] + "]"
+        json.loads(видимая_часть)          # рваный элемент сюда не разберётся
+
+    def test_short_value_is_untouched(self):
+        """Обратный контроль: обрезка, срабатывающая всегда, портит короткое."""
+        self.assertEqual(self.render._trim(["раз", "два"]),
+                         json.dumps(["раз", "два"], ensure_ascii=False))
+
+
 class TestUnknownIsNotHealthy(unittest.TestCase):
     """«Не разобрал» и «здоров» обязаны выглядеть по-разному."""
 
@@ -187,6 +226,30 @@ class TestUnknownIsNotHealthy(unittest.TestCase):
             self.assertTrue(any(r["state"] == "current" for r in res))
         finally:
             doctor.gh = orig
+
+    def test_slug_that_is_not_owner_slash_name_never_reaches_the_network(self):
+        """Слаг едет в путь URL. «../../user/repos» уводит запрос в другой
+        эндпоинт GitHub — не эскалация, но отчитываются уже не о том запросе.
+
+        Проверка живая: подставная `gh` запоминает, звали ли её вообще.
+        """
+        звали = []
+        orig = doctor.gh
+        doctor.gh = lambda p: (звали.append(p), {"pushed_at": "", "archived": False})[1]
+        try:
+            res = doctor.axis_upstream(
+                {"кривой": {"source": {"repo": "../../user/repos"}}})
+        finally:
+            doctor.gh = orig
+        # Сравнивается ИМЕННО кривой слаг: в конце оси есть отдельная проверка
+        # GSD, которая ходит в сеть по своему адресу и к этому тесту не
+        # относится. Ассерт «звонков не было вовсе» ловил бы её и краснел на
+        # машинах, где GSD установлен.
+        self.assertNotIn("repos/../../user/repos", звали,
+                         f"кривой слаг всё-таки ушёл в сеть: {звали}")
+        кривые = [r for r in res if "owner/name" in r.get("why", "")]
+        self.assertTrue(кривые, f"кривой слаг не назван: {res}")
+        self.assertEqual(кривые[0]["state"], "unknown")
 
     def test_incomplete_ledger_entry_does_not_crash(self):
         orig = doctor.read_json

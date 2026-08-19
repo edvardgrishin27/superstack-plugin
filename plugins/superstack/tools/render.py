@@ -106,6 +106,34 @@ def render_beginner(findings: list[dict], data: dict | None = None) -> str:
     return "\n".join(out)
 
 
+
+#: Сколько знаков факта показывать в разборе. Дальше — обрезка.
+EVIDENCE_LIMIT = 160
+
+
+def _trim(value, limit: int = EVIDENCE_LIMIT) -> str:
+    """Длинный факт обрезается ПО ГРАНИЦЕ ЭЛЕМЕНТА, а не по счёту знаков.
+
+    Обрезка на 160-м символе рвала путь посередине слова: из восьми задетых
+    проектов человек видел один, обрывок второго и не видел числа остальных.
+    «…» на месте семи проектов и «и ещё 7» — разные сообщения, и второе можно
+    проверить.
+    """
+    текст = json.dumps(value, ensure_ascii=False)
+    if len(текст) <= limit:
+        return текст
+    if isinstance(value, list) and value:
+        взято = []
+        for item in value:
+            кусок = json.dumps(item, ensure_ascii=False)
+            if len(", ".join(взято + [кусок])) > limit - 12 and взято:
+                break
+            взято.append(кусок)
+        осталось = len(value) - len(взято)
+        хвост = f" и ещё {осталось}" if осталось else ""
+        return "[" + ", ".join(взято) + "]" + хвост
+    return текст[:limit - 3] + "…"
+
 def render_expert(findings: list[dict], data: dict | None = None) -> str:
     out = [line(), "РАЗБОР", line()]
     out += render_coverage(data or {}, "expert")
@@ -118,10 +146,7 @@ def render_expert(findings: list[dict], data: dict | None = None) -> str:
         if f["evidence"]:
             out.append("  факты:")
             for k, v in f["evidence"].items():
-                text = json.dumps(v, ensure_ascii=False)
-                if len(text) > 160:
-                    text = text[:157] + "…"
-                out.append(f"    {k} = {text}")
+                out.append(f"    {k} = {_trim(v)}")
         if f["note"]:
             out.append(f"  оговорка: {f['note']}")
         out.append(f"  вердикт: {f['verdict']}   правило: {f['rule_file']}")
@@ -201,7 +226,24 @@ def _fail(msg: str, code: int = 2) -> None:
     raise SystemExit(code)
 
 
+
+def _utf8_stdio() -> None:
+    """Печать по-русски не должна зависеть от локали.
+
+    В окружении без UTF-8 — минимальный контейнер, cron с урезанным env,
+    `PYTHONCOERCECLOCALE=0` — кодировка вывода оказывается ascii, и первый же
+    русский символ роняет инструмент целиком. Человек получает не «проверка не
+    прошла», а трейсбек вместо любого ответа. На macOS по умолчанию это не
+    воспроизводится: интерпретатор сам приводит локаль C к C.UTF-8.
+    """
+    for поток in (sys.stdout, sys.stderr):
+        кодировка = (getattr(поток, "encoding", "") or "").lower().replace("-", "")
+        if кодировка != "utf8" and hasattr(поток, "reconfigure"):
+            поток.reconfigure(encoding="utf-8", errors="replace")
+
+
 def main() -> None:
+    _utf8_stdio()
     halt_if_paused()
     if len(sys.argv) < 2:
         _fail("нужен файл с находками:\n"

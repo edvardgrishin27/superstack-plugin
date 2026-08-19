@@ -36,6 +36,7 @@ import os
 import re
 import shutil
 import subprocess
+import tempfile
 import sys
 from pathlib import Path
 
@@ -49,7 +50,7 @@ REPO = Path(__file__).resolve().parent.parent
 #: `/go`, падающий на первом гейте. Правки входа жили в приватном и не доезжали
 #: до тех, кто по ним ставит.
 CARRY = ("plugins", "tests", "tools", "data", ".claude-plugin",
-         ".github", "README.md")
+         ".github", ".superstack", "README.md")
 
 #: Длина, с которой строка начинает выглядеть как ключ для чужого сканера.
 LITERAL_LIMIT = 24
@@ -112,7 +113,13 @@ def audit(pub: Path) -> dict:
     secrets = machine_secrets()
     leaks, personal, long_lits = [], [], []
     for f in sorted(pub.rglob("*")):
-        if not f.is_file() or ".git/" in str(f):
+        # `__pycache__` порождает САМ прогон тестов в публичном дереве уже
+        # после переноса. Это артефакт сборки, а не содержимое поставки: он
+        # никуда не уезжает, но абсолютные пути внутри него блокировали
+        # выкладку — проверка кричала на собственный побочный эффект.
+        путь = str(f)
+        if not f.is_file() or ".git/" in путь or "__pycache__" in путь \
+                or путь.endswith(".pyc"):
             continue
         try:
             text = f.read_text("utf-8", errors="replace")
@@ -204,7 +211,52 @@ def carry(pub: Path) -> None:
         if dst.exists():
             shutil.rmtree(dst)
         shutil.copytree(src, dst, ignore=shutil.ignore_patterns(
-            "__pycache__", "*.pyc", ".pytest_cache", ".git"))
+            "__pycache__", "*.pyc", ".pytest_cache", ".git",
+            ".mutation-lock"))
+
+
+
+def verify_published(pub: Path, клонер=None) -> dict:
+    """Публикация состоялась, если набор зелёный В СВЕЖЕМ КЛОНЕ выложенного.
+
+    Код возврата `git push` доказывает, что байты уехали. Он ничего не говорит
+    о том, что уехало ЦЕЛОЕ: в рабочем дереве живут файлы, которых нет в
+    индексе, и прогон в нём проходит по ним. Так уже случалось у других —
+    репозиторий, который не собирается ни у кого, кроме автора.
+
+    Клонер подаётся снаружи: проверка, обязательно ходящая в сеть, измеряет
+    чужой сервер и не может быть прогнана в наборе.
+    """
+    адрес = None
+    r = subprocess.run(["git", "remote", "get-url", "origin"], cwd=str(pub),
+                       capture_output=True, text=True)
+    if r.returncode == 0:
+        адрес = (r.stdout or "").strip()
+    if not адрес:
+        return {"status": "unknown", "detail": "у публичного дерева нет origin — "
+                                               "проверять нечего"}
+    клонер = клонер or _склонировать
+    with tempfile.TemporaryDirectory() as d:
+        куда = Path(d) / "клон"
+        код, почему = клонер(адрес, куда)
+        if код != 0:
+            return {"status": "unknown",
+                    "detail": f"склонировать выложенное не удалось: {почему}"}
+        кода, прошло, хвост = run_tests(куда)
+        if кода != 0:
+            # Худший из исходов: у автора зелено, у скачавшего нет, и узнаёт
+            # об этом скачавший.
+            return {"status": "fail", "tests_passed": прошло,
+                    "detail": f"в свежем клоне набор красный (код {кода})",
+                    "tail": (хвост or "")[-300:]}
+        return {"status": "pass", "tests_passed": прошло,
+                "detail": f"свежий клон зелёный: {прошло} тестов"}
+
+
+def _склонировать(адрес: str, куда: Path) -> tuple:
+    r = subprocess.run(["git", "clone", "--depth", "1", "-q", адрес, str(куда)],
+                       capture_output=True, text=True, timeout=600)
+    return r.returncode, (r.stderr or "").strip()[-200:]
 
 
 def main() -> int:
@@ -270,6 +322,16 @@ def main() -> int:
             print(json.dumps(report, ensure_ascii=False, indent=1))
             return 1
         print("  выложено", file=sys.stderr)
+
+        # Публикация СОСТОЯЛАСЬ — это зелёный прогон в свежем клоне, а не код
+        # возврата push. Иначе «выложено» означает «байты уехали», и разницу
+        # первым замечает тот, кто скачал.
+        проверка = verify_published(pub)
+        report["fresh_clone"] = проверка
+        print(f"  свежий клон: {проверка['detail']}", file=sys.stderr)
+        if проверка["status"] == "fail":
+            print(json.dumps(report, ensure_ascii=False, indent=1))
+            return 1
     else:
         print("  --push не задан: дерево подготовлено, выкладка не выполнена",
               file=sys.stderr)

@@ -640,6 +640,59 @@ class TestJudgeGrantInversion(unittest.TestCase):
             tmp.cleanup()
 
 
+class TestMemoryProbeSurvivesOneBadStore(unittest.TestCase):
+    """Одна нечитаемая память не имеет права уносить все остальные.
+
+    Раньше `try/except` стоял вокруг всей пробы: один каталог без прав —
+    и исчезали ВСЕ факты `mem.*`. Отчёт говорил «проблем с памятью не нашёл»,
+    что неотличимо от «не смотрел», и отличить это по выводу было нельзя.
+    """
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.claude = Path(self.tmp.name) / ".claude"
+        (self.claude / "projects").mkdir(parents=True)
+        self._orig = collect.CLAUDE
+        collect.CLAUDE = self.claude
+        self.addCleanup(setattr, collect, "CLAUDE", self._orig)
+
+    def _store(self, имя: str, тем: int = 2, индекс: bool = True) -> Path:
+        mem = self.claude / "projects" / имя / "memory"
+        mem.mkdir(parents=True)
+        if индекс:
+            (mem / "MEMORY.md").write_text("индекс\n", encoding="utf-8")
+        for i in range(тем):
+            (mem / f"тема-{i}.md").write_text("факт\n", encoding="utf-8")
+        return mem
+
+    def test_unreadable_store_does_not_erase_the_readable_one(self):
+        if os.geteuid() == 0:
+            self.skipTest("под root права на каталог не ограничивают чтение")
+        живая = self._store("живой")
+        битая = self._store("битый")
+        битая.chmod(0o000)
+        try:
+            collect.facts.clear()
+            collect.probe_memory()
+        finally:
+            битая.chmod(0o700)
+        пути = [s["path"] for s in collect.facts["mem.stores"]["value"]]
+        self.assertIn(str(живая), пути, "читаемая память исчезла вместе с битой")
+        self.assertEqual(collect.facts["mem.stores"]["provenance"], "AMBIGUOUS",
+                         "неполный обзор выдан за полный")
+
+    def test_empty_store_never_reports_negative_topics(self):
+        """Индекс темой не считается — и без нижней границы пустая память
+        печатала человеку «тем: -1», число, которого не бывает."""
+        self._store("пустой", тем=0, индекс=False)
+        collect.facts.clear()
+        collect.probe_memory()
+        темы = [s["topic_files"] for s in collect.facts["mem.stores"]["value"]]
+        self.assertTrue(темы)
+        self.assertTrue(all(t >= 0 for t in темы), темы)
+
+
 class TestHookIdMatching(unittest.TestCase):
     """Подстрока делала подключённым любой хук с коротким id."""
 

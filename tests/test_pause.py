@@ -130,5 +130,33 @@ class TestBrakeActuallyBrakes(PauseFixture):
         self.assertFalse(self.flag.exists())
 
 
+    def test_removing_a_pause_that_was_not_there_says_so(self):
+        """«Снято» и «нечего было снимать» — разные события.
+
+        Одинаковый ответ на оба означает, что подтверждение ничего не
+        подтверждает: человек, промахнувшийся файлом или снявший чужую паузу,
+        читает тот же успех, что и снявший свою.
+        """
+        r = self.pause("off")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertIn("паузы не было", r.stdout)
+
+    def test_removing_a_real_pause_says_it_was_removed(self):
+        self.pause("on")
+        r = self.pause("off")
+        self.assertIn("пауза снята", r.stdout)
+        self.assertFalse(self.flag.exists())
+
+    def test_the_hint_is_copyable_when_the_path_has_spaces(self):
+        """Путь к скрипту лежит в каталоге с пробелом и кириллицей. Строка без
+        кавычек копируется в неработающую команду — ровно тогда, когда человек
+        торопится больше всего."""
+        r = self.pause("on")
+        подсказка = [s for s in r.stdout.splitlines() if s.startswith("Снять:")]
+        self.assertTrue(подсказка, r.stdout)
+        self.assertIn('"', подсказка[0],
+                      "путь в подсказке не в кавычках — команда не скопируется")
+
+
 if __name__ == "__main__":
     unittest.main()
