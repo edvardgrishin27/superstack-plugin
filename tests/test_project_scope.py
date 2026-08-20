@@ -36,9 +36,9 @@ _s.loader.exec_module(en)
 #: намеренно: оно ограничено счётчиком на машине (три раза за всё время), и
 #: человеку, поставившему плагин, полезно узнать об этом хотя бы раз.
 AUTO_HOOKS = (
-    PKG / "hooks" / "session-lesson.sh",
-    PKG / "hooks" / "precompact.sh",
-    PKG / "hooks" / "verify-gate.sh",
+    PKG / "hooks" / "session-lesson.py",
+    PKG / "hooks" / "precompact.py",
+    PKG / "hooks" / "verify-gate.py",
 )
 
 
@@ -113,7 +113,8 @@ class TestHooksAreSilentInForeignProjects(unittest.TestCase):
                "SUPERSTACK_PROJECT_DIR": str(project)}
         env.pop("SUPERSTACK_DISABLE", None)
         env.pop("SUPERSTACK_IGNORE_PAUSE", None)
-        return subprocess.run(["sh", str(hook)], capture_output=True, text=True,
+        return subprocess.run([sys.executable, str(hook)],
+                              capture_output=True, text=True,
                               timeout=60, env=env, cwd=str(project),
                               input='{"session_id":"x"}')
 
@@ -133,7 +134,7 @@ class TestHooksAreSilentInForeignProjects(unittest.TestCase):
         позвали, — иначе он лечит шум ценой продукта."""
         (self.state / "projects").write_text(str(self.foreign) + "\n",
                                              encoding="utf-8")
-        p = self._run(PKG / "hooks" / "session-lesson.sh",
+        p = self._run(PKG / "hooks" / "session-lesson.py",
                       self.foreign)
         self.assertIn("hookSpecificOutput", p.stdout)
 
@@ -193,7 +194,7 @@ class TestTheGateSurvivesASymlinkedPath(unittest.TestCase):
         env.pop("SUPERSTACK_DISABLE", None)
         env.pop("SUPERSTACK_IGNORE_PAUSE", None)
         p = subprocess.run(
-            ["sh", str(hook)], capture_output=True, text=True, timeout=60,
+            [sys.executable, str(hook)], capture_output=True, text=True, timeout=60,
             env=env, cwd=str(project),
             input='{"session_id":"с1","transcript_path":"%s"}' % транскрипт)
         оставил = снимки.is_dir() and any(снимки.glob("*.jsonl"))
@@ -234,7 +235,7 @@ class TestTheGateSurvivesASymlinkedPath(unittest.TestCase):
         """
         (self.state / "projects").write_text(
             str(self.через_ссылку) + "\n", encoding="utf-8")
-        сказал, _, _ = self._след(PKG / "hooks" / "session-lesson.sh",
+        сказал, _, _ = self._след(PKG / "hooks" / "session-lesson.py",
                                   self.настоящий)
         self.assertTrue(сказал, "отметка неразрешённым путём перестала "
                                 "находиться — починили одну сторону, сломав "
@@ -246,12 +247,48 @@ class TestTheGateIsInEveryAutomaticHook(unittest.TestCase):
     заметят её опять только по жалобе из чужого проекта."""
 
     def test_each_hook_reads_the_registry(self):
-        for hook in AUTO_HOOKS:
-            with self.subTest(hook=hook.name):
-                t = hook.read_text("utf-8")
-                self.assertIn("$STATE/projects", t,
-                              f"{hook.name} не спрашивает, звали ли его здесь")
-                self.assertIn("enabled_here", t)
+        """Проверяется ТО, ЧТО РЕАЛЬНО ЗАПУСКАЕТСЯ, а не всё, что похоже на хук.
+
+        Раньше проверка обходила `hooks/*.sh` — и это работало, пока хуки были
+        скриптами. После переезда на Python `.sh` остался тонкой обёрткой без
+        логики: обход по маске нашёл бы её и отчитался о гейте, которого в ней
+        нет. Поэтому список берётся из `hooks.json`: запускается именно то, что
+        там названо.
+        """
+        import json as _json
+        реестр = _json.loads((PKG / "hooks" / "hooks.json").read_text("utf-8"))
+
+        команды = []
+
+        def обойти(узел):
+            if isinstance(узел, dict):
+                if isinstance(узел.get("command"), str):
+                    команды.append(узел["command"])
+                for v in узел.values():
+                    обойти(v)
+            elif isinstance(узел, list):
+                for v in узел:
+                    обойти(v)
+
+        обойти(реестр)
+        self.assertTrue(команды, "в hooks.json не объявлено ни одной команды")
+
+        # `first-run` исключён НАМЕРЕННО и по существу: это хук, который
+        # ПРЕДЛАГАЕТ позвать систему. Требовать от него отметку значит требовать
+        # молчать ровно там, где он один и нужен — в проекте, где SUPERSTACK
+        # ещё не звали. Его собственный потолок предложений проверяется отдельно.
+        ПРЕДЛАГАЕТ = "first-run"
+        for команда in команды:
+            имя = команда.split("/hooks/")[-1].strip('"')
+            if ПРЕДЛАГАЕТ in имя:
+                continue
+            файл = PKG / "hooks" / имя
+            with self.subTest(hook=имя):
+                self.assertTrue(файл.is_file(), f"{имя} объявлен и не существует")
+                t = файл.read_text("utf-8")
+                self.assertTrue(
+                    "projects" in t and ("enabled_here" in t or "позвали_здесь" in t),
+                    f"{имя} не спрашивает, звали ли его здесь")
 
     def test_the_starting_skills_write_the_mark(self):
         """Отметку ставят скиллы, НАЧИНАЮЩИЕ работу. `/what`, `/fix`, `/oops`

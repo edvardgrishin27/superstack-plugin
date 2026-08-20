@@ -280,7 +280,7 @@ class TestTheLessonWatchdogIgnoresTheSystemsOwnNoise(unittest.TestCase):
     коротких реплик, ради выхода из которой критерий и вводился.
     """
 
-    HOOK = PKG / "hooks" / "session-lesson.sh"
+    HOOK = PKG / "hooks" / "session-lesson.py"
 
     def test_the_hook_is_silent_while_mutations_run(self):
         t = self.HOOK.read_text("utf-8")

@@ -162,7 +162,7 @@ class TestTheBrakeWorksFromAPhrase(unittest.TestCase):
 
     def setUp(self):
         self.t = (SKILLS / "stop" / "SKILL.md").read_text("utf-8")
-        self.gate = (PKG / "hooks" / "verify-gate.sh").read_text("utf-8")
+        self.gate = (PKG / "hooks" / "verify-gate.py").read_text("utf-8")
 
     def test_the_description_carries_the_words_a_stuck_person_says(self):
         """Скилл выбирается по description. Слова берутся человеческие —
@@ -189,7 +189,11 @@ class TestTheBrakeWorksFromAPhrase(unittest.TestCase):
                       "«ход не закрывается» и не знает, что с этим делать")
 
     def test_the_block_message_does_not_hand_out_shell_commands(self):
-        блок = self.gate[self.gate.rindex("printf '{\"decision\":\"block\""):]
+        # Ищется ТЕЛО блокирующего ответа, а не конкретная форма печати:
+        # прежний якорь `printf '{"decision":"block"` жил ровно пока хук был
+        # скриптом оболочки. После порта на Python строка собирается функцией,
+        # и проверка, привязанная к способу печати, упала бы на верном коде.
+        блок = self.gate[self.gate.rindex("ГЕЙТ ВЕРИФИКАЦИИ НЕ ПРОЙДЕН"):]
         for команда in ("SUPERSTACK_DISABLE=1", "pause.sh on"):
             with self.subTest(команда=команда):
                 self.assertNotIn(команда, блок,
@@ -492,9 +496,10 @@ class FixFixture(unittest.TestCase):
         (hooks / "hooks.json").write_text(json.dumps({
             "hooks": {"Stop": [{"hooks": [
                 {"type": "command",
-                 "command": 'sh "${CLAUDE_PLUGIN_ROOT}/hooks/verify-gate.sh"'}]}]}
+                 "command": 'python3 "${CLAUDE_PLUGIN_ROOT}/hooks/verify-gate.py"'}]}]}
         }), encoding="utf-8")
-        (hooks / "verify-gate.sh").write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+        (hooks / "verify-gate.py").write_text("import sys\nsys.exit(0)\n",
+                                      encoding="utf-8")
         fix_mod.ROOT = root
         return root
 
@@ -517,7 +522,7 @@ class TestFixOrderedChain(FixFixture):
 
     def test_hook_referencing_missing_script_is_caught(self):
         root = self.make_healthy_root()
-        (root / "hooks" / "verify-gate.sh").unlink()
+        (root / "hooks" / "verify-gate.py").unlink()
         v = fix_mod.diagnose()
         self.assertEqual(v["status"], "broken")
         self.assertEqual(v["link"], "подключение хуков")

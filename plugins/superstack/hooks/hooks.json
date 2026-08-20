@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "sh \"${CLAUDE_PLUGIN_ROOT}/hooks/first-run.sh\"",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/first-run.py\"",
             "timeout": 5
           }
         ]
@@ -17,7 +17,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "sh \"${CLAUDE_PLUGIN_ROOT}/hooks/precompact.sh\"",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/precompact.py\"",
             "timeout": 30
           }
         ]
@@ -28,7 +28,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "sh \"${CLAUDE_PLUGIN_ROOT}/hooks/verify-gate.sh\"",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/verify-gate.py\"",
             "timeout": 180
           }
         ]
@@ -37,7 +37,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "sh \"${CLAUDE_PLUGIN_ROOT}/hooks/session-lesson.sh\"",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/session-lesson.py\"",
             "timeout": 10
           }
         ]

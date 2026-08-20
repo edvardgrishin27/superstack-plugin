@@ -13,6 +13,7 @@ import os
 import shutil
 import subprocess
 import sys
+import sys
 import tempfile
 import time
 import unittest
@@ -21,7 +22,9 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from paths import PKG  # noqa: E402
 
-HOOK = PKG / "hooks" / "session-lesson.sh"
+#: Хук переехал на Python: `sh` был лишней зависимостью, а питон
+#: продукту нужен в любом случае. `.sh` остался тонкой обёрткой.
+HOOK = PKG / "hooks" / "session-lesson.py"
 LEARN = PKG / "tools" / "learn.py"
 
 
@@ -39,7 +42,8 @@ def run(state: Path, script: Path = HOOK, disable: str = "") -> subprocess.Compl
     env.pop("SUPERSTACK_IGNORE_PAUSE", None)
     if disable:
         env["SUPERSTACK_DISABLE"] = disable
-    return subprocess.run(["sh", str(script)], capture_output=True, text=True,
+    return subprocess.run([sys.executable, str(script)],
+                          capture_output=True, text=True,
                           timeout=30, env=env)
 
 
@@ -79,12 +83,28 @@ class TestTheQuestionIsAsked(unittest.TestCase):
     def test_path_points_at_a_real_tool(self):
         c = self.ctx()
         import re
-        # Путь взят в одиночные кавычки И содержит пробел: разбиение по
-        # пробелам даёт обрывок. Достаём ровно то, что заключено в кавычки.
-        m = re.search(r"'([^']*learn\.py)'", c)
+        # Достаём путь в любой форме — в кавычках любого вида или без них.
+        # Прежняя регулярка требовала одиночных кавычек и зеленела ТОЛЬКО
+        # потому, что в каталоге автора есть пробел: без пробела `shlex.quote`
+        # кавычки опускает. То есть проверка измеряла имя чужого каталога.
+        m = (re.search(r"""['"]([^'"]*learn\.py)['"]""", c)
+             or re.search(r"(\S*learn\.py)", c))
         self.assertIsNotNone(m, f"путь к инструменту не назван: {c[:120]}")
         self.assertTrue(Path(m.group(1)).is_file(),
                         f"путь ведёт в никуда: {m.group(1)}")
+
+    def test_the_path_is_quoted_no_matter_where_it_lives(self):
+        """Форма команды не должна зависеть от места установки.
+
+        `shlex.quote` опускает кавычки, когда пробелов нет. Проверка на путь
+        зеленела ровно потому, что в каталоге автора пробел ЕСТЬ, — и упала на
+        первом же выкладывании в каталог без пробела. Зелёное было свойством
+        машины, а не кода.
+        """
+        c = self.ctx()
+        import re
+        m = re.search(r'"[^"]*learn\.py"', c)
+        self.assertIsNotNone(m, f"путь напечатан без кавычек: {c[:160]}")
 
     def test_kill_switch_silences_it(self):
         self.assertEqual(run(self.state, disable="1").stdout.strip(), "")
@@ -102,17 +122,17 @@ class TestTheQuestionIsAsked(unittest.TestCase):
         урок и не найдёт куда."""
         d = Path(self.tmp.name) / "копия"
         (d / "hooks").mkdir(parents=True)
-        shutil.copy2(HOOK, d / "hooks" / "session-lesson.sh")
-        self.assertEqual(run(self.state, script=d / "hooks" / "session-lesson.sh")
+        shutil.copy2(HOOK, d / "hooks" / "session-lesson.py")
+        self.assertEqual(run(self.state, script=d / "hooks" / "session-lesson.py")
                          .stdout.strip(), "")
 
     def test_path_with_a_space_survives(self):
         d = Path(self.tmp.name) / "каталог с пробелом"
         (d / "hooks").mkdir(parents=True)
         (d / "tools").mkdir(parents=True)
-        shutil.copy2(HOOK, d / "hooks" / "session-lesson.sh")
+        shutil.copy2(HOOK, d / "hooks" / "session-lesson.py")
         shutil.copy2(LEARN, d / "tools" / "learn.py")
-        out = run(self.state, script=d / "hooks" / "session-lesson.sh").stdout
+        out = run(self.state, script=d / "hooks" / "session-lesson.py").stdout
         c = json.loads(out)["hookSpecificOutput"]["additionalContext"]
         self.assertIn("каталог с пробелом", c)
 
@@ -142,7 +162,7 @@ class TestAQuietTurnIsNotAsked(unittest.TestCase):
                "SUPERSTACK_PROJECT_DIR": str(self.work)}
         env.pop("SUPERSTACK_DISABLE", None)
         env.pop("SUPERSTACK_IGNORE_PAUSE", None)
-        return subprocess.run(["sh", str(HOOK)], capture_output=True, text=True,
+        return subprocess.run([sys.executable, str(HOOK)], capture_output=True, text=True,
                               timeout=30, env=env, cwd=str(self.work))
 
     def test_the_first_turn_is_always_asked(self):
@@ -167,7 +187,7 @@ class TestAQuietTurnIsNotAsked(unittest.TestCase):
         терял работу, сделанную за это время."""
         env = {**os.environ, "SUPERSTACK_STATE_DIR": str(self.state),
                "SUPERSTACK_DISABLE": "1"}
-        subprocess.run(["sh", str(HOOK)], capture_output=True, text=True,
+        subprocess.run([sys.executable, str(HOOK)], capture_output=True, text=True,
                        timeout=30, env=env, cwd=str(self.work))
         self.assertFalse((self.state / "last-lesson-ask").exists())
 
@@ -179,7 +199,7 @@ class TestHookIsWired(unittest.TestCase):
         cfg = json.loads((PKG / "hooks" / "hooks.json")
                          .read_text("utf-8"))["hooks"]
         cmds = [h["command"] for e in cfg.get("Stop", []) for h in e["hooks"]]
-        self.assertTrue(any("session-lesson.sh" in c for c in cmds),
+        self.assertTrue(any("session-lesson.py" in c for c in cmds),
                         f"крючок не подключён: {cmds}")
         self.assertTrue(all("CLAUDE_PLUGIN_ROOT" in c for c in cmds))
 

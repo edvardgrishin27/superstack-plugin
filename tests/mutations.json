@@ -5,30 +5,30 @@
  "mutations": [
   {
    "id": "hook.no-persist-check",
-   "file": "plugins/superstack/hooks/first-run.sh",
-   "find": "if [ \"$saved\" != \"$next\" ]; then",
-   "replace": "if false; then",
+   "file": "plugins/superstack/hooks/first-run.py",
+   "find": "            if файл.read_text(\"utf-8\").strip() != str(стало):\n                return 0",
+   "replace": "            if False:\n                return 0",
    "why": "снята пост-проверка записи счётчика: напоминание, которое некому сосчитать, повторяется каждую сессию вечно"
   },
   {
    "id": "hook.garbage-counter-resets",
-   "file": "plugins/superstack/hooks/first-run.sh",
-   "find": "'' | *[!0-9]*) printf '%s' \"$MAX\"; return ;;",
-   "replace": "'' | *[!0-9]*) printf '0'; return ;;",
+   "file": "plugins/superstack/hooks/first-run.py",
+   "find": "    return int(текст) if текст.isdigit() else ПОТОЛОК",
+   "replace": "    return int(текст) if текст.isdigit() else 0",
    "why": "кривой счётчик обнуляет лимит вместо того, чтобы закрыть предложения: нечитаемое состояние обязано вести к молчанию"
   },
   {
    "id": "hook.no-lock",
-   "file": "plugins/superstack/hooks/first-run.sh",
-   "find": "mkdir \"$LOCK\" 2>/dev/null || exit 0",
-   "replace": "true",
+   "file": "plugins/superstack/hooks/first-run.py",
+   "find": "    try:\n        замок.mkdir()\n    except (FileExistsError, OSError):\n        return 0",
+   "replace": "    try:\n        pass\n    except (FileExistsError, OSError):\n        return 0",
    "why": "снят замок вокруг чтения-изменения-записи: параллельные сессии дают 11-24 предложения вместо трёх"
   },
   {
    "id": "hook.ceiling-removed",
-   "file": "plugins/superstack/hooks/first-run.sh",
-   "find": "if [ \"$n\" -ge \"$MAX\" ]; then",
-   "replace": "if false; then",
+   "file": "plugins/superstack/hooks/first-run.py",
+   "find": "        if было >= ПОТОЛОК:",
+   "replace": "        if было >= 10_000:",
    "why": "снят потолок: предложение приходит бесконечно"
   },
   {
@@ -215,93 +215,93 @@
   },
   {
    "id": "gate.block-disarmed",
-   "file": "plugins/superstack/hooks/verify-gate.sh",
-   "find": "  1) ;;",
-   "replace": "  1) exit 0 ;;",
+   "file": "plugins/superstack/hooks/verify-gate.py",
+   "find": "    return заблокировать(код, stderr)",
+   "replace": "    return 0",
    "why": "гейт перестаёт блокировать: красная проверка закрывает ход, и правило skills/go/SKILL.md снова становится пожеланием — ровно то отсутствие механизма, ради которого хук написан"
   },
   {
    "id": "gate.blocks-when-nothing-to-check",
-   "file": "plugins/superstack/hooks/verify-gate.sh",
-   "find": "  2) note_once \"SUPERSTACK: проверять нечем — проект не объявил ни одной проверки. Ход закрыт БЕЗ доказательства.\" ;;",
-   "replace": "  2) ;;",
+   "file": "plugins/superstack/hooks/verify-gate.py",
+   "find": "    if код == 2:\n        return сказать_один_раз(",
+   "replace": "    if False:\n        return сказать_один_раз(",
    "why": "проект без объявленных проверок блокируется навсегда: закрыть ход нельзя ничем, установка плагина означает перестать работать — инструмент становится неустановимым"
   },
   {
    "id": "gate.kill-switch-dead",
-   "file": "plugins/superstack/hooks/verify-gate.sh",
-   "find": "if [ \"${SUPERSTACK_DISABLE:-}\" = \"1\" ]; then",
-   "replace": "if false; then",
+   "file": "plugins/superstack/hooks/verify-gate.py",
+   "find": "    if os.environ.get(\"SUPERSTACK_DISABLE\") == \"1\":\n        return 0",
+   "replace": "    if False:\n        return 0",
    "why": "аварийный выключатель перестаёт выключать: один экспорт обязан гасить всю систему разом, иначе выключателя нет"
   },
   {
    "id": "gate.pause-ignored",
-   "file": "plugins/superstack/hooks/verify-gate.sh",
-   "find": "if [ \"${SUPERSTACK_IGNORE_PAUSE:-}\" != \"1\" ] && [ -f \"$STATE/PAUSE\" ]; then",
-   "replace": "if false; then",
+   "file": "plugins/superstack/hooks/verify-gate.py",
+   "find": "    if os.environ.get(\"SUPERSTACK_IGNORE_PAUSE\") != \"1\" \\\n            and (состояние() / \"PAUSE\").is_file():",
+   "replace": "    if False:",
    "why": "тормоз перестаёт тормозить: остановленная система продолжает гонять проверки и запирает человека в ходе, который нечем закрыть"
   },
   {
    "id": "gate.loop-guard-removed",
-   "file": "plugins/superstack/hooks/verify-gate.sh",
-   "find": "if printf '%s' \"$input\" | grep -q '\"stop_hook_active\"[[:space:]]*:[[:space:]]*true'; then",
-   "replace": "if false; then",
+   "file": "plugins/superstack/hooks/verify-gate.py",
+   "find": "    if re.search(r'\"stop_hook_active\"\\s*:\\s*true', вход):\n        return 0",
+   "replace": "    if False:\n        return 0",
    "why": "снят разрыв цикла: гейт блокирует подряд до предела Claude Code в 8 продолжений, каждое стоит полного прогона набора — проверка превращается в ловушку"
   },
   {
    "id": "gate.no-json-escaping",
-   "file": "plugins/superstack/hooks/verify-gate.sh",
-   "find": "    | sed -e 's/\\\\/\\\\\\\\/g' -e 's/\"/\\\\\"/g' \\",
-   "replace": "    | cat \\",
+   "file": "plugins/superstack/hooks/verify-gate.py",
+   "find": "    print(json.dumps({\"decision\": \"block\", \"reason\": \"\\n\".join(причина)},\n                     ensure_ascii=False))",
+   "replace": "    print('{\"decision\":\"block\",\"reason\":\"' + \"\\n\".join(причина) + '\"}')",
    "why": "кавычка или слэш из вывода проверки ломают разбор ВСЕГО объекта: хук перестаёт существовать для Claude Code целиком, молча и без сообщения"
   },
   {
    "id": "gate.notes-every-turn",
-   "file": "plugins/superstack/hooks/verify-gate.sh",
-   "find": "  grep -qxF \"$sid\" \"$notes\" 2>/dev/null && exit 0",
-   "replace": "  true",
+   "file": "plugins/superstack/hooks/verify-gate.py",
+   "find": "    if sid in если_уже:\n        return 0",
+   "replace": "    if False:\n        return 0",
    "why": "снят счётчик предупреждений: одна и та же строка на каждом закрытии хода — ровно тот способ, которым сообщение перестают читать"
   },
   {
    "id": "gate.note-not-persisted",
-   "file": "plugins/superstack/hooks/verify-gate.sh",
-   "find": "  mark_session \"$sid\" || exit 0",
-   "replace": "  mark_session \"$sid\" || true",
+   "file": "plugins/superstack/hooks/verify-gate.py",
+   "find": "        if sid not in журнал.read_text(\"utf-8\", errors=\"replace\").splitlines():\n            return 0",
+   "replace": "        if False:\n            return 0",
    "why": "предупреждение печатается, хотя отметить его не удалось: некому сосчитать — значит будет повторяться каждый ход вечно (тот же урок, что в first-run.sh)"
   },
   {
    "id": "gate.watchdog-removed",
-   "file": "plugins/superstack/hooks/verify-gate.sh",
-   "find": "  sleep \"$BUDGET\"",
-   "replace": "  sleep 100000",
+   "file": "plugins/superstack/hooks/verify-gate.py",
+   "find": "                           text=True, timeout=бюджет)",
+   "replace": "                           text=True)",
    "why": "снят таймаут: хук на КАЖДОМ закрытии хода висит столько, сколько думает проверка — зависший хук это зависшая работа"
   },
   {
    "id": "gate.signal-read-as-verdict",
-   "file": "plugins/superstack/hooks/verify-gate.sh",
-   "find": "if [ \"$rc\" -ge 128 ]; then",
-   "replace": "if false; then",
+   "file": "plugins/superstack/hooks/verify-gate.py",
+   "find": "    if код < 0:",
+   "replace": "    if False:",
    "why": "смерть по сигналу подаётся как обычный код возврата: человек читает «не смог проверить (код 143)» вместо названного бюджета и не понимает, какую ручку крутить"
   },
   {
    "id": "gate.unknown-code-silent",
-   "file": "plugins/superstack/hooks/verify-gate.sh",
-   "find": "  *) note_once \"SUPERSTACK: гейт верификации не смог проверить (код $rc). Ход закрыт БЕЗ доказательства.\" ;;",
-   "replace": "  *) exit 0 ;;",
+   "file": "plugins/superstack/hooks/verify-gate.py",
+   "find": "    if код != 1:\n        return сказать_один_раз(",
+   "replace": "    if False:\n        return сказать_один_раз(",
    "why": "непонятный код возврата тихо приравнивается к «прошло»: непроверенное подаётся как чистый результат"
   },
   {
    "id": "gate.detail-dropped",
-   "file": "plugins/superstack/hooks/verify-gate.sh",
-   "find": "  detail=$(awk 'NR<=40 { print substr($0, 1, 300) }' \"$ERRF\" 2>/dev/null || printf '')",
-   "replace": "  detail=''",
+   "file": "plugins/superstack/hooks/verify-gate.py",
+   "find": "    if хвост:\n        причина.append(хвост)",
+   "replace": "    if False:\n        причина.append(хвост)",
    "why": "причина блокировки перестаёт нести вывод проверки: модели говорят «почини», не говоря что именно красное"
   },
   {
    "id": "gate.verify-path-wrong",
-   "file": "plugins/superstack/hooks/verify-gate.sh",
-   "find": "VERIFY=\"$(dirname \"$0\")/../tools/verify.py\"",
-   "replace": "VERIFY=\"$(dirname \"$0\")/verify.py\"",
+   "file": "plugins/superstack/hooks/verify-gate.py",
+   "find": "    verify = Path(__file__).resolve().parent.parent / \"tools\" / \"verify.py\"",
+   "replace": "    verify = Path(os.environ.get(\"CLAUDE_PLUGIN_ROOT\", \".\")) / \"tools\" / \"verify.py\"",
    "why": "хук ищет проверку не там, где она лежит: гейт молча вырождается в «не смог проверить» на каждой машине"
   },
   {
@@ -670,30 +670,30 @@
   },
   {
    "id": "precompact.no-copy-mechanism",
-   "file": "plugins/superstack/hooks/precompact.sh",
-   "find": "if cp \"$TRANSCRIPT\" \"$TMP\" 2>/dev/null; then",
-   "replace": "if false; then",
+   "file": "plugins/superstack/hooks/precompact.py",
+   "find": "        shutil.copyfile(src, tmp)",
+   "replace": "        pass",
    "why": "снята запись копии транскрипта: после компакции разговор потерян навсегда, а хук молча притворяется, что сохранил его"
   },
   {
    "id": "precompact.no-session-id-sanitization",
-   "file": "plugins/superstack/hooks/precompact.sh",
-   "find": "SAFE_ID=$(printf '%s' \"$SESSION_ID\" | tr -cd 'A-Za-z0-9_-')",
-   "replace": "SAFE_ID=\"$SESSION_ID\"",
+   "file": "plugins/superstack/hooks/precompact.py",
+   "find": "    чистое = re.sub(r\"[^A-Za-z0-9_-]\", \"\", session_id or \"\")",
+   "replace": "    чистое = (session_id or \"\")",
    "why": "снята очистка session_id: значение вроде ../../evil выводит запись копии за пределы каталога состояния или ломает запись вовсе"
   },
   {
    "id": "precompact.disable-flag-ignored",
-   "file": "plugins/superstack/hooks/precompact.sh",
-   "find": "if [ \"${SUPERSTACK_DISABLE:-}\" = \"1\" ]; then\n  exit 0\nfi",
-   "replace": "if false; then\n  exit 0\nfi",
+   "file": "plugins/superstack/hooks/precompact.py",
+   "find": "    if os.environ.get(\"SUPERSTACK_DISABLE\") == \"1\":\n        return 0",
+   "replace": "    if False:\n        return 0",
    "why": "снят аварийный выключатель: SUPERSTACK_DISABLE=1 перестаёт останавливать хук, диск пишется вопреки явному запрету"
   },
   {
    "id": "precompact.unbounded-snapshot-growth",
-   "file": "plugins/superstack/hooks/precompact.sh",
-   "find": "ls -1t \"$DIR\"/*.jsonl 2>/dev/null | sed -n \"$((KEEP + 1)),\\$p\" |",
-   "replace": "ls -1t \"$DIR\"/*.jsonl 2>/dev/null | sed -n \"$((KEEP + 999999)),\\$p\" |",
+   "file": "plugins/superstack/hooks/precompact.py",
+   "find": "    for старый in снимки[сколько:]:",
+   "replace": "    for старый in []:",
    "why": "потолок KEEP перестаёт подрезать старые снимки: каталог состояния растёт без ограничения на активном пользователе"
   },
   {
@@ -1007,29 +1007,29 @@
   {
    "id": "lesson.hook-unwired",
    "file": "plugins/superstack/hooks/hooks.json",
-   "find": "sh \\\"${CLAUDE_PLUGIN_ROOT}/hooks/session-lesson.sh\\\"",
-   "replace": "sh \\\"${CLAUDE_PLUGIN_ROOT}/hooks/never-called.sh\\\"",
+   "find": "python3 \\\"${CLAUDE_PLUGIN_ROOT}/hooks/session-lesson.py\\\"",
+   "replace": "true \\\"${CLAUDE_PLUGIN_ROOT}/hooks/session-lesson.py\\\"",
    "why": "спусковой крючок памяти отключён: журнал построен целиком и снова стоит пустым — механизм без вызова не работает так же, как отсутствующий, но выглядит построенным"
   },
   {
    "id": "lesson.bar-not-stated",
-   "file": "plugins/superstack/hooks/session-lesson.sh",
-   "find": "printf '%s' '--failure ... --deadend ... . Не все три — НЕ ЗАПИСЫВАЙ и не упоминай: '",
-   "replace": "printf '%s' '--failure ... --deadend ... . Записывай всё подряд: '",
+   "file": "plugins/superstack/hooks/session-lesson.py",
+   "find": "    \"--failure ... --deadend ... . Не все три — НЕ ЗАПИСЫВАЙ и не упоминай: \"",
+   "replace": "    \"--failure ... --deadend ... . \"",
    "why": "исчезает разрешение молчать: хук вынуждает записать что-нибудь каждый ход, память наполняется шумом, а шумную память перестают читать — она умирает тише, чем пустая"
   },
   {
    "id": "lesson.printf-eats-the-keys",
-   "file": "plugins/superstack/hooks/session-lesson.sh",
-   "find": "printf '%s' '--failure",
-   "replace": "printf '--failure",
+   "file": "plugins/superstack/hooks/session-lesson.py",
+   "find": "\"--failure ... --deadend ... . Не все три",
+   "replace": "\"--deadend ... . Не все три",
    "why": "строка, начинающаяся с «--», снова принимается printf за опцию: половина команды молча пропадает, и агент получает инструкцию без ключей"
   },
   {
    "id": "lesson.no-tool-still-asks",
-   "file": "plugins/superstack/hooks/session-lesson.sh",
-   "find": "if [ ! -f \"$LEARN\" ]; then",
-   "replace": "if false; then",
+   "file": "plugins/superstack/hooks/session-lesson.py",
+   "find": "    if not learn.is_file():",
+   "replace": "    if False:",
    "why": "вопрос задаётся, когда инструмента нет: человек читает просьбу записать урок и не находит куда"
   },
   {
@@ -1713,44 +1713,44 @@
   },
   {
    "id": "lesson.asks-on-every-turn",
-   "file": "plugins/superstack/hooks/session-lesson.sh",
-   "find": "  if [ -z \"$CHANGED\" ]; then\n    exit 0\n  fi",
-   "replace": "  if [ -z \"$CHANGED\" ]; then\n    :\n  fi",
+   "file": "plugins/superstack/hooks/session-lesson.py",
+   "find": "        if ломают_дерево(корень) or not что_то_менялось(отметка, корень):\n            return 0",
+   "replace": "        if ломают_дерево(корень):\n            return 0",
    "why": "вопрос про урок снова задаётся на ходу без единого изменения — агент обязан ответить, ответ порождает новый Stop, и разговор встаёт в петлю коротких реплик"
   },
   {
    "id": "lesson.mark-never-set",
-   "file": "plugins/superstack/hooks/session-lesson.sh",
-   "find": ": > \"$STAMP\" 2>/dev/null || true",
-   "replace": "true",
+   "file": "plugins/superstack/hooks/session-lesson.py",
+   "find": "        отметка.write_text(\"\", encoding=\"utf-8\")",
+   "replace": "        pass",
    "why": "отметка времени не ставится — точки отсчёта нет, и хук навсегда остаётся в режиме «спрашивать каждый ход»"
   },
   {
    "id": "lesson.disabled-hook-moves-the-mark",
-   "file": "plugins/superstack/hooks/session-lesson.sh",
-   "find": "if [ \"${SUPERSTACK_DISABLE:-}\" = \"1\" ]; then\n  exit 0\nfi",
-   "replace": "if [ \"${SUPERSTACK_DISABLE:-}\" = \"1\" ]; then\n  mkdir -p \"${SUPERSTACK_STATE_DIR:-$HOME/.claude/superstack}\" 2>/dev/null || true\n  : > \"${SUPERSTACK_STATE_DIR:-$HOME/.claude/superstack}/last-lesson-ask\" 2>/dev/null || true\n  exit 0\nfi",
+   "file": "plugins/superstack/hooks/session-lesson.py",
+   "find": "    if os.environ.get(\"SUPERSTACK_DISABLE\") == \"1\":\n        return True",
+   "replace": "    if False:\n        return True",
    "why": "выключенный хук сдвигает точку отсчёта — вся работа, сделанная при выключенном хуке, перестаёт считаться изменением, и первый же урок после включения теряется"
   },
   {
    "id": "scope.lesson-hook-runs-everywhere",
-   "file": "plugins/superstack/hooks/session-lesson.sh",
-   "find": "enabled_here || exit 0",
-   "replace": "enabled_here || true",
+   "file": "plugins/superstack/hooks/session-lesson.py",
+   "find": "    if not позвали_здесь(корень):\n        return 0",
+   "replace": "    if False:\n        return 0",
    "why": "хук урока снова срабатывает в КАЖДОМ проекте на машине — плагины стоят глобально, и человек, пишущий в соседнем каталоге что-то своё, получает вопросы от системы, которую там не звал"
   },
   {
    "id": "scope.verify-gate-runs-everywhere",
-   "file": "plugins/superstack/hooks/verify-gate.sh",
-   "find": "enabled_here || exit 0",
-   "replace": "enabled_here || true",
+   "file": "plugins/superstack/hooks/verify-gate.py",
+   "find": "    if not позвали_здесь(корень):\n        return 0",
+   "replace": "    if False:\n        return 0",
    "why": "гейт верификации снова работает в чужих проектах — самый дорогой случай: он может НЕ ДАТЬ ЗАКРЫТЬ ХОД там, где нет ни тестов, ни плана"
   },
   {
    "id": "scope.precompact-runs-everywhere",
-   "file": "plugins/superstack/hooks/precompact.sh",
-   "find": "enabled_here || exit 0",
-   "replace": "enabled_here || true",
+   "file": "plugins/superstack/hooks/precompact.py",
+   "find": "    if not позвали_здесь(корень):\n        return 0",
+   "replace": "    if False:\n        return 0",
    "why": "снимки транскриптов снова сохраняются из любого проекта на машине, включая те, где систему не звали"
   },
   {
@@ -1965,9 +1965,9 @@
   },
   {
    "id": "lesson.watchdog-counts-system-noise",
-   "file": "plugins/superstack/hooks/session-lesson.sh",
-   "find": "  if [ -f \"$STATE/../superstack/.mutation-lock\" ] || \\\n     [ -f \"./.mutation-lock\" ]; then\n    exit 0\n  fi",
-   "replace": "  if false; then\n    exit 0\n  fi",
+   "file": "plugins/superstack/hooks/session-lesson.py",
+   "find": "    return (состояние() / \".mutation-lock\").is_file() \\\n        or (корень / \".mutation-lock\").is_file()",
+   "replace": "    return False",
    "why": "сторож урока снова считает правки прогона мутаций работой человека — на каждом разговорном ходе спрашивает про урок, и разговор превращается в петлю коротких реплик"
   },
   {
@@ -2379,8 +2379,8 @@
   {
    "id": "merge.gate-hook-unwired",
    "file": "plugins/superstack/hooks/hooks.json",
-   "find": "\"command\": \"sh \\\"${CLAUDE_PLUGIN_ROOT}/hooks/verify-gate.sh\\\"\",",
-   "replace": "\"command\": \"sh \\\"${CLAUDE_PLUGIN_ROOT}/hooks/session-lesson.sh\\\"\",",
+   "find": "python3 \\\"${CLAUDE_PLUGIN_ROOT}/hooks/verify-gate.py\\\"",
+   "replace": "true \\\"${CLAUDE_PLUGIN_ROOT}/hooks/verify-gate.py\\\"",
    "why": "гейт верификации потерян при сведении трёх hooks.json в один: файл на месте, код рабочий, набор зелёный — и ход закрывается без единой проверки. Ровно этот отказ слияние и могло внести молча"
   },
   {
@@ -2413,16 +2413,16 @@
   },
   {
    "id": "scope.symlinked-path-not-resolved",
-   "file": "plugins/superstack/hooks/session-lesson.sh",
-   "find": "    real=$(CDPATH= cd -- \"$line\" 2>/dev/null && pwd -P) || real=\"\"",
-   "replace": "    real=\"\"",
+   "file": "plugins/superstack/hooks/session-lesson.py",
+   "find": "            реальный = str(Path(строка).resolve()).rstrip(\"/\") + \"/\"",
+   "replace": "            реальный = строка.rstrip(\"/\") + \"/\"",
    "why": "гейт области снова сверяет пути буквально: отметка записана разрешённым путём, а оболочка отдаёт $PWD как есть — у человека, чей проект под симлинком, отметка стоит и НИ ОДИН хук не срабатывает. Ни гейта верификации, ни страховки памяти, и узнать об этом неоткуда"
   },
   {
    "id": "brake.block-does-not-name-the-way-out",
-   "file": "plugins/superstack/hooks/verify-gate.sh",
-   "find": "  printf 'Если это мешает человеку — передай ему дословно: чтобы остановить проверки, достаточно сказать «останови суперстек». Не предлагай ему переменные окружения и команды оболочки.\\n'",
-   "replace": "  :",
+   "file": "plugins/superstack/hooks/verify-gate.py",
+   "find": "        \"Если это мешает человеку — передай ему дословно: чтобы остановить \"\n        \"проверки, достаточно сказать «останови суперстек». Не предлагай ему \"\n        \"переменные окружения и команды оболочки.\",",
+   "replace": "        \"Если это мешает человеку — разберись сам.\",",
    "why": "блок гейта перестаёт называть выход — человек читает «ход не закрывается» и остаётся без способа это прекратить: оба прежних выключателя требуют терминала, которым он не владеет"
   },
   {
@@ -3222,6 +3222,13 @@
    "find": "    if os.name == \"nt\":",
    "replace": "    if False:",
    "why": "на Windows чужой замок объявляется мёртвым: второй прогон ломает дерево тому, кто в этот момент меряет"
+  },
+  {
+   "id": "lesson.path-quoted-only-sometimes",
+   "file": "plugins/superstack/hooks/session-lesson.py",
+   "find": "    команда = '\"%s\"' % str(learn).replace('\"', '\\\\\"')",
+   "replace": "    команда = str(learn)",
+   "why": "путь печатается без кавычек: в каталоге с пробелом скопированная команда не работает, а форма вывода начинает зависеть от места установки"
   }
  ]
 }

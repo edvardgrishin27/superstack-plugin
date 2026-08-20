@@ -36,15 +36,19 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from paths import PKG, REPO, at, packages  # noqa: E402
 
 ROOT = REPO
-HOOK = at("hooks", "first-run.sh")
-GATE = at("hooks", "verify-gate.sh")
+#: Хук переехал на Python: `sh` был лишней зависимостью, а без
+#: python3 продукт не работает вообще. `.sh` остался обёрткой.
+HOOK = at("hooks", "first-run.py")
+#: Гейт переехал на Python вместе с остальными хуками: `sh` был лишней
+#: зависимостью, а экранирование JSON руками — самой хрупкой его частью.
+GATE = at("hooks", "verify-gate.py")
 SKILL = at("skills", "superstack", "SKILL.md")
 MANIFESTS = [d / ".claude-plugin" / "plugin.json" for d in packages()]
 ENV = {**os.environ, "SUPERSTACK_IGNORE_PAUSE": "1"}
 
 #: команда отказа, как она напечатана в подсказке. Путь может содержать
 #: пробелы, поэтому «до слова done», а не «одно слово».
-REFUSAL_RE = re.compile(r"(sh .+? done)")
+REFUSAL_RE = re.compile(r"(python3 .+? done)")
 
 
 def _load(name: str, path: Path):
@@ -71,7 +75,7 @@ def run_hook(script: Path, state: Path, *args, disable: str = "",
         env["SUPERSTACK_DISABLE"] = disable
     if env_extra:
         env.update(env_extra)
-    return subprocess.run(["sh", str(script)] + list(args),
+    return subprocess.run([sys.executable, str(script)] + list(args),
                           capture_output=True, text=True, timeout=60, env=env,
                           cwd=str(cwd) if cwd else None)
 
@@ -128,7 +132,7 @@ class TestFirstRunHook(unittest.TestCase):
         или нет."""
         d = Path(self.tmp.name) / dirname
         d.mkdir(parents=True)
-        dst = d / "first-run.sh"
+        dst = d / "first-run.py"
         shutil.copy2(HOOK, dst)
         return dst
 
@@ -186,7 +190,7 @@ class TestFirstRunHook(unittest.TestCase):
         state = Path(self.tmp.name) / "st-quote"
         out = run_hook(script, state).stdout
         data = json.loads(out)  # именно здесь падал неэкранированный путь
-        self.assertIn("first-run.sh",
+        self.assertIn("first-run.py",
                       data["hookSpecificOutput"]["additionalContext"])
         cmd = self.refusal_command(script, Path(self.tmp.name) / "st-quote2")
         r = subprocess.run(
@@ -238,20 +242,29 @@ class TestFirstRunHook(unittest.TestCase):
         Счётчик подкладывается заранее, иначе хук на первом запуске отвечает
         «0» не читая файла, и про чтение спросить будет нечего.
         """
+        # Наблюдается ИСХОД, а не механизм. Прежняя версия подменяла `cat` на
+        # PATH и смотрела, читается ли счётчик под замком, — способ, который
+        # работал ровно пока хук был скриптом оболочки. Питоновский читает файл
+        # сам, никакого `cat` не зовёт, и наблюдатель молчал бы на исправном
+        # коде. Проверка исхода не зависит от того, чем хук написан, и ловит
+        # ровно то, ради чего замок стоит: одновременные окна не должны
+        # напечатать больше, чем осталось до потолка.
+        import concurrent.futures as futures
+
         self.state.mkdir(parents=True)
-        (self.state / "first-run.count").write_text("1", encoding="utf-8")
-        bindir, witness = self.witness_cat()
-        r = run_hook(HOOK, self.state, env_extra={
-            "PATH": f"{bindir}{os.pathsep}{os.environ['PATH']}",
-            "SS_LOCK": str(self.state / "first-run.lock"),
-            "SS_WITNESS": str(witness),
-        })
-        self.assertTrue(r.stdout.strip(),
-                        "хук промолчал — про его критическую секцию нечего спросить")
-        seen = witness.read_text(encoding="utf-8").splitlines() if witness.exists() else []
-        self.assertTrue(seen, "счётчик не читался ни разу — наблюдать нечего")
-        self.assertEqual(seen, ["взят"] * len(seen),
-                         f"счётчик читался без замка: {seen}")
+        (self.state / "first-run.count").write_text("2", encoding="utf-8")
+
+        def запуск(_):
+            return run_hook(HOOK, self.state).stdout.strip()
+
+        with futures.ThreadPoolExecutor(max_workers=8) as пул:
+            ответы = [о for о in пул.map(запуск, range(8)) if о]
+
+        self.assertEqual(len(ответы), 1,
+                         f"до потолка оставалось одно предложение, напечатано "
+                         f"{len(ответы)} — счётчик читался без замка")
+        self.assertEqual((self.state / "first-run.count").read_text("utf-8").strip(),
+                         "3", "счётчик не досчитал до потолка")
 
     def test_a_lock_held_by_someone_else_silences_it(self):
         """Не взяли замок — молчим, и чужой замок не трогаем.
@@ -404,7 +417,7 @@ class TestFirstRunHook(unittest.TestCase):
     def test_tells_how_to_turn_it_off(self):
         ctx = json.loads(hook(self.state).stdout)["hookSpecificOutput"]["additionalContext"]
         self.assertIn("done", ctx)
-        self.assertIn("first-run.sh", ctx)
+        self.assertIn("first-run.py", ctx)
 
     def test_always_exits_zero(self):
         """SessionStart блокировать не умеет, но ненулевой код показывает
@@ -521,7 +534,7 @@ class TestVerifyGateHook(unittest.TestCase):
         self.plug = base / "plug"
         (self.plug / "hooks").mkdir(parents=True)
         (self.plug / "tools").mkdir(parents=True)
-        self.script = self.plug / "hooks" / "verify-gate.sh"
+        self.script = self.plug / "hooks" / "verify-gate.py"
         shutil.copy2(GATE, self.script)
         #: отметка «подставная проверка была запущена». Пустой файл — улика,
         #: что хук дошёл до запуска; его отсутствие — что не дошёл.
@@ -584,7 +597,7 @@ class TestVerifyGateHook(unittest.TestCase):
                 str(project or self.project) + "\n", encoding="utf-8")
         except OSError:
             pass
-        return subprocess.run(["sh", str(script or self.script)],
+        return subprocess.run([sys.executable, str(script or self.script)],
                               input=self.stdin_for() if stdin is None else stdin,
                               capture_output=True, text=True, timeout=timeout,
                               env=env)
@@ -884,7 +897,7 @@ class TestHookWiring(unittest.TestCase):
         self.assertEqual([e["matcher"] for e in entries], ["startup"],
                          "resume и compact — тот же человек посреди работы, не новый")
         cmd = entries[0]["hooks"][0]["command"]
-        self.assertIn("first-run.sh", cmd)
+        self.assertIn("first-run.py", cmd)
         self.assertIn("CLAUDE_PLUGIN_ROOT", cmd)
         self.assertTrue(HOOK.is_file())
 
@@ -894,12 +907,12 @@ class TestHookWiring(unittest.TestCase):
         пожеланием.
 
         Объявление живёт у guard: ${CLAUDE_PLUGIN_ROOT} указывает на СВОЙ пакет,
-        и Stop, объявленный в install, искал бы verify-gate.sh у себя.
+        и Stop, объявленный в install, искал бы verify-gate.py у себя.
         """
         cfg = json.loads((PKG / "hooks" / "hooks.json").read_text("utf-8"))
         self.assertIn("Stop", cfg["hooks"], "гейт не подключён ни к чему")
         cmds = [h["command"] for e in cfg["hooks"]["Stop"] for h in e["hooks"]]
-        self.assertTrue(any("verify-gate.sh" in c for c in cmds), cmds)
+        self.assertTrue(any("verify-gate.py" in c for c in cmds), cmds)
         self.assertTrue(all("CLAUDE_PLUGIN_ROOT" in c for c in cmds),
                         "путь к хуку не переживёт установку плагина в другой каталог")
         self.assertTrue(GATE.is_file())
@@ -910,7 +923,7 @@ class TestHookWiring(unittest.TestCase):
         проверить, что SessionStart на месте у своего владельца."""
         cfg = json.loads((PKG / "hooks" / "hooks.json").read_text("utf-8"))
         cmds = [h["command"] for e in cfg["hooks"]["SessionStart"] for h in e["hooks"]]
-        self.assertTrue(any("first-run.sh" in c for c in cmds), cmds)
+        self.assertTrue(any("first-run.py" in c for c in cmds), cmds)
 
     def test_claude_code_does_not_kill_the_gate_before_it_can_speak(self):
         """Таймаут в hooks.json обязан пережить собственный бюджет хука.
@@ -925,13 +938,17 @@ class TestHookWiring(unittest.TestCase):
         # session-lesson со своими законными 10 секундами, и «самый короткий»
         # стал измерять не тот механизм — тест падал на верной конфигурации.
         сроки = [h.get("timeout", 600) for e in cfg["hooks"]["Stop"]
-                 for h in e["hooks"] if "verify-gate.sh" in h["command"]]
+                 for h in e["hooks"] if "verify-gate.py" in h["command"]]
         self.assertEqual(len(сроки), 1,
                          "гейт объявлен не один раз — сроки перестают быть "
                          f"сравнимыми: {сроки}")
         outer = сроки[0]
-        budget = int(re.search(r'SUPERSTACK_GATE_TIMEOUT:-(\d+)',
-                               GATE.read_text("utf-8")).group(1))
+        # Бюджет читается ИЗ КОДА хука, а не из формы его записи в оболочке:
+        # прежний якорь `SUPERSTACK_GATE_TIMEOUT:-120` был синтаксисом sh и
+        # исчез вместе с портом. Проверка привязывается к значению, которое
+        # хук реально использует.
+        budget = int(re.search(r"^БЮДЖЕТ = (\d+)", GATE.read_text("utf-8"),
+                               re.M).group(1))
         self.assertGreater(outer, budget + 2,
                            f"внешний таймаут {outer}с не переживает бюджет хука {budget}с")
 

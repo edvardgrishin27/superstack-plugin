@@ -288,8 +288,8 @@
    "layer": "дистрибуция",
    "mechanism": "вход для того, кто не знает про команды: система заговаривает первой, но спрашивает",
    "evidence": {
-    "file": "plugins/superstack/hooks/first-run.sh",
-    "contains": "additionalContext"
+    "file": "plugins/superstack/hooks/first-run.py",
+    "contains": "\"hookEventName\": \"SessionStart\""
    }
   },
   {
@@ -297,8 +297,8 @@
    "layer": "дистрибуция",
    "mechanism": "потолок напоминаний и выключатель по отказу",
    "evidence": {
-    "file": "plugins/superstack/hooks/first-run.sh",
-    "contains": "MAX=3"
+    "file": "plugins/superstack/hooks/first-run.py",
+    "contains": "ПОТОЛОК = 3"
    }
   },
   {
@@ -522,8 +522,8 @@
    "layer": "дисциплина",
    "mechanism": "аварийный выключатель первой строкой КАЖДОГО хука, а не одного",
    "evidence": {
-    "file": "plugins/superstack/hooks/verify-gate.sh",
-    "contains": "SUPERSTACK_DISABLE"
+    "file": "plugins/superstack/hooks/verify-gate.py",
+    "contains": "if os.environ.get(\"SUPERSTACK_DISABLE\") == \"1\":"
    }
   },
   {
@@ -567,8 +567,8 @@
    "layer": "L7 эволюция",
    "mechanism": "вопрос «что забрать навсегда» задаётся ХУКОМ в конце хода: журнал был построен целиком и стоял пустым, потому что его никто не вызывал",
    "evidence": {
-    "file": "plugins/superstack/hooks/session-lesson.sh",
-    "contains": "hookEventName"
+    "file": "plugins/superstack/hooks/session-lesson.py",
+    "contains": "\"hookEventName\": \"Stop\""
    }
   },
   {
@@ -1137,8 +1137,8 @@
    "layer": "L1 конституция",
    "mechanism": "гейт области сверяет пути с обеих сторон разрешёнными: один каталог под двумя именами ведёт себя одинаково",
    "evidence": {
-    "file": "plugins/superstack/hooks/verify-gate.sh",
-    "contains": "real=$(CDPATH= cd -- \"$line\""
+    "file": "plugins/superstack/hooks/verify-gate.py",
+    "contains": "реальный = str(Path(строка).resolve())"
    }
   },
   {
@@ -1155,7 +1155,7 @@
    "layer": "L5 гарантии",
    "mechanism": "блок гейта называет выход там, где человек застрял, — фразой, а не переменной окружения",
    "evidence": {
-    "file": "plugins/superstack/hooks/verify-gate.sh",
+    "file": "plugins/superstack/hooks/verify-gate.py",
     "contains": "останови суперстек"
    }
   },
@@ -1335,8 +1335,8 @@
    "layer": "L7 эволюция",
    "mechanism": "Stop-хук урока молчит на ходе без работы и при замке мутаций",
    "evidence": {
-    "file": "plugins/superstack/hooks/session-lesson.sh",
-    "contains": "-newer \"$STAMP\""
+    "file": "plugins/superstack/hooks/session-lesson.py",
+    "contains": "def что_то_менялось"
    }
   },
   {

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Тесты страховки памяти на компакции (hooks/precompact.sh, hooks/hooks.json).
+"""Тесты страховки памяти на компакции (hooks/precompact.py, hooks/hooks.json).
 
 Зачем этот файл существует.
 
@@ -37,7 +37,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from paths import PKG, REPO, at  # noqa: E402
 
 ROOT = REPO
-HOOK = at("hooks", "precompact.sh")
+#: Хук переехал на Python: `sh` был лишней зависимостью, а разбор
+#: JSON на sed спотыкался об экранированную кавычку в значении.
+HOOK = at("hooks", "precompact.py")
 HOOKS_JSON = PKG / "hooks" / "hooks.json"
 
 
@@ -76,7 +78,7 @@ class PrecompactFixture(unittest.TestCase):
             st.mkdir(parents=True, exist_ok=True)
             (st / "projects").write_text(os.getcwd() + "\n", encoding="utf-8")
         return subprocess.run(
-            ["sh", str(HOOK)],
+            [sys.executable, str(HOOK)],
             input=input_text,
             capture_output=True, text=True, timeout=30,
             env=use,
@@ -178,7 +180,7 @@ class TestHookNeverBreaksCompaction(PrecompactFixture):
         self.assertEqual(r.returncode, 0, r.stderr)
 
     def test_malformed_json_does_not_crash(self):
-        r = subprocess.run(["sh", str(HOOK)], input="{not valid json at all",
+        r = subprocess.run([sys.executable, str(HOOK)], input="{not valid json at all",
                            capture_output=True, text=True, timeout=30,
                            env=self.env)
         self.assertEqual(r.returncode, 0, r.stderr)
@@ -268,7 +270,12 @@ class TestHooksJsonDeclaresPreCompact(unittest.TestCase):
         cfg = json.loads(HOOKS_JSON.read_text("utf-8"))["hooks"]
         названы = {re.search(r'hooks/([\w.-]+)', h["command"]).group(1)
                    for entries in cfg.values() for e in entries for h in e["hooks"]}
-        на_диске = {f.name for f in (PKG / "hooks").glob("*.sh")}
+        на_диске = {f.name for f in (PKG / "hooks").glob("*")
+                    if f.suffix in (".sh", ".py")
+                    # Обёртка — не реализация: она лишь зовёт соседний файл.
+                    # Требовать объявления и от неё значило бы требовать
+                    # звать хук дважды.
+                    and "exec python3" not in f.read_text("utf-8")}
         self.assertEqual(
             на_диске - названы, set(),
             "скрипты лежат в hooks/, но их не зовёт ни одно событие — "
@@ -282,7 +289,7 @@ class TestHooksJsonDeclaresPreCompact(unittest.TestCase):
             for entry in entries
             for h in entry["hooks"]
         ]
-        self.assertTrue(any("precompact.sh" in c for c in commands), commands)
+        self.assertTrue(any("precompact.py" in c for c in commands), commands)
 
     def test_precompact_script_file_exists_and_is_referenced_relative_to_plugin_root(self):
         self.assertTrue(HOOK.is_file(), "hooks.json ссылается на несуществующий файл")
