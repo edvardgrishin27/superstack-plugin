@@ -25,7 +25,7 @@ import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from paths import PKG  # noqa: E402
+from paths import PKG, skill_text  # noqa: E402
 
 TOOL = PKG / "tools" / "plain_ru.py"
 _s = importlib.util.spec_from_file_location("ss_plain_ru", TOOL)
@@ -159,8 +159,9 @@ class TestTheSkillKeepsItPlain(unittest.TestCase):
 
     def setUp(self):
         from paths import REPO
-        self.t = (PKG / "skills" / "go"
-                  / "SKILL.md").read_text("utf-8")
+        # Скилл — это стержень ПЛЮС вынесенные фазы: утверждение «сказано
+        # в скилле» после выноса перестало быть утверждением об одном файле.
+        self.t = skill_text("go")
 
     def test_the_skill_names_the_plain_russian_check(self):
         self.assertIn("plain_ru.py", self.t)

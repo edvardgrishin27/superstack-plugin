@@ -21,6 +21,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from paths import PKG, REPO, skill_text  # noqa: E402
 
+#: Стержень скилла. Утверждения «сказано в скилле» проверяются по СКЛЕЙКЕ
+#: (GO_ALL): после выноса фаз один файл перестал быть всем скиллом.
 GO = PKG / "skills" / "go" / "SKILL.md"
 #: Условные фазы вынесены в go/phases/*.md — «сказано в скилле» это
 #: теперь про скилл целиком, а не про один файл.
@@ -76,7 +78,7 @@ class TestHowQuestionsAreAsked(unittest.TestCase):
     """
 
     def setUp(self):
-        self.t = GO.read_text("utf-8")
+        self.t = GO_ALL
 
     def test_three_rounds_not_a_questionnaire(self):
         self.assertIn("Три раунда", self.t)
@@ -181,7 +183,7 @@ class TestConfirmationLevelIsTheHumansChoice(unittest.TestCase):
     """
 
     def setUp(self):
-        self.t = GO.read_text("utf-8")
+        self.t = GO_ALL
 
     def test_the_ladder_exists_with_three_rungs(self):
         self.assertIn("Ступень подтверждений", self.t)
@@ -214,7 +216,7 @@ class TestTheRunLeavesASummaryInTheProject(unittest.TestCase):
     """
 
     def setUp(self):
-        self.t = GO.read_text("utf-8")
+        self.t = GO_ALL
 
     def test_the_summary_goes_to_project_memory(self):
         self.assertIn("Сводка остаётся в проекте", self.t)

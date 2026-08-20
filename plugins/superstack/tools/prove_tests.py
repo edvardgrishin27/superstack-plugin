@@ -60,6 +60,12 @@ def _lock(root: Path) -> Path:
 
 
 def _alive(pid: int) -> bool:
+    if os.name == "nt":
+        # На Windows сигнала 0 нет: `os.kill` там убивает процесс по-настоящему.
+        # Спросить «жив ли он» нечем, и выбор направления ошибки здесь не
+        # технический, а по цене: счесть чужой замок мёртвым значит сломать
+        # дерево тому, кто как раз меряет. Поэтому «не знаю» = «жив».
+        return True
     try:
         os.kill(pid, 0)
     except ProcessLookupError:
@@ -97,7 +103,12 @@ def release(root: Path) -> None:
 
 def run_tests(root: Path, cmd: str) -> tuple:
     try:
-        p = subprocess.run(shlex.split(cmd), cwd=str(root), capture_output=True,
+        # posix=False на Windows: в POSIX-режиме обратный слэш считается
+        # экранированием, и `C:\проект\npm.cmd` разбирается в `C:проектnpm.cmd`.
+        # Команда не найдётся, а сообщение будет про отсутствующий файл — то
+        # есть человек пойдёт искать поломку не там.
+        p = subprocess.run(shlex.split(cmd, posix=os.name != "nt"),
+                           cwd=str(root), capture_output=True,
                            text=True, timeout=TIMEOUT,
                            env={**os.environ, "NO_COLOR": "1", "CI": "1"})
     except (OSError, subprocess.TimeoutExpired) as e:

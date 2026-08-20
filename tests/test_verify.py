@@ -20,7 +20,7 @@ import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from paths import REPO, at  # noqa: E402
+from paths import REPO, at, skill_text  # noqa: E402
 
 ROOT = REPO
 # Счётчик попыток (tools/verify.py::apply_attempt_ceiling) пишет на диск —
@@ -481,7 +481,7 @@ class TestOutputIsMachineReadable(ProjectFixture):
 
 class TestSkillContract(unittest.TestCase):
     def setUp(self):
-        self.text = (at("skills", "go", "SKILL.md")).read_text("utf-8")
+        self.text = skill_text("go")
 
     def test_skill_calls_the_gate(self):
         """Проверяется ВЫЗОВ, а не буквальная строка пути.

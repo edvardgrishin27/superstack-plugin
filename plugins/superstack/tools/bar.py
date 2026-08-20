@@ -111,7 +111,11 @@ def _argv(root: Path, g: dict) -> tuple:
         return [], ("ворота объявлены, но запускать нечего: нет ни `run`, "
                     "ни `builtin`")
     try:
-        return shlex.split(cmd), ""
+        # posix=False на Windows: в POSIX-режиме обратный слэш считается
+        # экранированием, и `C:\проект\npm.cmd` разбирается в `C:проектnpm.cmd`.
+        # Команда не найдётся, а сообщение будет про отсутствующий файл — то
+        # есть человек пойдёт искать поломку не там.
+        return shlex.split(cmd, posix=os.name != "nt"), ""
     except ValueError as e:
         return [], f"команда не разобрана ({e})"
 

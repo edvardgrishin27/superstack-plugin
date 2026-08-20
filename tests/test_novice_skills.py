@@ -175,8 +175,8 @@ class TestTheBrakeWorksFromAPhrase(unittest.TestCase):
                               "подтянется, когда его позовут этими словами")
 
     def test_the_brake_calls_the_script_that_confirms_the_flag(self):
-        self.assertIn('"$CLAUDE_PLUGIN_ROOT/tools/pause.sh" on', self.t)
-        self.assertIn('"$CLAUDE_PLUGIN_ROOT/tools/pause.sh" off', self.t)
+        self.assertIn('"$CLAUDE_PLUGIN_ROOT/tools/pause.py" on', self.t)
+        self.assertIn('"$CLAUDE_PLUGIN_ROOT/tools/pause.py" off', self.t)
 
     def test_the_block_message_names_the_way_out(self):
         """Выход назван ТАМ, где человек застрял.

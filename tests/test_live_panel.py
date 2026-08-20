@@ -27,7 +27,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from paths import PKG, REPO  # noqa: E402
+from paths import PKG, REPO, skill_text  # noqa: E402
 
 TOOL = PKG / "tools" / "live_panel.py"
 _s = importlib.util.spec_from_file_location("ss_live_panel", TOOL)
@@ -259,13 +259,11 @@ class TestTheSkillOpensThePanel(unittest.TestCase):
     """Панель, которую никто не открывает, — это файл на диске, а не панель."""
 
     def test_the_go_skill_starts_it(self):
-        t = (PKG / "skills" / "go"
-             / "SKILL.md").read_text("utf-8")
+        t = skill_text("go")
         self.assertIn("live_panel.py", t)
 
     def test_the_skill_records_the_phase(self):
-        t = (PKG / "skills" / "go"
-             / "SKILL.md").read_text("utf-8")
+        t = skill_text("go")
         self.assertIn('progress.py" phase', t,
                       "фаза нигде не записывается — панель покажет «не начато» "
                       "весь прогон")

@@ -25,7 +25,7 @@ import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from paths import PKG, REPO  # noqa: E402
+from paths import PKG, REPO, skill_text  # noqa: E402
 
 ENABLE = PKG / "tools" / "enable.py"
 _s = importlib.util.spec_from_file_location("ss_enable", ENABLE)
@@ -257,11 +257,10 @@ class TestTheGateIsInEveryAutomaticHook(unittest.TestCase):
         """Отметку ставят скиллы, НАЧИНАЮЩИЕ работу. `/what`, `/fix`, `/oops`
         её не ставят намеренно: они диагностика и откат, включать ими систему
         в чужом проекте не за что."""
-        for rel in ("plugins/superstack/skills/go/SKILL.md",
-                    "plugins/superstack/skills/superstack/SKILL.md"):
-            with self.subTest(skill=rel):
-                self.assertIn("enable.py", (REPO / rel).read_text("utf-8"),
-                              f"{rel} не отмечает проект — хуки останутся "
+        for имя in ("go", "superstack"):
+            with self.subTest(skill=имя):
+                self.assertIn("enable.py", skill_text(имя),
+                              f"{имя} не отмечает проект — хуки останутся "
                               "немыми там, где систему как раз позвали")
 
 

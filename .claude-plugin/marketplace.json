@@ -11,7 +11,7 @@
       "name": "superstack",
       "source": "./plugins/superstack",
       "description": "Вся система одним пакетом: /go от фразы до доказанного куска, четыре гейта проектирования, верификация кодом возврата, слепая приёмка, память и пульт новичка.",
-      "version": "0.4.0",
+      "version": "0.5.0",
       "license": "MIT",
       "category": "workflow"
     }

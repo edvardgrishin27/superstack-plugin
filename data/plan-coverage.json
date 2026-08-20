@@ -27,8 +27,8 @@
    "layer": "L0 рантайм",
    "mechanism": "тормоз-файл, работающий, когда агент не отвечает",
    "evidence": {
-    "file": "plugins/superstack/tools/pause.sh",
-    "contains": "PAUSE"
+    "file": "plugins/superstack/tools/pause.py",
+    "contains": "return Path.home() / \".claude\" / \"superstack\" / \"PAUSE\""
    }
   },
   {
@@ -108,7 +108,7 @@
    "layer": "L3 проектирование",
    "mechanism": "вход в стройку через спеку и блокирующий гейт плана",
    "evidence": {
-    "file": "plugins/superstack/skills/go/SKILL.md",
+    "file": "plugins/superstack/skills/go/phases/3-план.md",
     "contains": "Код не пишется, пока человек не сказал «да»"
    }
   },
@@ -126,8 +126,8 @@
    "layer": "L4 исполнение",
    "mechanism": "критерий приёмки формулируется ДО работы, а не после",
    "evidence": {
-    "file": "plugins/superstack/skills/go/SKILL.md",
-    "contains": "как проверить"
+    "file": "plugins/superstack/skills/go/phases/2-спека.md",
+    "contains": "как проверить\n(конкретная команда с ожидаемым результатом)"
    }
   },
   {
@@ -405,7 +405,7 @@
    "layer": "интерфейс",
    "mechanism": "интервью фронтиром: весь текущий срез вопросов разом, с приложенной рекомендацией",
    "evidence": {
-    "file": "plugins/superstack/skills/go/SKILL.md",
+    "file": "plugins/superstack/skills/go/phases/1-понять.md",
     "contains": "фронтир"
    }
   },
@@ -945,7 +945,7 @@
    "layer": "интерфейс",
    "mechanism": "ступень подтверждений: сколько раз система останавливается — выбор человека, но гейты, слепая приёмка и G4 не отключаются ни на одной",
    "evidence": {
-    "file": "plugins/superstack/skills/go/SKILL.md",
+    "file": "plugins/superstack/skills/go/phases/1-понять.md",
     "contains": "Ступень подтверждений"
    }
   },
@@ -1416,7 +1416,7 @@
    "layer": "L4 исполнение",
    "mechanism": "проверка заводится раньше кода: список работает заданием, а не отчётом задним числом",
    "evidence": {
-    "file": "plugins/superstack/skills/go/SKILL.md",
+    "file": "plugins/superstack/skills/go/phases/4-работа.md",
     "contains": "Сначала в список проверяемого, потом код"
    }
   },
@@ -2039,6 +2039,87 @@
    "evidence": {
     "file": "tools/gauntlet.py",
     "contains": "shutil.copytree(PLUG, копия"
+   }
+  },
+  {
+   "id": "BAR.skill-weight",
+   "layer": "планка",
+   "mechanism": "вес скилла на загрузке считает прибор: тот же потолок, что мы ставим чужой конституции, стоит и на нашей",
+   "evidence": {
+    "file": "tools/gauntlet.py",
+    "contains": "def gate_weight"
+   }
+  },
+  {
+   "id": "BAR.always-read-phase-counts",
+   "layer": "планка",
+   "mechanism": "фаза, читаемая всегда, входит в вес загрузки — вынести текст в файл и читать его каждый раз не считается облегчением",
+   "evidence": {
+    "file": "tools/gauntlet.py",
+    "contains": "ЧИТАЕТСЯ_ВСЕГДА"
+   }
+  },
+  {
+   "id": "BAR.two-numbers-not-one",
+   "layer": "планка",
+   "mechanism": "ворота плана называют два числа: сколько механизмов проверено поломкой и сколько только подстрокой",
+   "evidence": {
+    "file": "tools/gauntlet.py",
+    "contains": "только подстрокой"
+   }
+  },
+  {
+   "id": "PLAT.unverified-is-said-out-loud",
+   "layer": "дистрибуция",
+   "mechanism": "непроверенная платформа называется вслух на старте, а не выясняется человеком по непонятным ошибкам",
+   "evidence": {
+    "file": "plugins/superstack/tools/platform_check.py",
+    "contains": "def verdict"
+   }
+  },
+  {
+   "id": "PLAT.what-breaks-is-named",
+   "layer": "дистрибуция",
+   "mechanism": "на непроверенной платформе названо поимённо, что именно не работает — не «возможны проблемы»",
+   "evidence": {
+    "file": "plugins/superstack/tools/platform_check.py",
+    "contains": "ЗАВИСИТ_ОТ_ОБОЛОЧКИ"
+   }
+  },
+  {
+   "id": "PLAT.python-part-still-works",
+   "layer": "дистрибуция",
+   "mechanism": "питоновская часть остаётся рабочей там, где нет оболочки: инструменты не падают, а объявляют деградацию",
+   "evidence": {
+    "file": "plugins/superstack/tools/platform_check.py",
+    "contains": "def degraded"
+   }
+  },
+  {
+   "id": "PLAT.command-survives-backslashes",
+   "layer": "дистрибуция",
+   "mechanism": "команда проекта разбирается по правилам платформы: обратный слэш в пути не считается экранированием",
+   "evidence": {
+    "file": "plugins/superstack/tools/bar.py",
+    "contains": "posix=os.name != \"nt\""
+   }
+  },
+  {
+   "id": "PLAT.unknown-lock-means-alive",
+   "layer": "дистрибуция",
+   "mechanism": "там, где живость чужого процесса не спросить, замок считается живым — цена ошибки в другую сторону выше",
+   "evidence": {
+    "file": "plugins/superstack/tools/prove_tests.py",
+    "contains": "if os.name == \"nt\":"
+   }
+  },
+  {
+   "id": "L0.kill-switch-needs-no-shell",
+   "layer": "L0 основание",
+   "mechanism": "аварийная остановка не зависит от оболочки: она обязана срабатывать и там, где sh нет",
+   "evidence": {
+    "file": "plugins/superstack/tools/pause.sh",
+    "contains": "exec python3"
    }
   }
  ],

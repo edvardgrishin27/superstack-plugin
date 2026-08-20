@@ -27,7 +27,7 @@ import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from paths import PKG, REPO  # noqa: E402
+from paths import PKG, REPO, skill_text  # noqa: E402
 
 
 def _load(name, path):
@@ -86,7 +86,7 @@ class TestSkillsHaveNoPositionalParameters(unittest.TestCase):
         вызова, поэтому проверяется не отсутствие старой формы, а НАЛИЧИЕ
         новой в том же количестве.
         """
-        t = (PKG / "skills" / "go" / "SKILL.md").read_text("utf-8")
+        t = skill_text("go")
         self.assertNotIn('$(T ', t, "остался вызов через удалённую функцию")
         self.assertNotIn('"$W"', t, "остался вызов через удалённый резолвер")
         self.assertGreaterEqual(t.count('"$CLAUDE_PLUGIN_ROOT/tools/'), 20)

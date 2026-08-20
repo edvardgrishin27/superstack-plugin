@@ -530,24 +530,24 @@
   },
   {
    "id": "pause.flag-path-wrong",
-   "file": "plugins/superstack/tools/pause.sh",
-   "find": "F=\"$HOME/.claude/superstack/PAUSE\"",
-   "replace": "F=\"$HOME/.claude/superstack/PAUSED\"",
-   "why": "тормоз пишет флаг не туда, куда смотрят инструменты: `pause.sh on` отвечает «ПАУЗА подтверждена», а система продолжает работать — аварийный тормоз становится нерабочим стабом"
+   "file": "plugins/superstack/tools/pause.py",
+   "find": "    return Path.home() / \".claude\" / \"superstack\" / \"PAUSE\"",
+   "replace": "    return Path.home() / \".claude\" / \"PAUSE\"",
+   "why": "путь флага расходится с тем, который читают инструменты: человек жмёт стоп, флаг ложится мимо, система продолжает работать"
   },
   {
    "id": "pause.status-always-green",
-   "file": "plugins/superstack/tools/pause.sh",
-   "find": "exit 10; else echo \"работает\"; fi",
-   "replace": "exit 0; else echo \"работает\"; fi",
-   "why": "состояние паузы перестаёт читаться кодом возврата: вызывающий скрипт видит ноль и считает, что система работает, пока она стоит"
+   "file": "plugins/superstack/tools/pause.py",
+   "find": "    if f.is_file():\n        try:\n            с = f.read_text(\"utf-8\").strip()",
+   "replace": "    if False:\n        try:\n            с = f.read_text(\"utf-8\").strip()",
+   "why": "статус всегда отвечает «работает»: человек не может узнать, стоит ли пауза, и снимает её вслепую"
   },
   {
    "id": "pause.confirmation-unverified",
-   "file": "plugins/superstack/tools/pause.sh",
-   "find": "    date -u +%Y-%m-%dT%H:%M:%SZ > \"$F\" || { echo \"НЕ УДАЛОСЬ записать флаг $F\" >&2; exit 1; }\n    [ -s \"$F\" ] || { echo \"НЕ УДАЛОСЬ: флаг пуст после записи\" >&2; exit 1; }",
-   "replace": "    date -u +%Y-%m-%dT%H:%M:%SZ > \"$F\" 2>/dev/null || true",
-   "why": "«ПАУЗА подтверждена» снова печатается без подтверждения записи: человек в аварийной ситуации читает «остановлено», а флага на диске нет и ничто не остановлено"
+   "file": "plugins/superstack/tools/pause.py",
+   "find": "    if not (f.is_file() and f.stat().st_size):",
+   "replace": "    if False:",
+   "why": "«ПАУЗА подтверждена» печатается без проверки диска: в аварийной ситуации человек читает «остановлено», а система работает"
   },
   {
    "id": "log.redact-shape-disabled",
@@ -1762,7 +1762,7 @@
   },
   {
    "id": "scope.starting-skill-does-not-mark",
-   "file": "plugins/superstack/skills/go/SKILL.md",
+   "file": "plugins/superstack/skills/go/phases/0-завести.md",
    "find": "python3 \"$CLAUDE_PLUGIN_ROOT/tools/enable.py\" .",
    "replace": "# отметка проекта не ставится",
    "why": "скилл перестаёт отмечать проект — хуки молчат там, где систему как раз позвали, и гейт верификации не срабатывает вовсе"
@@ -1804,7 +1804,7 @@
   },
   {
    "id": "skill.positional-parameter-returns",
-   "file": "plugins/superstack/skills/go/SKILL.md",
+   "file": "plugins/superstack/skills/go/phases/5-верификация.md",
    "find": "python3 \"$CLAUDE_PLUGIN_ROOT/tools/verify.py\" .",
    "replace": "T() { python3 \"$CLAUDE_PLUGIN_ROOT/tools/$1\" .; }\nT verify.py",
    "why": "в скилл возвращается сокращение с позиционным параметром: движок подставляет в «$1» аргумент слэш-команды, и вызов уходит искать инструмент с именем-словом из просьбы человека. Один раз это уже случилось на живом прогоне — искался инструмент «брифа»"
@@ -1846,14 +1846,14 @@
   },
   {
    "id": "skill.questions-lose-the-rounds",
-   "file": "plugins/superstack/skills/go/SKILL.md",
+   "file": "plugins/superstack/skills/go/phases/1-понять.md",
    "find": "**Три раунда, не анкета.**",
    "replace": "Спроси всё сразу.",
    "why": "интервью снова становится анкетой: человек получает список вопросов вместо трёх решающих, и отвечает наугад на то, что должно было прийти умолчанием"
   },
   {
    "id": "skill.hard-words-without-an-explanation",
-   "file": "plugins/superstack/skills/go/SKILL.md",
+   "file": "plugins/superstack/skills/go/phases/1-понять.md",
    "find": "**К непонятному слову — вариант «объясни сначала».**",
    "replace": "Термины используй свободно.",
    "why": "человек, слышащий слово впервые, снова угадывает вместо того, чтобы спросить, — и догадка выглядит как принятое решение"
@@ -1986,14 +1986,14 @@
   },
   {
    "id": "autonomy.ladder-removed",
-   "file": "plugins/superstack/skills/go/SKILL.md",
+   "file": "plugins/superstack/skills/go/phases/1-понять.md",
    "find": "### Ступень подтверждений",
    "replace": "### Заметки о согласованиях",
    "why": "ступень подтверждений перестаёт быть выбором человека — одно умолчание на всех дёргает новичка на каждом таске либо не спрашивает там, где он хотел посмотреть"
   },
   {
    "id": "autonomy.ladder-can-switch-off-gates",
-   "file": "plugins/superstack/skills/go/SKILL.md",
+   "file": "plugins/superstack/skills/go/phases/1-понять.md",
    "find": "- **гейты остаются гейтами на всех трёх.**",
    "replace": "- на верхней ступени гейты можно не запускать:",
    "why": "шкала доверия превращается в тумблер «не проверяй» — человек, выбравший меньше подтверждений, теряет вместе с ними коды возврата, слепую приёмку и G4"
@@ -2560,16 +2560,16 @@
   },
   {
    "id": "pause.off-always-says-removed",
-   "file": "plugins/superstack/tools/pause.sh",
-   "find": "    if [ -f \"$F\" ]; then had=1; else had=0; fi",
-   "replace": "    had=1",
+   "file": "plugins/superstack/tools/pause.py",
+   "find": "    был = f.is_file()",
+   "replace": "    был = True",
    "why": "«снято» и «нечего было снимать» снова отвечают одинаково — подтверждение снятия перестаёт что-либо подтверждать"
   },
   {
    "id": "pause.hint-not-copyable",
-   "file": "plugins/superstack/tools/pause.sh",
-   "find": "echo \"Снять: \\\"$0\\\" off\" ;;",
-   "replace": "echo \"Снять: \"$0\" off\" ;;",
+   "file": "plugins/superstack/tools/pause.py",
+   "find": "    print(f'Снять: python3 \"{Path(__file__).resolve()}\" off')",
+   "replace": "    print(f'Снять: python3 {Path(__file__).resolve()} off')",
    "why": "путь в подсказке снова без кавычек: в каталоге с пробелом скопированная команда не работает — ровно когда человек торопится"
   },
   {
@@ -2637,7 +2637,7 @@
   },
   {
    "id": "go.check-before-code-dropped",
-   "file": "plugins/superstack/skills/go/SKILL.md",
+   "file": "plugins/superstack/skills/go/phases/4-работа.md",
    "find": "**Сначала в список проверяемого, потом код",
    "replace": "**Порядок работы свободный, потом код",
    "why": "правило «проверка раньше кода» вымывается из скилла — список снова становится отчётом задним числом, где забытое неотличимо от несуществующего"
@@ -3166,6 +3166,62 @@
    "find": "        \"plan\": str(p).replace(str(Path.home()), \"~\"),",
    "replace": "        \"plan\": str(p),",
    "why": "отметка о сверке снова тащит абсолютный домашний путь в файл, который уезжает в публичный репозиторий"
+  },
+  {
+   "id": "weight.ceiling-not-enforced",
+   "file": "tools/gauntlet.py",
+   "find": "        if старт > ВЕС_ПОТОЛОК:\n",
+   "replace": "        if False:\n",
+   "why": "потолок веса перестаёт срабатывать: скилл снова растёт прозой, а прибор молчит — та же асимметрия «меряем чужое, не своё»"
+  },
+  {
+   "id": "weight.always-read-phase-is-free",
+   "file": "tools/gauntlet.py",
+   "find": "            if ЧИТАЕТСЯ_ВСЕГДА in рядом:\n                старт += байт",
+   "replace": "            if False:\n                старт += байт",
+   "why": "фаза, читаемая всегда, перестаёт входить в стартовый вес — ворота обходятся за минуту: весь текст уезжает в файл, который читают каждый раз"
+  },
+  {
+   "id": "plan.one-loud-number",
+   "file": "tools/gauntlet.py",
+   "find": "    подтверждено = [it for it in present\n                    if it[\"evidence\"][\"file\"] in сломанные]",
+   "replace": "    подтверждено = present",
+   "why": "два честных числа схлопываются обратно в одно громкое: «228 механизмов» снова читается как «228 работают», хотя 24 доказаны только подстрокой"
+  },
+  {
+   "id": "platform.unverified-passes-silently",
+   "file": "plugins/superstack/tools/platform_check.py",
+   "find": "    if проверена and not сломано:",
+   "replace": "    if True:",
+   "why": "непроверенная платформа объявляется проверенной: человек получает непонятные ошибки и относит их на свой компьютер"
+  },
+  {
+   "id": "platform.what-breaks-not-named",
+   "file": "plugins/superstack/tools/platform_check.py",
+   "find": "    return [{\"что\": имя, \"почему\": why} for имя, why in ЗАВИСИТ_ОТ_ОБОЛОЧКИ]",
+   "replace": "    return []",
+   "why": "список поломок пустеет: остаётся «возможны проблемы» — сообщение, под которым нельзя принять ни одного решения"
+  },
+  {
+   "id": "platform.shell-presence-ignored",
+   "file": "plugins/superstack/tools/platform_check.py",
+   "find": "    if shutil.which(\"sh\"):\n        return []",
+   "replace": "    if True:\n        return []",
+   "why": "наличие оболочки перестаёт учитываться: Windows с Git Bash и без него объявляются одинаково — враньё половине людей"
+  },
+  {
+   "id": "portable.shlex-posix-always",
+   "file": "plugins/superstack/tools/bar.py",
+   "find": "return shlex.split(cmd, posix=os.name != \"nt\"), \"\"",
+   "replace": "return shlex.split(cmd), \"\"",
+   "why": "команда с обратными слэшами снова рассыпается на Windows: `C:\\проект\\npm.cmd` становится `C:проектnpm.cmd`, и сообщение уводит искать поломку не туда"
+  },
+  {
+   "id": "portable.foreign-lock-declared-dead",
+   "file": "plugins/superstack/tools/prove_tests.py",
+   "find": "    if os.name == \"nt\":",
+   "replace": "    if False:",
+   "why": "на Windows чужой замок объявляется мёртвым: второй прогон ломает дерево тому, кто в этот момент меряет"
   }
  ]
 }
