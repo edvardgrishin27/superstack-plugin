@@ -1,0 +1,2233 @@
+{
+ "schema": "superstack.plan-coverage.v1",
+ "source": "~/.claude/plans/typed-waddling-hamster.md — восемь слоёв агентной ОС",
+ "why": "План — 928 строк прозы. Пока «построено» проверяется чтением, ответ зависит от того, кто читал и в каком настроении. Здесь у каждого механизма есть улика: файл и строка, которая обязана в нём быть. Список превращает план в счётную величину и даёт циклу конечную точку, а не ощущение готовности.",
+ "rule": "Улика — это ПРИСУТСТВИЕ механизма, а не его качество. Ворота «план» отвечают на вопрос «построено ли», ворота «мутации» — на вопрос «держится ли». Одних без других недостаточно.",
+ "mechanisms": [
+  {
+   "id": "L0.version",
+   "layer": "L0 рантайм",
+   "mechanism": "активная версия движка определяется, а не угадывается",
+   "evidence": {
+    "file": "plugins/superstack/tools/probe/collect.py",
+    "contains": "def probe_runtime"
+   }
+  },
+  {
+   "id": "L0.model-routing-floor",
+   "layer": "L0 рантайм",
+   "mechanism": "порог маршрутизации субагентов по модели: ниже него проверка молча деградирует",
+   "evidence": {
+    "file": "plugins/superstack/tools/probe/collect.py",
+    "contains": "MODEL_ROUTING_FLOOR"
+   }
+  },
+  {
+   "id": "L0.kill-switch",
+   "layer": "L0 рантайм",
+   "mechanism": "тормоз-файл, работающий, когда агент не отвечает",
+   "evidence": {
+    "file": "plugins/superstack/tools/pause.py",
+    "contains": "return Path.home() / \".claude\" / \"superstack\" / \"PAUSE\""
+   }
+  },
+  {
+   "id": "L1.settings-scan",
+   "layer": "L1 конституция",
+   "mechanism": "все файлы настроек по всем скоупам, а не один",
+   "evidence": {
+    "file": "plugins/superstack/tools/probe/collect.py",
+    "contains": "def _settings_files"
+   }
+  },
+  {
+   "id": "L1.default-mode",
+   "layer": "L1 конституция",
+   "mechanism": "правило: режим прав задан явно, а не унаследован от вендора",
+   "evidence": {
+    "file": "plugins/superstack/rules/core.rules.json",
+    "contains": "ctx.default-mode-unset"
+   }
+  },
+  {
+   "id": "L1.listing-budget",
+   "layer": "L1 конституция",
+   "mechanism": "бюджет листинга скиллов измеряется: описания сверх бюджета молча выбрасываются",
+   "evidence": {
+    "file": "plugins/superstack/rules/core.rules.json",
+    "contains": "ctx.skill-listing-over-budget"
+   }
+  },
+  {
+   "id": "L2.index-limit",
+   "layer": "L2 память",
+   "mechanism": "индекс памяти сверх лимита загрузки обрезается молча — это ловится",
+   "evidence": {
+    "file": "plugins/superstack/rules/core.rules.json",
+    "contains": "mem.index-over-limit"
+   }
+  },
+  {
+   "id": "L2.instincts",
+   "layer": "L2 память",
+   "mechanism": "наблюдение за сессиями включено, а не просто установлено",
+   "evidence": {
+    "file": "plugins/superstack/rules/core.rules.json",
+    "contains": "mem.instincts-dormant"
+   }
+  },
+  {
+   "id": "L2.promotion-gate",
+   "layer": "L2 память",
+   "mechanism": "планка продвижения в память: пройденная проверка + названный паттерн отказа + отброшенный тупик",
+   "evidence": {
+    "file": "plugins/superstack/tools/learn.py",
+    "contains": "failure_pattern"
+   }
+  },
+  {
+   "id": "L2.provenance",
+   "layer": "L2 память",
+   "mechanism": "у каждого факта источник; факт без источника — слух",
+   "evidence": {
+    "file": "plugins/superstack/tools/probe/collect.py",
+    "contains": "AMBIGUOUS"
+   }
+  },
+  {
+   "id": "L2.memory-lint",
+   "layer": "L2 память",
+   "mechanism": "линт памяти: индекс, дубли, битые ссылки, факты без источника",
+   "evidence": {
+    "file": "plugins/superstack/tools/memory_lint.py",
+    "contains": "def load"
+   }
+  },
+  {
+   "id": "L3.spec-before-code",
+   "layer": "L3 проектирование",
+   "mechanism": "вход в стройку через спеку и блокирующий гейт плана",
+   "evidence": {
+    "file": "plugins/superstack/skills/go/phases/3-план.md",
+    "contains": "Код не пишется, пока человек не сказал «да»"
+   }
+  },
+  {
+   "id": "L3.spec-shape",
+   "layer": "L3 проектирование",
+   "mechanism": "структуру спеки проверяет скрипт: агентский markdown гниёт молча",
+   "evidence": {
+    "file": "plugins/superstack/tools/spec_lint.py",
+    "contains": "def has_verifiable_claim"
+   }
+  },
+  {
+   "id": "L4.acceptance-criterion",
+   "layer": "L4 исполнение",
+   "mechanism": "критерий приёмки формулируется ДО работы, а не после",
+   "evidence": {
+    "file": "plugins/superstack/skills/go/phases/2-спека.md",
+    "contains": "как проверить\n(конкретная команда с ожидаемым результатом)"
+   }
+  },
+  {
+   "id": "L5.verify-gate",
+   "layer": "L5 гарантии",
+   "mechanism": "гейт верификации решает кодом возврата, а не словами",
+   "evidence": {
+    "file": "plugins/superstack/tools/verify.py",
+    "contains": "def verdict"
+   }
+  },
+  {
+   "id": "L5.absent-is-not-pass",
+   "layer": "L5 гарантии",
+   "mechanism": "отсутствие тестов — не зелёный: иначе гейт мотивирует удалять тесты",
+   "evidence": {
+    "file": "plugins/superstack/tools/verify.py",
+    "contains": "EMPTY_MARKERS"
+   }
+  },
+  {
+   "id": "L5.stop-enforcement",
+   "layer": "L5 гарантии",
+   "mechanism": "Stop-хук сам гоняет гейт: правило без принуждения — пожелание",
+   "evidence": {
+    "file": "plugins/superstack/hooks/hooks.json",
+    "contains": "Stop"
+   }
+  },
+  {
+   "id": "L5.cross-model",
+   "layer": "L5 гарантии",
+   "mechanism": "второе мнение другой модели, только чтение, запрет самоаттестации",
+   "evidence": {
+    "file": "plugins/superstack/agents/second-opinion.md",
+    "contains": "model: fable"
+   }
+  },
+  {
+   "id": "L5.degradation-caught",
+   "layer": "L5 гарантии",
+   "mechanism": "тихая деградация второго мнения ловится правилом",
+   "evidence": {
+    "file": "plugins/superstack/rules/discipline.rules.json",
+    "contains": "ass.second-opinion-degraded"
+   }
+  },
+  {
+   "id": "L5.verifier-theater",
+   "layer": "L5 гарантии",
+   "mechanism": "судья с правом записи опознаётся: он чинит вместо того, чтобы находить",
+   "evidence": {
+    "file": "plugins/superstack/rules/discipline.rules.json",
+    "contains": "disc.verifier-theater"
+   }
+  },
+  {
+   "id": "L5.secrets-everywhere",
+   "layer": "L5 гарантии",
+   "mechanism": "секреты ищутся и в конфигах, и в инструкциях, которые агент исполняет",
+   "evidence": {
+    "file": "plugins/superstack/tools/probe/collect.py",
+    "contains": "def _text_assets"
+   }
+  },
+  {
+   "id": "L5.mutation-bar",
+   "layer": "L5 гарантии",
+   "mechanism": "зарегистрированные мутации: доказательство, что тесты держат смысл",
+   "evidence": {
+    "file": "tests/mutations.json",
+    "contains": "\"mutations\""
+   }
+  },
+  {
+   "id": "L6.report-as-page",
+   "layer": "L6 наблюдаемость",
+   "mechanism": "вердикт страницей: целевой человек в терминал не заходит",
+   "evidence": {
+    "file": "plugins/superstack/tools/render_html.py",
+    "contains": "def build"
+   }
+  },
+  {
+   "id": "L6.coverage-first",
+   "layer": "L6 наблюдаемость",
+   "mechanism": "блок охвата печатается ПЕРВЫМ: «не смотрел» отличается от «не нашёл»",
+   "evidence": {
+    "file": "plugins/superstack/tools/render_html.py",
+    "contains": "def coverage_block"
+   }
+  },
+  {
+   "id": "L6.next-step",
+   "layer": "L6 наблюдаемость",
+   "mechanism": "отчёт ведёт к действию: кто решает, что дальше и одна следующая вещь",
+   "evidence": {
+    "file": "plugins/superstack/tools/render_html.py",
+    "contains": "def next_block"
+   }
+  },
+  {
+   "id": "L6.cost",
+   "layer": "L6 наблюдаемость",
+   "mechanism": "расход виден: без него бюджетные пороги считаются от самооценки модели",
+   "evidence": {
+    "file": "plugins/superstack/rules/core.rules.json",
+    "contains": "obs.no-cost-metrics"
+   }
+  },
+  {
+   "id": "L7.doctor",
+   "layer": "L7 эволюция",
+   "mechanism": "доктор актуальности: версии, вытеснение нативом, протухание апстрима",
+   "evidence": {
+    "file": "plugins/superstack/tools/doctor.py",
+    "contains": "def axis_supersession"
+   }
+  },
+  {
+   "id": "L7.supersession",
+   "layer": "L7 эволюция",
+   "mechanism": "реестр вытеснения нативом: что выбросить и с какой версии",
+   "evidence": {
+    "file": "plugins/superstack/data/supersession.json",
+    "contains": "\"entries\""
+   }
+  },
+  {
+   "id": "L7.skill-tests",
+   "layer": "L7 эволюция",
+   "mechanism": "скиллы проверяются сценарием: делает ли скилл то, что заявлено",
+   "evidence": {
+    "file": "plugins/superstack/tools/skill_test.py",
+    "contains": "def check_frontmatter"
+   }
+  },
+  {
+   "id": "L7.ceiling",
+   "layer": "L7 эволюция",
+   "mechanism": "потолок: новое входит, только вытесняя старое — иначе накопление, а не улучшение",
+   "evidence": {
+    "file": "plugins/superstack/rules/evolution.rules.json",
+    "contains": "ev.no-budget-ceiling"
+   }
+  },
+  {
+   "id": "L7.measurement",
+   "layer": "L7 эволюция",
+   "mechanism": "эталонные задачи: правка, ухудшившая метрику, откатывается",
+   "evidence": {
+    "file": "plugins/superstack/tools/baseline.py",
+    "contains": "def build_metrics"
+   }
+  },
+  {
+   "id": "DIST.first-run",
+   "layer": "дистрибуция",
+   "mechanism": "вход для того, кто не знает про команды: система заговаривает первой, но спрашивает",
+   "evidence": {
+    "file": "plugins/superstack/hooks/first-run.py",
+    "contains": "\"hookEventName\": \"SessionStart\""
+   }
+  },
+  {
+   "id": "DIST.offer-ceiling",
+   "layer": "дистрибуция",
+   "mechanism": "потолок напоминаний и выключатель по отказу",
+   "evidence": {
+    "file": "plugins/superstack/hooks/first-run.py",
+    "contains": "ПОТОЛОК = 3"
+   }
+  },
+  {
+   "id": "BAR.gauntlet",
+   "layer": "планка",
+   "mechanism": "останов считает код, а не модель: оценщик /goal не вызывает инструменты",
+   "evidence": {
+    "file": "tools/gauntlet.py",
+    "contains": "def gate_hermetic"
+   }
+  },
+  {
+   "id": "INST.backup-first",
+   "layer": "установщик",
+   "mechanism": "бэкап до первого изменения, путь печатается ДО правок",
+   "evidence": {
+    "file": "plugins/superstack/tools/apply.py",
+    "contains": "def make_backup"
+   }
+  },
+  {
+   "id": "INST.quarantine",
+   "layer": "установщик",
+   "mechanism": "удаление запрещено: карантин и возврат одной командой",
+   "evidence": {
+    "file": "plugins/superstack/tools/apply.py",
+    "contains": "QUARANTINE"
+   }
+  },
+  {
+   "id": "INST.secret-not-in-backup",
+   "layer": "установщик",
+   "mechanism": "секрет не копируется в бэкап: иначе починка удваивает утечку",
+   "evidence": {
+    "file": "plugins/superstack/tools/apply.py",
+    "contains": "def redact"
+   }
+  },
+  {
+   "id": "INST.prove-planted-failure",
+   "layer": "установщик",
+   "mechanism": "система САМА подкладывает падающий тест: зелёное, нарисованное себе, не считается",
+   "evidence": {
+    "file": "plugins/superstack/tools/prove.py",
+    "contains": "planted_failure"
+   }
+  },
+  {
+   "id": "INST.prove-negative-controls",
+   "layer": "установщик",
+   "mechanism": "три негативных контроля: секрет→блок, самоодобрение→блок, красные тесты→блок",
+   "evidence": {
+    "file": "plugins/superstack/tools/prove.py",
+    "contains": "negative_control"
+   }
+  },
+  {
+   "id": "INST.state-machine",
+   "layer": "установщик",
+   "mechanism": "install_state выставляется только скриптами-ассертами, никогда моделью",
+   "evidence": {
+    "file": "plugins/superstack/tools/state.py",
+    "contains": "proven-local"
+   }
+  },
+  {
+   "id": "INST.base-kit",
+   "layer": "установщик",
+   "mechanism": "базовый набор ПРИМЕНЯЕТСЯ, а не только перечисляется: диагностика без применения оставляет человека там же, где нашла",
+   "evidence": {
+    "file": "plugins/superstack/tools/apply.py",
+    "contains": "def act_base_item"
+   }
+  },
+  {
+   "id": "UX.what",
+   "layer": "интерфейс",
+   "mechanism": "«где я и что дальше» — команда, которую можно спросить в любой момент",
+   "evidence": {
+    "file": "plugins/superstack/skills/what/SKILL.md",
+    "contains": "name: what"
+   }
+  },
+  {
+   "id": "UX.oops",
+   "layer": "интерфейс",
+   "mechanism": "отменить последнее одной командой",
+   "evidence": {
+    "file": "plugins/superstack/skills/oops/SKILL.md",
+    "contains": "name: oops"
+   }
+  },
+  {
+   "id": "UX.fix",
+   "layer": "интерфейс",
+   "mechanism": "«что-то сломалось» — вход в диагностику без знания терминов",
+   "evidence": {
+    "file": "plugins/superstack/skills/fix/SKILL.md",
+    "contains": "name: fix"
+   }
+  },
+  {
+   "id": "UX.interview-frontier",
+   "layer": "интерфейс",
+   "mechanism": "интервью фронтиром: весь текущий срез вопросов разом, с приложенной рекомендацией",
+   "evidence": {
+    "file": "plugins/superstack/skills/go/phases/1-понять.md",
+    "contains": "фронтир"
+   }
+  },
+  {
+   "id": "L2.raw-wiki",
+   "layer": "L2 память",
+   "mechanism": "raw/ неизменяемые источники и wiki/ порождаемое: Document против Memory",
+   "evidence": {
+    "file": "plugins/superstack/tools/memory_lint.py",
+    "contains": "raw/"
+   }
+  },
+  {
+   "id": "L2.routing",
+   "layer": "L2 память",
+   "mechanism": "знание маршрутизируется в три адресата: память, правила с paths, скилл",
+   "evidence": {
+    "file": "plugins/superstack/tools/learn.py",
+    "contains": "def route"
+   }
+  },
+  {
+   "id": "L2.precompact",
+   "layer": "L2 память",
+   "mechanism": "PreCompact-страховка: момент компакции — единственный шанс сохранить детали",
+   "evidence": {
+    "file": "plugins/superstack/hooks/hooks.json",
+    "contains": "PreCompact"
+   }
+  },
+  {
+   "id": "L3.artifact-graph",
+   "layer": "L3 проектирование",
+   "mechanism": "граф артефактов: циклы, битые ссылки, спека без тестов — с кодом возврата",
+   "evidence": {
+    "file": "plugins/superstack/tools/artifact_graph.py",
+    "contains": "def validate"
+   }
+  },
+  {
+   "id": "L4.attempt-limit",
+   "layer": "L4 исполнение",
+   "mechanism": "лимит попыток с явной сдачей: цикл ревью-фикс за ночь сжигает подписку",
+   "evidence": {
+    "file": "plugins/superstack/tools/verify.py",
+    "contains": "MAX_ATTEMPTS"
+   }
+  },
+  {
+   "id": "OBS.log",
+   "layer": "L6 наблюдаемость",
+   "mechanism": "единый журнал: что делал инструмент, сколько занял, чем кончил",
+   "evidence": {
+    "file": "plugins/superstack/tools/log.py",
+    "contains": "def event"
+   }
+  },
+  {
+   "id": "OBS.log-no-secrets",
+   "layer": "L6 наблюдаемость",
+   "mechanism": "секрет не попадает в журнал: место и отпечаток, никогда значение",
+   "evidence": {
+    "file": "plugins/superstack/tools/log.py",
+    "contains": "redact"
+   }
+  },
+  {
+   "id": "OBS.log-wired",
+   "layer": "L6 наблюдаемость",
+   "mechanism": "журнал подключён во всех инструментах, а не только объявлен",
+   "evidence": {
+    "file": "tools/gauntlet.py",
+    "contains": "from log import"
+   }
+  },
+  {
+   "id": "L7.axis-upstream",
+   "layer": "L7 эволюция",
+   "mechanism": "протухание апстрима: архивирован ли репозиторий, когда последний коммит",
+   "evidence": {
+    "file": "plugins/superstack/tools/doctor.py",
+    "contains": "def axis_upstream"
+   }
+  },
+  {
+   "id": "L7.axis-drift",
+   "layer": "L7 эволюция",
+   "mechanism": "расхождение объявленного и подключённого",
+   "evidence": {
+    "file": "plugins/superstack/tools/doctor.py",
+    "contains": "def axis_drift"
+   }
+  },
+  {
+   "id": "L7.axis-self",
+   "layer": "L7 эволюция",
+   "mechanism": "доктор проверяет сам себя: для какой версии собран против установленной",
+   "evidence": {
+    "file": "plugins/superstack/tools/doctor.py",
+    "contains": "def axis_self"
+   }
+  },
+  {
+   "id": "DISC.model-routing",
+   "layer": "дисциплина",
+   "mechanism": "раскладка по тирам: механическое не оплачивается по высшей ставке",
+   "evidence": {
+    "file": "plugins/superstack/rules/discipline.rules.json",
+    "contains": "disc.all-agents-top-tier"
+   }
+  },
+  {
+   "id": "SAFE.kill-switch-everywhere",
+   "layer": "дисциплина",
+   "mechanism": "аварийный выключатель первой строкой КАЖДОГО хука, а не одного",
+   "evidence": {
+    "file": "plugins/superstack/hooks/verify-gate.py",
+    "contains": "if os.environ.get(\"SUPERSTACK_DISABLE\") == \"1\":"
+   }
+  },
+  {
+   "id": "L5.blind-acceptance",
+   "layer": "L5 гарантии",
+   "mechanism": "слепая приёмка: судья видит исходную просьбу и результат, но не спеку — безупречно сделанное НЕ ТО иначе проходит все ворота",
+   "evidence": {
+    "file": "plugins/superstack/tools/blind_accept.py",
+    "contains": "def is_retelling"
+   }
+  },
+  {
+   "id": "DIST.sync-is-a-mechanism",
+   "layer": "дистрибуция",
+   "mechanism": "выкладка — скрипт, который ОТКАЗЫВАЕТСЯ: утечка, красный набор и неизмеренные числа останавливают публикацию, а не сопровождают её",
+   "evidence": {
+    "file": "tools/sync_public.py",
+    "contains": "def audit"
+   }
+  },
+  {
+   "id": "L6.progress-proof-vs-claim",
+   "layer": "L6 наблюдаемость",
+   "mechanism": "панель хода: «доказано» требует кода возврата гейта, шкалу двигает только оно — полоску нельзя не увидеть, и зелёное по слову агента читается как факт",
+   "evidence": {
+    "file": "plugins/superstack/tools/progress.py",
+    "contains": "if status == PROVEN and exit_code != 0"
+   }
+  },
+  {
+   "id": "L6.progress-asks-the-human",
+   "layer": "L6 наблюдаемость",
+   "mechanism": "«что осталось закрыть» адресовано человеку, а «никто не проверял» не выдаётся за «проверено, чисто»",
+   "evidence": {
+    "file": "plugins/superstack/tools/progress.py",
+    "contains": "def review_debt"
+   }
+  },
+  {
+   "id": "L7.lesson-trigger",
+   "layer": "L7 эволюция",
+   "mechanism": "вопрос «что забрать навсегда» задаётся ХУКОМ в конце хода: журнал был построен целиком и стоял пустым, потому что его никто не вызывал",
+   "evidence": {
+    "file": "plugins/superstack/hooks/session-lesson.py",
+    "contains": "\"hookEventName\": \"Stop\""
+   }
+  },
+  {
+   "id": "L3.manifest",
+   "layer": "L3 проектирование",
+   "mechanism": "требования человека держатся дословно, и цитата обязана находиться в брифе",
+   "evidence": {
+    "file": "plugins/superstack/tools/manifest.py",
+    "contains": "def quote_is_in_brief"
+   }
+  },
+  {
+   "id": "L3.brief-is-the-standard",
+   "layer": "L3 проектирование",
+   "mechanism": "бриф не редактируется — отпечаток сверяется на каждой операции",
+   "evidence": {
+    "file": "plugins/superstack/tools/manifest.py",
+    "contains": "def brief_intact"
+   }
+  },
+  {
+   "id": "L3.only-human-drops",
+   "layer": "L3 проектирование",
+   "mechanism": "снять требование можно только словами человека, и они сохраняются",
+   "evidence": {
+    "file": "plugins/superstack/tools/manifest.py",
+    "contains": "def drop"
+   }
+  },
+  {
+   "id": "L5.gate-g2-independent",
+   "layer": "L5 гарантии",
+   "mechanism": "покрытие спеки подтверждает не тот, кто её писал; незапущенная сверка — провал",
+   "evidence": {
+    "file": "plugins/superstack/tools/gates.py",
+    "contains": "def gate_g2"
+   }
+  },
+  {
+   "id": "L5.gate-g3-both-ways",
+   "layer": "L5 гарантии",
+   "mechanism": "трассируемость в обе стороны: и требование без таска, и таск без требования",
+   "evidence": {
+    "file": "plugins/superstack/tools/gates.py",
+    "contains": "def gate_g3"
+   }
+  },
+  {
+   "id": "L5.gate-g4-drift",
+   "layer": "L5 гарантии",
+   "mechanism": "расхождение манифеста со слепой приёмкой вычисляется, а не переписывается из отчёта",
+   "evidence": {
+    "file": "plugins/superstack/tools/gates.py",
+    "contains": "def drift"
+   }
+  },
+  {
+   "id": "L4.waves",
+   "layer": "L4 исполнение",
+   "mechanism": "волны считаются из зависимостей, а не прикидываются",
+   "evidence": {
+    "file": "plugins/superstack/tools/crew.py",
+    "contains": "def compute_waves"
+   }
+  },
+  {
+   "id": "L4.zones",
+   "layer": "L4 исполнение",
+   "mechanism": "пересечение зон внутри волны — вложенность считается пересечением",
+   "evidence": {
+    "file": "plugins/superstack/tools/crew.py",
+    "contains": "def zones_overlap"
+   }
+  },
+  {
+   "id": "L4.serial-flight",
+   "layer": "L4 исполнение",
+   "mechanism": "последовательный полёт волны ловится по отметкам старта",
+   "evidence": {
+    "file": "plugins/superstack/tools/crew.py",
+    "contains": "def serial_flight"
+   }
+  },
+  {
+   "id": "L4.tier-ceiling",
+   "layer": "L4 исполнение",
+   "mechanism": "ярус и потолок нарезки: мелкая нарезка покупает расход, не надёжность",
+   "evidence": {
+    "file": "plugins/superstack/tools/crew.py",
+    "contains": "def tier_check"
+   }
+  },
+  {
+   "id": "L4.handoff",
+   "layer": "L4 исполнение",
+   "mechanism": "промпт исполнителю собирает код: обязательное вложено, неполный таск не уходит",
+   "evidence": {
+    "file": "plugins/superstack/tools/handoff.py",
+    "contains": "TESTING_CONTRACT"
+   }
+  },
+  {
+   "id": "L4.builder-agent",
+   "layer": "L4 исполнение",
+   "mechanism": "код пишет отдельный агент на Sonnet в свежем контексте, один таск — один контекст",
+   "evidence": {
+    "file": "plugins/superstack/agents/builder.md",
+    "contains": "model: sonnet"
+   }
+  },
+  {
+   "id": "L7.mutation-lock",
+   "layer": "L7 эволюция",
+   "mechanism": "два харнесса не мутируют одно дерево — замок с самоснятием мёртвой блокировки",
+   "evidence": {
+    "file": "tools/gauntlet.py",
+    "contains": "def acquire_lock"
+   }
+  },
+  {
+   "id": "L3.adr-by-tier",
+   "layer": "L3 проектирование",
+   "mechanism": "архитектурные решения обязательны с яруса T2 и только с отвергнутым вариантом",
+   "evidence": {
+    "file": "plugins/superstack/tools/adr.py",
+    "contains": "def check"
+   }
+  },
+  {
+   "id": "L3.adr-staleness",
+   "layer": "L3 проектирование",
+   "mechanism": "решение, чья зона исчезла из кода, протухло и краснеет",
+   "evidence": {
+    "file": "plugins/superstack/tools/adr.py",
+    "contains": "if not (root / z.rstrip(\"/\")).exists():"
+   }
+  },
+  {
+   "id": "L4.adr-reaches-the-executor",
+   "layer": "L4 исполнение",
+   "mechanism": "решение вкладывается в промпт того, кто пишет в его зоне — смотреть обязан",
+   "evidence": {
+    "file": "plugins/superstack/tools/handoff.py",
+    "contains": "def governing_adrs"
+   }
+  },
+  {
+   "id": "L2.memory-file-detect",
+   "layer": "L2 память",
+   "mechanism": "файл памяти выбирается детекцией, существующий бьёт признаки",
+   "evidence": {
+    "file": "plugins/superstack/tools/memory_file.py",
+    "contains": "def detect"
+   }
+  },
+  {
+   "id": "L2.memory-markers",
+   "layer": "L2 память",
+   "mechanism": "чужой текст вне маркеров сверяется отпечатком до и после записи",
+   "evidence": {
+    "file": "plugins/superstack/tools/memory_file.py",
+    "contains": "def write_block"
+   }
+  },
+  {
+   "id": "L2.memory-documents-what-exists",
+   "layer": "L2 память",
+   "mechanism": "путь, которого нет в репозитории, делает файл памяти красным",
+   "evidence": {
+    "file": "plugins/superstack/tools/memory_file.py",
+    "contains": "def check"
+   }
+  },
+  {
+   "id": "L5.review-three-axes",
+   "layer": "L5 гарантии",
+   "mechanism": "три оси ревью, отчёт раздельный — одна не маскирует другую",
+   "evidence": {
+    "file": "plugins/superstack/tools/review.py",
+    "contains": "def verdict"
+   }
+  },
+  {
+   "id": "L5.review-routing",
+   "layer": "L5 гарантии",
+   "mechanism": "находка маршрутизируется вопросом «мог ли исполнитель знать»",
+   "evidence": {
+    "file": "plugins/superstack/tools/review.py",
+    "contains": "def route"
+   }
+  },
+  {
+   "id": "L5.review-packet",
+   "layer": "L5 гарантии",
+   "mechanism": "каждый ревьюер получает только материал своей оси, изъятое называется",
+   "evidence": {
+    "file": "plugins/superstack/tools/review.py",
+    "contains": "def pack"
+   }
+  },
+  {
+   "id": "L5.followup-ceiling",
+   "layer": "L5 гарантии",
+   "mechanism": "два дозапроса потолок, дальше свежий контекст и смена подхода",
+   "evidence": {
+    "file": "plugins/superstack/tools/review.py",
+    "contains": "def followup_allowed"
+   }
+  },
+  {
+   "id": "L5.reviewer-continuity",
+   "layer": "L5 гарантии",
+   "mechanism": "ревьюер переживает таск; смена внутри волны — дефект процесса",
+   "evidence": {
+    "file": "plugins/superstack/tools/review.py",
+    "contains": "def reviewer_continuity"
+   }
+  },
+  {
+   "id": "L3.premortem",
+   "layer": "L3 проектирование",
+   "mechanism": "семь вопросов к задаче; проход не имеет права ничего вычеркнуть",
+   "evidence": {
+    "file": "plugins/superstack/tools/premortem.py",
+    "contains": "def add"
+   }
+  },
+  {
+   "id": "L3.premortem-floor",
+   "layer": "L3 проектирование",
+   "mechanism": "меньше трёх находок — признак прохода для галочки",
+   "evidence": {
+    "file": "plugins/superstack/tools/premortem.py",
+    "contains": "MIN_FINDINGS"
+   }
+  },
+  {
+   "id": "L7.wiring-gate",
+   "layer": "L7 эволюция",
+   "mechanism": "инструмент обязан быть достижим от точки входа, иначе красное",
+   "evidence": {
+    "file": "tools/gauntlet.py",
+    "contains": "def gate_wiring"
+   }
+  },
+  {
+   "id": "L7.path-into-the-void",
+   "layer": "L7 эволюция",
+   "mechanism": "скилл не может звать инструмент соседнего пакета через свой корень",
+   "evidence": {
+    "file": "tools/gauntlet.py",
+    "contains": "wrong_paths"
+   }
+  },
+  {
+   "id": "L4.plan-feeds-the-crew",
+   "layer": "L4 исполнение",
+   "mechanism": "состояние стройки несёт блокеры, зоны и отметки старта — расчёт волн читает их оттуда",
+   "evidence": {
+    "file": "plugins/superstack/tools/progress.py",
+    "contains": "entry[\"blockedBy\"]"
+   }
+  },
+  {
+   "id": "L4.plan-feeds-the-handoff",
+   "layer": "L4 исполнение",
+   "mechanism": "таск несёт критерии, цель и цитаты — передача собирается из них и не теряет их при перезаписи",
+   "evidence": {
+    "file": "plugins/superstack/tools/progress.py",
+    "contains": "(\"goal\", goal), (\"acceptance\", acceptance)"
+   }
+  },
+  {
+   "id": "L4.only-named-sections",
+   "layer": "L4 исполнение",
+   "mechanism": "исполнителю уходят только названные разделы спеки, не спека целиком",
+   "evidence": {
+    "file": "plugins/superstack/tools/handoff.py",
+    "contains": "def extract_sections"
+   }
+  },
+  {
+   "id": "L4.return-contract-checked",
+   "layer": "L4 исполнение",
+   "mechanism": "контракт возврата разбирается кодом; «DONE» при красных тестах — противоречие",
+   "evidence": {
+    "file": "plugins/superstack/tools/contract.py",
+    "contains": "def check"
+   }
+  },
+  {
+   "id": "L4.contract-required",
+   "layer": "L4 исполнение",
+   "mechanism": "ответ без блока контракта не считается законченным таском",
+   "evidence": {
+    "file": "plugins/superstack/tools/contract.py",
+    "contains": "\"STATUS\" not in f"
+   }
+  },
+  {
+   "id": "L5.project-mutations",
+   "layer": "L5 гарантии",
+   "mechanism": "тесты проекта человека доказываются поломкой: зелёное при внесённой поломке — находка",
+   "evidence": {
+    "file": "plugins/superstack/tools/prove_tests.py",
+    "contains": "def run"
+   }
+  },
+  {
+   "id": "L5.dependency-stub",
+   "layer": "L5 гарантии",
+   "mechanism": "заглушка зависимости с той же формой ответа — не зависящий от языка способ убить интеграцию",
+   "evidence": {
+    "file": "plugins/superstack/tools/prove_tests.py",
+    "contains": "\"stub\" in m"
+   }
+  },
+  {
+   "id": "L5.no-mutations-is-not-strength",
+   "layer": "L5 гарантии",
+   "mechanism": "ноль зарегистрированных поломок — «не проверяли», а не «тесты держат»",
+   "evidence": {
+    "file": "plugins/superstack/tools/prove_tests.py",
+    "contains": "if not muts:"
+   }
+  },
+  {
+   "id": "L3.basis-vs-reason",
+   "layer": "L3 проектирование",
+   "mechanism": "основание требования и причина статуса — разные поля; смена статуса не стирает смысл строки",
+   "evidence": {
+    "file": "plugins/superstack/tools/manifest.py",
+    "contains": "r[\"reason\"] = reason"
+   }
+  },
+  {
+   "id": "DIST.marketplace-crosscheck",
+   "layer": "L0 рантайм",
+   "mechanism": "объявленное в маркетплейсе сверяется с существующим в обе стороны",
+   "evidence": {
+    "file": "tools/gauntlet.py",
+    "contains": "def marketplace_crosscheck"
+   }
+  },
+  {
+   "id": "DIST.every-package-validated",
+   "layer": "L0 рантайм",
+   "mechanism": "схема проверяется у каждого пакета, а не только у корневого манифеста",
+   "evidence": {
+    "file": "tools/gauntlet.py",
+    "contains": "\"plugin\", \"validate\", str(d)"
+   }
+  },
+  {
+   "id": "DIST.no-manifest-dependencies",
+   "layer": "L0 рантайм",
+   "mechanism": "соседние инструменты лежат в том же каталоге: поля dependencies движок не знает, а раскладку искать больше не у кого — пакет один",
+   "evidence": {
+    "file": "plugins/superstack/tools/what.py",
+    "contains": "sys.path.insert(0, str(Path(__file__).resolve().parent))"
+   }
+  },
+  {
+   "id": "DIST.readme-ships",
+   "layer": "L0 рантайм",
+   "mechanism": "витрина выкладывается вместе с кодом и не отстаёт от него",
+   "evidence": {
+    "file": "tools/sync_public.py",
+    "contains": "\"README.md\")"
+   }
+  },
+  {
+   "id": "UX.confirmation-ladder",
+   "layer": "интерфейс",
+   "mechanism": "ступень подтверждений: сколько раз система останавливается — выбор человека, но гейты, слепая приёмка и G4 не отключаются ни на одной",
+   "evidence": {
+    "file": "plugins/superstack/skills/go/phases/1-понять.md",
+    "contains": "Ступень подтверждений"
+   }
+  },
+  {
+   "id": "UX.design-direction",
+   "layer": "интерфейс",
+   "mechanism": "направление интерфейса выбирается до кода и переводится в проверяемые числа; ориентир человека не вычёркивается",
+   "evidence": {
+    "file": "plugins/superstack/skills/go/SKILL.md",
+    "contains": "Фаза 2.5 — НАПРАВЛЕНИЕ"
+   }
+  },
+  {
+   "id": "UX.design-goes-out-to-the-human",
+   "layer": "интерфейс",
+   "mechanism": "дизайн делает человек во внешнем инструменте: система собирает ему промпт со списком того, что принести обратно, и ждёт; код до этого не пишется",
+   "evidence": {
+    "file": "plugins/superstack/skills/go/phases/direction.md",
+    "contains": "Код в это время не пишется"
+   }
+  },
+  {
+   "id": "UX.design-prompt-checked-against-docs",
+   "layer": "интерфейс",
+   "mechanism": "промпт для внешнего дизайн-инструмента не показывается, пока не записана свежая сверка с его документацией с названными источниками",
+   "evidence": {
+    "file": "plugins/superstack/tools/design_brief.py",
+    "contains": "DOCS_FRESH_DAYS"
+   }
+  },
+  {
+   "id": "UX.live-panel",
+   "layer": "интерфейс",
+   "mechanism": "живая панель хода: этап и держатель хода видны постоянно, обновление стоит одной записи состояния; этап следует из работы — переход части в running двигает его сам",
+   "evidence": {
+    "file": "plugins/superstack/tools/progress.py",
+    "contains": "data = set_phase(data, BUILD_PHASE, \"исполнитель\", detail, now=keep,"
+   },
+   "note": "Улика указывает на запись состояния, а не на разметку: разметка и её JS живут в строковом литерале live_panel.py, а ворота вырезают из .py прозу и литералы целиком — там любая улика невидима. Отображение держат тесты test_live_panel.py и мутации panel.*, они по литералу работают."
+  },
+  {
+   "id": "UX.plain-ru",
+   "layer": "интерфейс",
+   "mechanism": "человеческий русский на всём, что видит человек: словарь жаргона с заменами, роли и этапы с пояснениями, надписи вне кода; подпись с жаргоном не записывается вовсе",
+   "evidence": {
+    "file": "plugins/superstack/tools/progress.py",
+    "contains": "bad = _jargon_in(detail) if plain else []"
+   }
+  },
+  {
+   "id": "UX.eta-from-measurement",
+   "layer": "интерфейс",
+   "mechanism": "«сколько ещё ждать» считается только по замеренному: конец части отмечается, оценка берёт середину ряда прошлых длительностей; замеров нет — оценки нет, и об этом говорится прямо",
+   "evidence": {
+    "file": "plugins/superstack/tools/progress.py",
+    "contains": "elif keep and keep.get(\"status\") == RUNNING and \"finished\" not in entry:"
+   },
+   "note": "Улика на ЗАМЕР, а не на его показ: без отметки конца показывать нечего, а сам показ проверяется тестами панели."
+  },
+  {
+   "id": "GUARD.checks-catalog",
+   "layer": "L5 гарантии",
+   "mechanism": "каталог из 571 проверки по первоисточникам (OWASP Top 10 2025, ASVS 5.0, CWE Top 25, NIST 800-63B, OWASP LLM и Agentic, NIST AI 100-2e2025, MCP): три уровня важности, десять тем, 472 пункта с числовым порогом",
+   "evidence": {
+    "file": "plugins/superstack/data/checks-catalog.json",
+    "contains": "superstack.checks-catalog.v1"
+   }
+  },
+  {
+   "id": "GUARD.pack-by-capability",
+   "layer": "L5 гарантии",
+   "mechanism": "набор отбирается двумя осями: тип продукта И что в нём есть (вход, платежи, ии, файлы, фон, объёмы, роли, перс-данные); тема без своей возможности не показывается — лендингу 33 обязательные вместо 104",
+   "evidence": {
+    "file": "plugins/superstack/tools/security_pack.py",
+    "contains": "def needed_topics(has: list, data: dict = None) -> list:"
+   }
+  },
+  {
+   "id": "GUARD.page-is-not-a-frame",
+   "layer": "L5 гарантии",
+   "mechanism": "проверка «это ещё каркас»: считает видимые заглушки и пустые блоки, отказывается признавать страницу результатом и печатает список вопросов к человеку",
+   "evidence": {
+    "file": "plugins/superstack/tools/page_check.py",
+    "contains": "caркас = len(seen) > PLACEHOLDER_LIMIT"
+   }
+  },
+  {
+   "id": "BUILD.handoff-instead-of-lying",
+   "layer": "L4 исполнение",
+   "mechanism": "передача работы при исчерпании контекста: статус HANDOFF, потолок в две передачи, запрет передавать красное, обязательная строка «на чём остановился»",
+   "evidence": {
+    "file": "plugins/superstack/tools/contract.py",
+    "contains": "MAX_HANDOFFS = 2"
+   }
+  },
+  {
+   "id": "GUARD.repair-ladder",
+   "layer": "L5 гарантии",
+   "mechanism": "лестница починки: недоделка идёт тому же исполнителю, отказ — сразу в свежий контекст, дальше другой подход; четыре попытки, пятой нет; причина называется до починки",
+   "evidence": {
+    "file": "plugins/superstack/tools/review.py",
+    "contains": "def repair_route(data: dict, kind: str, reason: str = \"\") -> dict:"
+   }
+  },
+  {
+   "id": "CONTROL.installed-drift",
+   "layer": "L6 наблюдаемость",
+   "mechanism": "сверка «то ли запускается, что правишь»: файл за файлом по отпечатку между репозиторием и установленной копией — нашла семь разошедшихся пакетов при зелёном наборе",
+   "evidence": {
+    "file": "plugins/superstack/tools/installed_drift.py",
+    "contains": "def compare(repo: Path, name: str) -> dict:"
+   }
+  },
+  {
+   "id": "BUILD.report-from-files",
+   "layer": "L4 исполнение",
+   "mechanism": "финальный отчёт собирается из файлов прогона, а не по памяти: доказанное отделено от заявленного, закрытые находки не смешиваются с открытыми, «что ждёт человека» идёт раньше готового",
+   "evidence": {
+    "file": "plugins/superstack/tools/report.py",
+    "contains": "if f.get(\"blocking\") and not f.get(\"closed\")]"
+   }
+  },
+  {
+   "id": "UX.motion-is-not-a-condition",
+   "layer": "интерфейс",
+   "mechanism": "движение на странице обязательно, но не является условием видимости: запрет на движение сужен до нажатия, prefers-reduced-motion выключает всё, страховка показывает содержимое, если наблюдатель молчит",
+   "evidence": {
+    "file": "plugins/superstack/tools/plain_ru.py",
+    "contains": "def find_jargon(text: str, data: dict = None) -> list:"
+   },
+   "note": "механизм живёт в проекте-образце (керамика), здесь закреплена только его языковая часть; поведение проверяется тестами проекта"
+  },
+  {
+   "id": "BUILD.state-lock",
+   "layer": "L4 исполнение",
+   "mechanism": "замок на файл состояния держится всю операцию «прочитал, изменил, записал»: волна из двух помощников — два процесса, и без него второй затирает отметку первого молча, с кодом возврата 0",
+   "evidence": {
+    "file": "plugins/superstack/tools/progress.py",
+    "contains": "class _Lock:"
+   }
+  },
+  {
+   "id": "BUILD.expected-failure",
+   "layer": "L4 исполнение",
+   "mechanism": "ненулевой код возврата не всегда провал: гейт, доказавший работу отказом, помечается дословно «ожидаемый отказ», и пометка снимает только тот прогон, рядом с которым стоит",
+   "evidence": {
+    "file": "plugins/superstack/tools/contract.py",
+    "contains": "_EXPECTED = re.compile(r\"ожидаемый отказ\", re.I)"
+   }
+  },
+  {
+   "id": "DIST.single-package",
+   "layer": "L0 рантайм",
+   "mechanism": "весь набор ставится одной записью маркетплейса; межпакетной адресации нет, потому что нет второго пакета",
+   "evidence": {
+    "file": "tests/test_distribution.py",
+    "contains": "test_the_set_ships_as_exactly_one_package"
+   }
+  },
+  {
+   "id": "DIST.calls-checked-literally",
+   "layer": "L0 рантайм",
+   "mechanism": "каждый вызов инструмента написан полным путём и сверяется с диском — сокращение переменной сделало бы его невидимым для ворот",
+   "evidence": {
+    "file": "tests/test_wiring.py",
+    "contains": "test_every_called_tool_exists_in_the_package"
+   }
+  },
+  {
+   "id": "L5.hook-scripts-declared",
+   "layer": "L5 гарантии",
+   "mechanism": "скрипт хука, на который не указывает ни одно событие, — мёртвый механизм; проверка идёт в обе стороны",
+   "evidence": {
+    "file": "tests/test_precompact.py",
+    "contains": "test_every_hook_script_is_declared_by_some_event"
+   }
+  },
+  {
+   "id": "DIST.import-is-a-call",
+   "layer": "L0 рантайм",
+   "mechanism": "достижимость считается и по пути к файлу, и по питоновскому импорту, но не по голому упоминанию имени",
+   "evidence": {
+    "file": "tools/gauntlet.py",
+    "contains": "def зовёт"
+   }
+  },
+  {
+   "id": "L1.scope-gate-resolves-symlinks",
+   "layer": "L1 конституция",
+   "mechanism": "гейт области сверяет пути с обеих сторон разрешёнными: один каталог под двумя именами ведёт себя одинаково",
+   "evidence": {
+    "file": "plugins/superstack/hooks/verify-gate.py",
+    "contains": "реальный = str(Path(строка).resolve())"
+   }
+  },
+  {
+   "id": "L6.brake-from-a-phrase",
+   "layer": "L6 пульт",
+   "mechanism": "остановка системы срабатывает с человеческой фразы, а не с команды в терминале",
+   "evidence": {
+    "file": "plugins/superstack/skills/stop/SKILL.md",
+    "contains": "name: stop"
+   }
+  },
+  {
+   "id": "L5.block-names-the-exit",
+   "layer": "L5 гарантии",
+   "mechanism": "блок гейта называет выход там, где человек застрял, — фразой, а не переменной окружения",
+   "evidence": {
+    "file": "plugins/superstack/hooks/verify-gate.py",
+    "contains": "останови суперстек"
+   }
+  },
+  {
+   "id": "L5.gates-run-on-every-push",
+   "layer": "L5 гарантии",
+   "mechanism": "набор и быстрые ворота гоняются автоматически на каждый push; мутации — по ночам и на теге",
+   "evidence": {
+    "file": ".github/workflows/gates.yml",
+    "contains": "pytest tests/"
+   }
+  },
+  {
+   "id": "L5.workflow-is-acceptable-to-github",
+   "layer": "L5 гарантии",
+   "mechanism": "рабочий процесс проверяется на приемлемость для движка, а не только на наличие прогона внутри",
+   "evidence": {
+    "file": "tests/test_distribution.py",
+    "contains": "test_the_workflow_is_one_github_will_actually_accept"
+   }
+  },
+  {
+   "id": "L7.bar-shows-it-is-alive",
+   "layer": "L7 эволюция",
+   "mechanism": "долгие ворота подают признак жизни в stderr: номер, имя и оценка остатка по факту, а выжившая объявляется сразу",
+   "evidence": {
+    "file": "tools/gauntlet.py",
+    "contains": "мутация {n}/{всего}"
+   }
+  },
+  {
+   "id": "L4.conditional-phases-load-on-demand",
+   "layer": "L4 исполнение",
+   "mechanism": "условные фазы вынесены из сборочного скилла и читаются только при своём условии; заглушка обязана нести условие и веление прочесть",
+   "evidence": {
+    "file": "tests/test_wiring.py",
+    "contains": "test_every_phase_file_is_named_with_an_order_to_read_it"
+   }
+  },
+  {
+   "id": "DIST.readme-checked-against-manifests",
+   "layer": "L0 рантайм",
+   "mechanism": "ключ установки в витрине сверяется с именами из маркетплейса, а инструкция покрывает машину с прошлой установкой",
+   "evidence": {
+    "file": "tests/test_distribution.py",
+    "contains": "test_the_install_key_in_the_readme_matches_the_manifests"
+   }
+  },
+  {
+   "id": "BAR.project-bar",
+   "layer": "планка",
+   "mechanism": "планка проекта читается из его собственного файла, а не выдумывается моделью на ходу",
+   "evidence": {
+    "file": "plugins/superstack/tools/bar.py",
+    "contains": "def load_bar"
+   }
+  },
+  {
+   "id": "BAR.empty-is-not-taken",
+   "layer": "планка",
+   "mechanism": "планка без единого ворот — «не проверяли», а не «взята»",
+   "evidence": {
+    "file": "plugins/superstack/tools/bar.py",
+    "contains": "if not gates:"
+   }
+  },
+  {
+   "id": "BAR.unrunnable-is-not-pass",
+   "layer": "планка",
+   "mechanism": "объявленные ворота, которые нечем запустить, гасят вердикт вместо того, чтобы молча выпасть",
+   "evidence": {
+    "file": "plugins/superstack/tools/bar.py",
+    "contains": "UNRUNNABLE"
+   }
+  },
+  {
+   "id": "BAR.self-hosted",
+   "layer": "планка",
+   "mechanism": "SUPERSTACK держит собственную готовность тем же файлом планки, что выдаёт чужим проектам",
+   "evidence": {
+    "file": ".superstack/bar.json",
+    "contains": "gauntlet.py"
+   }
+  },
+  {
+   "id": "BAR.plan-drift",
+   "layer": "планка",
+   "mechanism": "расхождение карты механизмов с планом видно воротами, а не только тому, кто помнит",
+   "evidence": {
+    "file": "tools/gauntlet.py",
+    "contains": "def gate_reconciled"
+   }
+  },
+  {
+   "id": "BAR.never-reconciled-is-not-pass",
+   "layer": "планка",
+   "mechanism": "карта, ни разу не сверявшаяся с планом, не считается сверенной",
+   "evidence": {
+    "file": "tools/gauntlet.py",
+    "contains": "отметка.get(\"digest\")"
+   }
+  },
+  {
+   "id": "BAR.reconcile-names-who",
+   "layer": "планка",
+   "mechanism": "отметка о сверке называет, кто сверял: «кто-то когда-то» уже один раз прошло за проверку",
+   "evidence": {
+    "file": "tools/plan_stamp.py",
+    "contains": "if not кто:"
+   }
+  },
+  {
+   "id": "GAP.970",
+   "layer": "L3 проектирование",
+   "mechanism": "добавка обязана назвать родителя и меру",
+   "evidence": {
+    "file": "plugins/superstack/tools/manifest.py",
+    "contains": "if r[\"kind\"] == ADDITION and not r.get(\"parent\")"
+   }
+  },
+  {
+   "id": "GAP.1036",
+   "layer": "L7 эволюция",
+   "mechanism": "реестр исключений проводки: ручной запуск назван с причиной",
+   "evidence": {
+    "file": "data/entrypoints.json",
+    "contains": "superstack.entrypoints.v1"
+   }
+  },
+  {
+   "id": "GAP.1067",
+   "layer": "L4 исполнение",
+   "mechanism": "сквозной тест конвейера: вход берётся из выхода предыдущего",
+   "evidence": {
+    "file": "tests/test_pipeline.py",
+    "contains": "class Chain(unittest.TestCase)"
+   }
+  },
+  {
+   "id": "GAP.1122",
+   "layer": "планка",
+   "mechanism": "ворота «правила»: каталоги правил линтуются глобом",
+   "evidence": {
+    "file": "tools/gauntlet.py",
+    "contains": "def gate_rules"
+   }
+  },
+  {
+   "id": "GAP.1499",
+   "layer": "дистрибуция",
+   "mechanism": "единый подъём версии, откат назад — отказ",
+   "evidence": {
+    "file": "tools/bump.py",
+    "contains": "def newer(a: str, b: str)"
+   }
+  },
+  {
+   "id": "GAP.1565",
+   "layer": "L0 рантайм",
+   "mechanism": "выкладка распространяет удаления",
+   "evidence": {
+    "file": "tools/sync_public.py",
+    "contains": "def carry(pub: Path)"
+   }
+  },
+  {
+   "id": "GAP.1508",
+   "layer": "интерфейс",
+   "mechanism": "невозможность прочитать словарь объявляется вслух",
+   "evidence": {
+    "file": "plugins/superstack/tools/progress.py",
+    "contains": "НЕ СМОГ ПРОВЕРИТЬ подпись на жаргон"
+   }
+  },
+  {
+   "id": "GAP.1596",
+   "layer": "L7 эволюция",
+   "mechanism": "Stop-хук урока молчит на ходе без работы и при замке мутаций",
+   "evidence": {
+    "file": "plugins/superstack/hooks/session-lesson.py",
+    "contains": "def что_то_менялось"
+   }
+  },
+  {
+   "id": "GAP.1559",
+   "layer": "L4 исполнение",
+   "mechanism": "два читателя ADR сверяются на одних файлах",
+   "evidence": {
+    "file": "tests/test_adr.py",
+    "contains": "class TestTwoReadersDoNotDrift"
+   }
+  },
+  {
+   "id": "GAP.165",
+   "layer": "L5 гарантии",
+   "mechanism": "хук PreToolUse останавливает запись кода: нет падающего теста — нет правки",
+   "evidence": {
+    "file": "plugins/superstack/tools/apply.py",
+    "contains": "base.tdd-gate"
+   }
+  },
+  {
+   "id": "GAP.337",
+   "layer": "интерфейс",
+   "mechanism": "команда «почему» по идентификатору находки",
+   "evidence": {
+    "file": "plugins/superstack/tools/render.py",
+    "contains": "def render_why"
+   }
+  },
+  {
+   "id": "GAP.383",
+   "layer": "L6 наблюдаемость",
+   "mechanism": "подъём детализации одним словом и всегда видимая подсказка про него",
+   "evidence": {
+    "file": "plugins/superstack/tools/render.py",
+    "contains": "Подробный разбор с доказательствами: /more"
+   }
+  },
+  {
+   "id": "GAP.538",
+   "layer": "L2 память",
+   "mechanism": "продвижение личного знания в общее требует подтверждений",
+   "evidence": {
+    "file": "plugins/superstack/tools/learn.py",
+    "contains": "e.get(\"confirmations\", 1) < 2"
+   }
+  },
+  {
+   "id": "GAP.545",
+   "layer": "L7 эволюция",
+   "mechanism": "находка выше порога схожести правит существующую запись, а не плодит вторую",
+   "evidence": {
+    "file": "plugins/superstack/tools/learn.py",
+    "contains": "MERGE_TITLE_THRESHOLD"
+   }
+  },
+  {
+   "id": "BAR.unbuilt-promises-are-visible",
+   "layer": "планка",
+   "mechanism": "механизм, обещанный планом и не построенный, гасит вердикт сверки, а не лежит молча в стороне",
+   "evidence": {
+    "file": "tools/gauntlet.py",
+    "contains": "\"plan-gaps.json\""
+   }
+  },
+  {
+   "id": "BAR.gaps-leave-only-two-ways",
+   "layer": "планка",
+   "mechanism": "запись о непостроенном уходит либо постройкой с уликой, либо отказом В ПЛАНЕ — молча не удаляется",
+   "evidence": {
+    "file": "data/plan-gaps.json",
+    "contains": "Молча удалить запись"
+   }
+  },
+  {
+   "id": "L4.check-before-code",
+   "layer": "L4 исполнение",
+   "mechanism": "проверка заводится раньше кода: список работает заданием, а не отчётом задним числом",
+   "evidence": {
+    "file": "plugins/superstack/skills/go/phases/4-работа.md",
+    "contains": "Сначала в список проверяемого, потом код"
+   }
+  },
+  {
+   "id": "SAFE.destructive-list",
+   "layer": "L5 гарантии",
+   "mechanism": "перечень деструктивных команд лежит в ОДНОМ месте: межрепозиторная константа, а не список в каждом слое",
+   "evidence": {
+    "file": "plugins/superstack/data/destructive-commands.json",
+    "contains": "superstack.destructive.v1"
+   }
+  },
+  {
+   "id": "SAFE.destructive-gated",
+   "layer": "L5 гарантии",
+   "mechanism": "перечень доходит до слоя исполнения: недостающие правила запрета в настройках названы поимённо",
+   "evidence": {
+    "file": "plugins/superstack/tools/deny_list.py",
+    "contains": "def missing"
+   }
+  },
+  {
+   "id": "SAFE.deny-write-needs-consent",
+   "layer": "L5 гарантии",
+   "mechanism": "запись запретов в чужие настройки — только по явному флагу: инструмент, правящий машину молча, это тот же захват",
+   "evidence": {
+    "file": "plugins/superstack/tools/deny_list.py",
+    "contains": "if not разрешено"
+   }
+  },
+  {
+   "id": "SAFE.data-has-no-git",
+   "layer": "L5 гарантии",
+   "mechanism": "правка данных не считается готовой без объявленного пути отката: у кода откат это git, у данных git нет",
+   "evidence": {
+    "file": "plugins/superstack/tools/data_rollback.py",
+    "contains": "def touches_data"
+   }
+  },
+  {
+   "id": "SAFE.rollback-is-a-command",
+   "layer": "L5 гарантии",
+   "mechanism": "путь отката — это пара команд снимка и восстановления, а не намерение сделать бэкап",
+   "evidence": {
+    "file": "plugins/superstack/tools/data_rollback.py",
+    "contains": "def restore_path"
+   }
+  },
+  {
+   "id": "SAFE.irreversible-said-aloud",
+   "layer": "L5 гарантии",
+   "mechanism": "необратимую правку данных можно провести, только назвав её необратимой и с причиной",
+   "evidence": {
+    "file": "plugins/superstack/tools/data_rollback.py",
+    "contains": "IRREVERSIBLE"
+   }
+  },
+  {
+   "id": "L7.doctor-health",
+   "layer": "L7 эволюция",
+   "mechanism": "ось здоровья: отвечают ли MCP, не падают ли хуки, не спорят ли скиллы за одну просьбу",
+   "evidence": {
+    "file": "plugins/superstack/tools/doctor.py",
+    "contains": "def axis_health"
+   }
+  },
+  {
+   "id": "L7.trigger-collision",
+   "layer": "L7 эволюция",
+   "mechanism": "два скилла, претендующих на одну просьбу, названы парой — иначе выигрывает случайный",
+   "evidence": {
+    "file": "plugins/superstack/tools/doctor.py",
+    "contains": "def trigger_collisions"
+   }
+  },
+  {
+   "id": "L7.config-security",
+   "layer": "L7 эволюция",
+   "mechanism": "ось безопасности конфигурации: разрешение шире нужного, MCP со всеми правами, скилл с shell при загрузке",
+   "evidence": {
+    "file": "plugins/superstack/tools/doctor.py",
+    "contains": "def axis_config_security"
+   }
+  },
+  {
+   "id": "L7.wide-permission-named",
+   "layer": "L7 эволюция",
+   "mechanism": "широкое разрешение называется вместе с тем, что оно на самом деле разрешает",
+   "evidence": {
+    "file": "plugins/superstack/tools/doctor.py",
+    "contains": "ШИРОКИЕ"
+   }
+  },
+  {
+   "id": "L5.diff-coverage",
+   "layer": "L5 гарантии",
+   "mechanism": "изменённые строки без теста краснеют: покрытие считается по диффу, а не по проекту целиком",
+   "evidence": {
+    "file": "plugins/superstack/tools/diff_coverage.py",
+    "contains": "def uncovered_changed"
+   }
+  },
+  {
+   "id": "L5.no-report-is-not-green",
+   "layer": "L5 гарантии",
+   "mechanism": "нет отчёта о покрытии — «измерить нечем», а не «покрыто»",
+   "evidence": {
+    "file": "plugins/superstack/tools/diff_coverage.py",
+    "contains": "измерить нечем"
+   }
+  },
+  {
+   "id": "L5.coverage-of-the-whole-hides-the-new",
+   "layer": "L5 гарантии",
+   "mechanism": "общий процент по проекту не засчитывается за покрытие правки: большой зелёный проект прячет непокрытую новую строку",
+   "evidence": {
+    "file": "plugins/superstack/tools/diff_coverage.py",
+    "contains": "def changed_lines"
+   }
+  },
+  {
+   "id": "L5.scan-cascade",
+   "layer": "L5 гарантии",
+   "mechanism": "детерминированные сканеры стоят каскадом: до коммита, до слияния и по расписанию",
+   "evidence": {
+    "file": "plugins/superstack/tools/scan_cascade.py",
+    "contains": "def layers"
+   }
+  },
+  {
+   "id": "L5.one-layer-is-not-a-cascade",
+   "layer": "L5 гарантии",
+   "mechanism": "один слой каскадом не считается: pre-commit обходится флагом, а CI ловит секрет, когда он уже в истории",
+   "evidence": {
+    "file": "plugins/superstack/tools/scan_cascade.py",
+    "contains": "ОБХОДИТСЯ"
+   }
+  },
+  {
+   "id": "L3.layer-guard",
+   "layer": "L3 проектирование",
+   "mechanism": "запрещённый импорт между слоями ловится машиной: когда код пишет модель, границы держат инварианты, а не ревью",
+   "evidence": {
+    "file": "plugins/superstack/tools/layer_guard.py",
+    "contains": "def violations"
+   }
+  },
+  {
+   "id": "L3.boundaries-declared-not-guessed",
+   "layer": "L3 проектирование",
+   "mechanism": "границы объявляет проект, а не угадывает инструмент: неназванная архитектура — «проверять нечего», а не «нарушений нет»",
+   "evidence": {
+    "file": "plugins/superstack/tools/layer_guard.py",
+    "contains": "не объявлены"
+   }
+  },
+  {
+   "id": "L1.constitution-ceiling",
+   "layer": "L1 конституция",
+   "mechanism": "потолок конституции считается числом: файл читается каждой сессией целиком и оплачивается каждый ход",
+   "evidence": {
+    "file": "plugins/superstack/rules/core.rules.json",
+    "contains": "cc.constitution-over-ceiling"
+   }
+  },
+  {
+   "id": "L1.constitution-measured",
+   "layer": "L1 конституция",
+   "mechanism": "объём конституции измеряется пробой, а не оценивается на глаз",
+   "evidence": {
+    "file": "plugins/superstack/tools/probe/collect.py",
+    "contains": "cc.constitution_lines"
+   }
+  },
+  {
+   "id": "UX.interview-three-states",
+   "layer": "интерфейс",
+   "mechanism": "дерево интервью показывается тремя состояниями — улажено, фронтир, заблокировано и чем именно",
+   "evidence": {
+    "file": "plugins/superstack/tools/interview.py",
+    "contains": "def states"
+   }
+  },
+  {
+   "id": "UX.interview-state-is-derived",
+   "layer": "интерфейс",
+   "mechanism": "состояние узла вычисляется из ответов и зависимостей, а не проставляется словом",
+   "evidence": {
+    "file": "plugins/superstack/tools/interview.py",
+    "contains": "def _состояние"
+   }
+  },
+  {
+   "id": "UX.reopen-a-settled-node",
+   "layer": "интерфейс",
+   "mechanism": "к улаженному узлу можно вернуться и переспросить: дерево без возврата — украшение",
+   "evidence": {
+    "file": "plugins/superstack/tools/interview.py",
+    "contains": "def reopen"
+   }
+  },
+  {
+   "id": "UX.change-of-mind-propagates",
+   "layer": "интерфейс",
+   "mechanism": "передумал в узле — всё, что на нём стояло, помечается требующим пересмотра",
+   "evidence": {
+    "file": "plugins/superstack/tools/interview.py",
+    "contains": "def _зависимые"
+   }
+  },
+  {
+   "id": "L3.scaffold-from-spec",
+   "layer": "L3 проектирование",
+   "mechanism": "конфигурация проекта рождается ИЗ спеки, а не пишется руками: папка приходит настроенной",
+   "evidence": {
+    "file": "plugins/superstack/tools/scaffold.py",
+    "contains": "def generate"
+   }
+  },
+  {
+   "id": "L3.scaffold-invents-nothing",
+   "layer": "L3 проектирование",
+   "mechanism": "генератор ничего не выдумывает: нет спеки или в ней нет раздела — отказ, а не правдоподобный текст",
+   "evidence": {
+    "file": "plugins/superstack/tools/scaffold.py",
+    "contains": "def _из_спеки"
+   }
+  },
+  {
+   "id": "L3.scaffold-obeys-the-ceiling",
+   "layer": "L3 проектирование",
+   "mechanism": "сгенерированная конституция помещается в тот же потолок, который проверяет правило",
+   "evidence": {
+    "file": "plugins/superstack/tools/scaffold.py",
+    "contains": "ПОТОЛОК"
+   }
+  },
+  {
+   "id": "L3.scaffold-never-overwrites",
+   "layer": "L3 проектирование",
+   "mechanism": "чужой файл не перезаписывается молча: работа человека дороже удобства генератора",
+   "evidence": {
+    "file": "plugins/superstack/tools/scaffold.py",
+    "contains": "def _занято"
+   }
+  },
+  {
+   "id": "UX.launch-mode-routed",
+   "layer": "интерфейс",
+   "mechanism": "чем запускать работу считает система по форме задачи, а не вспоминает человек",
+   "evidence": {
+    "file": "plugins/superstack/tools/launch_mode.py",
+    "contains": "def choose"
+   }
+  },
+  {
+   "id": "UX.each-step-names-its-ceiling",
+   "layer": "интерфейс",
+   "mechanism": "у каждой ступени автономии назван потолок — то, о чём молчат; рекомендация без потолка это реклама",
+   "evidence": {
+    "file": "plugins/superstack/tools/launch_mode.py",
+    "contains": "\"потолок\""
+   }
+  },
+  {
+   "id": "UX.goal-without-a-gate-is-hope",
+   "layer": "интерфейс",
+   "mechanism": "/goal не предлагается там, где нет детерминированного гейта: иначе выдаётся надежда за автономию",
+   "evidence": {
+    "file": "plugins/superstack/tools/launch_mode.py",
+    "contains": "s.get(\"stop_gate\") is False"
+   }
+  },
+  {
+   "id": "L3.idea-before-spec",
+   "layer": "L3 проектирование",
+   "mechanism": "документ идеи отвечает «зачем и кому» до того, как спека ответит «что и как проверить»",
+   "evidence": {
+    "file": "plugins/superstack/tools/idea_lint.py",
+    "contains": "def sections"
+   }
+  },
+  {
+   "id": "L3.pain-needs-a-number",
+   "layer": "L3 проектирование",
+   "mechanism": "боль и мера без числа — ощущение: по ним нельзя понять, стало ли лучше",
+   "evidence": {
+    "file": "plugins/superstack/tools/idea_lint.py",
+    "contains": "нужно_число"
+   }
+  },
+  {
+   "id": "L3.kind-derived-not-asked",
+   "layer": "L3 проектирование",
+   "mechanism": "вид продукта выводится из слов человека и зависимостей, а не спрашивается у того, кто не знает разницы",
+   "evidence": {
+    "file": "plugins/superstack/tools/classify.py",
+    "contains": "def evidence"
+   }
+  },
+  {
+   "id": "L3.weak-signal-is-a-question",
+   "layer": "L3 проектирование",
+   "mechanism": "слабые сигналы дают «не знаю» и честный вопрос: угаданный вид тише пропущенного",
+   "evidence": {
+    "file": "plugins/superstack/tools/classify.py",
+    "contains": "ПОРОГ"
+   }
+  },
+  {
+   "id": "L6.outgoing-report",
+   "layer": "L6 наблюдаемость",
+   "mechanism": "итог уходит туда, где человека застанут: автономия без исходящего шага привязывает его к столу",
+   "evidence": {
+    "file": "plugins/superstack/tools/notify.py",
+    "contains": "def send"
+   }
+  },
+  {
+   "id": "L6.no-channel-is-not-quiet-ok",
+   "layer": "L6 наблюдаемость",
+   "mechanism": "канал не объявлен — «отправлять некуда», а не тихое ничего",
+   "evidence": {
+    "file": "plugins/superstack/tools/notify.py",
+    "contains": "def channel"
+   }
+  },
+  {
+   "id": "L6.secrets-never-leave",
+   "layer": "L6 наблюдаемость",
+   "mechanism": "исходящий отчёт проходит редактуру: канал доставки — самый дешёвый способ вынести ключ с машины",
+   "evidence": {
+    "file": "plugins/superstack/tools/notify.py",
+    "contains": "def redact"
+   }
+  },
+  {
+   "id": "L6.delivery-is-a-response-code",
+   "layer": "L6 наблюдаемость",
+   "mechanism": "доставка подтверждается кодом ответа, а сбой доставки не отменяет сделанного",
+   "evidence": {
+    "file": "plugins/superstack/tools/notify.py",
+    "contains": "код >= 400"
+   }
+  },
+  {
+   "id": "L7.doctor-on-schedule",
+   "layer": "L7 эволюция",
+   "mechanism": "доктор ходит по расписанию сам: событие «протухло» приходит от чужих релизов, вспомнить о нём вовремя нельзя",
+   "evidence": {
+    "file": "plugins/superstack/tools/schedule_doctor.py",
+    "contains": "def installed"
+   }
+  },
+  {
+   "id": "L7.finding-without-a-reader",
+   "layer": "L7 эволюция",
+   "mechanism": "задача без шага доставки не засчитывается: находка, которую никто не прочитал, равна ненайденной",
+   "evidence": {
+    "file": "plugins/superstack/tools/schedule_doctor.py",
+    "contains": "ДОСТАВКА not in текст"
+   }
+  },
+  {
+   "id": "L7.prune-by-silence",
+   "layer": "L7 эволюция",
+   "mechanism": "не срабатывавшее дольше срока предлагается к удалению: файл на месте всегда, работает он или нет",
+   "evidence": {
+    "file": "plugins/superstack/tools/prune.py",
+    "contains": "def candidates"
+   }
+  },
+  {
+   "id": "L7.silence-is-not-uselessness",
+   "layer": "L7 эволюция",
+   "mechanism": "«не срабатывало» и «не нужно» разведены: у тормоза молчание — лучшая новость, и он под нож не идёт",
+   "evidence": {
+    "file": "plugins/superstack/tools/prune.py",
+    "contains": "МОЛЧАНИЕ_ЭТО_ХОРОШО"
+   }
+  },
+  {
+   "id": "L7.young-log-judges-nobody",
+   "layer": "L7 эволюция",
+   "mechanism": "журнал короче срока наблюдения не даёт вердикта: поставленное вчера не срабатывало вчера",
+   "evidence": {
+    "file": "plugins/superstack/tools/prune.py",
+    "contains": "самое_старое > порог"
+   }
+  },
+  {
+   "id": "DIST.publication-is-a-fresh-clone",
+   "layer": "дистрибуция",
+   "mechanism": "публикация состоялась — это зелёный прогон в СВЕЖЕМ клоне, а не код возврата push",
+   "evidence": {
+    "file": "tools/sync_public.py",
+    "contains": "def verify_published"
+   }
+  },
+  {
+   "id": "DIST.broken-publish-blocks",
+   "layer": "дистрибуция",
+   "mechanism": "красный клон роняет выкладку: у автора зелено, у скачавшего нет — и узнаёт об этом скачавший",
+   "evidence": {
+    "file": "tools/sync_public.py",
+    "contains": "проверка[\"status\"] == \"fail\""
+   }
+  },
+  {
+   "id": "UX.four-switches-one-product",
+   "layer": "интерфейс",
+   "mechanism": "механизмы, мешающие новичку, вынесены в явные выключатели: один продукт с четырьмя тумблерами, а не два продукта",
+   "evidence": {
+    "file": "plugins/superstack/data/expert-only.json",
+    "contains": "не два продукта"
+   }
+  },
+  {
+   "id": "UX.switch-defaults-off",
+   "layer": "интерфейс",
+   "mechanism": "мешающий механизм по умолчанию выключен: умолчание «включено» превращает выключатель в ловушку",
+   "evidence": {
+    "file": "plugins/superstack/tools/expert_toggles.py",
+    "contains": "def state"
+   }
+  },
+  {
+   "id": "UX.switch-names-its-price",
+   "layer": "интерфейс",
+   "mechanism": "включённый механизм называет и пользу, и цену — выбор без цены не выбор",
+   "evidence": {
+    "file": "plugins/superstack/data/expert-only.json",
+    "contains": "\"hurts\""
+   }
+  },
+  {
+   "id": "UX.typo-in-a-switch-is-loud",
+   "layer": "интерфейс",
+   "mechanism": "неизвестное имя выключателя — отказ: иначе включённым числится то, чего нет, а настоящий молчит выключенным",
+   "evidence": {
+    "file": "plugins/superstack/tools/expert_toggles.py",
+    "contains": "чужие"
+   }
+  },
+  {
+   "id": "L4.external-quota",
+   "layer": "L4 исполнение",
+   "mechanism": "обращения к внешнему справочнику считаются и упираются в потолок: расход растёт тихо, ни одна попытка не выглядит лишней",
+   "evidence": {
+    "file": "plugins/superstack/tools/quota.py",
+    "contains": "def verdict"
+   }
+  },
+  {
+   "id": "L4.undeclared-is-not-unlimited",
+   "layer": "L4 исполнение",
+   "mechanism": "потолок не объявлен — «считать нечего», а не разрешение тратить",
+   "evidence": {
+    "file": "plugins/superstack/tools/quota.py",
+    "contains": "def limits"
+   }
+  },
+  {
+   "id": "L4.ceiling-stops-not-warns",
+   "layer": "L4 исполнение",
+   "mechanism": "достигнутый потолок останавливает цикл: предупреждение, которое можно проигнорировать, игнорируют",
+   "evidence": {
+    "file": "plugins/superstack/tools/quota.py",
+    "contains": "исчерпаны"
+   }
+  },
+  {
+   "id": "L5.heavy-mcp-addressed",
+   "layer": "L5 гарантии",
+   "mechanism": "тяжёлый MCP выдаётся той роли, чья петля без него невозможна: описания уезжают в контекст каждой роли, которой он выдан",
+   "evidence": {
+    "file": "plugins/superstack/tools/mcp_routing.py",
+    "contains": "def findings"
+   }
+  },
+  {
+   "id": "L5.saving-that-kills-the-check",
+   "layer": "L5 гарантии",
+   "mechanism": "отсутствие браузера у роли-оракула — находка: экономия, убирающая единственный способ посмотреть, создаёт дыру с верификацией",
+   "evidence": {
+    "file": "plugins/superstack/tools/mcp_routing.py",
+    "contains": "missing-where-required"
+   }
+  },
+  {
+   "id": "L6.debt-by-count",
+   "layer": "L6 наблюдаемость",
+   "mechanism": "техдолг ищется счётом «часто правится × большой», а не впечатлением от чтения",
+   "evidence": {
+    "file": "plugins/superstack/tools/debt.py",
+    "contains": "def hotspots"
+   }
+  },
+  {
+   "id": "L6.rank-carries-its-terms",
+   "layer": "L6 наблюдаемость",
+   "mechanism": "каждое горячее место несёт свои слагаемые: рейтинг без чисел — гадание с ранжированием",
+   "evidence": {
+    "file": "plugins/superstack/tools/debt.py",
+    "contains": "\"edits\": n, \"lines\": строк"
+   }
+  },
+  {
+   "id": "INST.conditional-additions",
+   "layer": "установщик",
+   "mechanism": "добавки сверх базы заданы данными: условие → что ставится, и условие считается по фактам машины",
+   "evidence": {
+    "file": "plugins/superstack/data/conditional-kit.json",
+    "contains": "superstack.conditional-kit.v1"
+   }
+  },
+  {
+   "id": "INST.unevaluable-condition-is-named",
+   "layer": "установщик",
+   "mechanism": "невычислимое условие объявляется пропущенным с причиной: молча пропущенная добавка неотличима от невыполнимой",
+   "evidence": {
+    "file": "plugins/superstack/tools/conditional_kit.py",
+    "contains": "условие не вычислено"
+   }
+  },
+  {
+   "id": "INST.same-grammar-as-rules",
+   "layer": "установщик",
+   "mechanism": "условия добавок считает тот же движок, что и правила: своя копия грамматики разошлась бы молча",
+   "evidence": {
+    "file": "plugins/superstack/tools/conditional_kit.py",
+    "contains": "def _движок"
+   }
+  },
+  {
+   "id": "INST.external-confirmation",
+   "layer": "установщик",
+   "mechanism": "итог сверяется у внешней стороны: единственный шаг, который система не может себе нарисовать",
+   "evidence": {
+    "file": "plugins/superstack/tools/external_check.py",
+    "contains": "def verdict"
+   }
+  },
+  {
+   "id": "INST.literal-conditions",
+   "layer": "установщик",
+   "mechanism": "условия буквальные — открыт и добавленных строк больше нуля: «похоже, что создан» ответом не является",
+   "evidence": {
+    "file": "plugins/superstack/tools/external_check.py",
+    "contains": "состояние != \"open\""
+   }
+  },
+  {
+   "id": "INST.silence-is-not-consent",
+   "layer": "установщик",
+   "mechanism": "молчание внешней стороны не толкуется в свою пользу: нет ответа — «сверить не удалось»",
+   "evidence": {
+    "file": "plugins/superstack/tools/external_check.py",
+    "contains": "if ответ is None"
+   }
+  },
+  {
+   "id": "L4.commit-plan",
+   "layer": "L4 исполнение",
+   "mechanism": "история собирается по объявленной заранее нарезке: «как получилось» — документ, который никто не планировал",
+   "evidence": {
+    "file": "plugins/superstack/tools/commit_plan.py",
+    "contains": "def drift"
+   }
+  },
+  {
+   "id": "L4.mixed-commit-is-named",
+   "layer": "L4 исполнение",
+   "mechanism": "коммит, смешавший два объявленных куска, называется: откатить один из них больше нельзя",
+   "evidence": {
+    "file": "plugins/superstack/tools/commit_plan.py",
+    "contains": "mixed-commit"
+   }
+  },
+  {
+   "id": "L4.slice-needs-a-reason",
+   "layer": "L4 исполнение",
+   "mechanism": "кусок нарезки объявляется вместе с причиной: без неё через месяц он читается как случайность",
+   "evidence": {
+    "file": "plugins/superstack/tools/commit_plan.py",
+    "contains": "без причины"
+   }
+  },
+  {
+   "id": "L2.distill-by-task",
+   "layer": "L2 память",
+   "mechanism": "чужое знание входит скиллами по ЗАДАЧАМ: документ целиком подтягивается либо всегда, либо никогда",
+   "evidence": {
+    "file": "plugins/superstack/tools/distill.py",
+    "contains": "document-not-a-task"
+   }
+  },
+  {
+   "id": "L2.source-prefix",
+   "layer": "L2 память",
+   "mechanism": "имя дистиллированного скилла несёт префикс источника: без него чужой скилл сталкивается со своим и выигрывает случайный",
+   "evidence": {
+    "file": "plugins/superstack/tools/distill.py",
+    "contains": "no-source-prefix"
+   }
+  },
+  {
+   "id": "L2.provenance-inside",
+   "layer": "L2 память",
+   "mechanism": "происхождение названо внутри скилла: через полгода не отличить выстраданное от переписанного",
+   "evidence": {
+    "file": "plugins/superstack/tools/distill.py",
+    "contains": "no-provenance"
+   }
+  },
+  {
+   "id": "BAR.mutations-on-a-copy",
+   "layer": "планка",
+   "mechanism": "мутации ломают одноразовую копию, а не рабочее дерево: обрыв прогона больше не оставляет сломанный файл у человека",
+   "evidence": {
+    "file": "tools/gauntlet.py",
+    "contains": "shutil.copytree(PLUG, копия"
+   }
+  },
+  {
+   "id": "BAR.skill-weight",
+   "layer": "планка",
+   "mechanism": "вес скилла на загрузке считает прибор: тот же потолок, что мы ставим чужой конституции, стоит и на нашей",
+   "evidence": {
+    "file": "tools/gauntlet.py",
+    "contains": "def gate_weight"
+   }
+  },
+  {
+   "id": "BAR.always-read-phase-counts",
+   "layer": "планка",
+   "mechanism": "фаза, читаемая всегда, входит в вес загрузки — вынести текст в файл и читать его каждый раз не считается облегчением",
+   "evidence": {
+    "file": "tools/gauntlet.py",
+    "contains": "ЧИТАЕТСЯ_ВСЕГДА"
+   }
+  },
+  {
+   "id": "BAR.two-numbers-not-one",
+   "layer": "планка",
+   "mechanism": "ворота плана называют два числа: сколько механизмов проверено поломкой и сколько только подстрокой",
+   "evidence": {
+    "file": "tools/gauntlet.py",
+    "contains": "только подстрокой"
+   }
+  },
+  {
+   "id": "PLAT.unverified-is-said-out-loud",
+   "layer": "дистрибуция",
+   "mechanism": "непроверенная платформа называется вслух на старте, а не выясняется человеком по непонятным ошибкам",
+   "evidence": {
+    "file": "plugins/superstack/tools/platform_check.py",
+    "contains": "def verdict"
+   }
+  },
+  {
+   "id": "PLAT.what-breaks-is-named",
+   "layer": "дистрибуция",
+   "mechanism": "на непроверенной платформе названо поимённо, что именно не работает — не «возможны проблемы»",
+   "evidence": {
+    "file": "plugins/superstack/tools/platform_check.py",
+    "contains": "ЗАВИСИТ_ОТ_ОБОЛОЧКИ"
+   }
+  },
+  {
+   "id": "PLAT.python-part-still-works",
+   "layer": "дистрибуция",
+   "mechanism": "питоновская часть остаётся рабочей там, где нет оболочки: инструменты не падают, а объявляют деградацию",
+   "evidence": {
+    "file": "plugins/superstack/tools/platform_check.py",
+    "contains": "def degraded"
+   }
+  },
+  {
+   "id": "PLAT.command-survives-backslashes",
+   "layer": "дистрибуция",
+   "mechanism": "команда проекта разбирается по правилам платформы: обратный слэш в пути не считается экранированием",
+   "evidence": {
+    "file": "plugins/superstack/tools/bar.py",
+    "contains": "posix=os.name != \"nt\""
+   }
+  },
+  {
+   "id": "PLAT.unknown-lock-means-alive",
+   "layer": "дистрибуция",
+   "mechanism": "там, где живость чужого процесса не спросить, замок считается живым — цена ошибки в другую сторону выше",
+   "evidence": {
+    "file": "plugins/superstack/tools/prove_tests.py",
+    "contains": "if os.name == \"nt\":"
+   }
+  },
+  {
+   "id": "L0.kill-switch-needs-no-shell",
+   "layer": "L0 основание",
+   "mechanism": "аварийная остановка не зависит от оболочки: она обязана срабатывать и там, где sh нет",
+   "evidence": {
+    "file": "plugins/superstack/tools/pause.sh",
+    "contains": "exec python3"
+   }
+  },
+  {
+   "id": "UX.design-canvas-in-tool",
+   "layer": "интерфейс",
+   "mechanism": "дизайн рисуется на холсте ВНУТРИ инструмента и правится руками человека до того, как написан код",
+   "evidence": {
+    "file": "plugins/superstack/skills/go/phases/direction.md",
+    "contains": "ДИЗАЙН ДЕЛАЕТСЯ ЗДЕСЬ, НА ХОЛСТЕ"
+   }
+  },
+  {
+   "id": "UX.design-pulled-not-retold",
+   "layer": "интерфейс",
+   "mechanism": "цвет, объявленный в спеке, обязан БУКВАЛЬНО встречаться в артборде: придуманный «примерно такой же» не проезжает",
+   "evidence": {
+    "file": "plugins/superstack/tools/design_pull.py",
+    "contains": "которого в дизайне НЕТ"
+   }
+  },
+  {
+   "id": "UX.design-contrast-computed",
+   "layer": "интерфейс",
+   "mechanism": "контраст вычисляется из значений дизайна (hex, rgb, hsl, oklch), а не оценивается на глаз; непонятая запись — «не проверено», а не ноль",
+   "evidence": {
+    "file": "plugins/superstack/tools/design_pull.py",
+    "contains": "проверено НЕ БЫЛО"
+   }
+  },
+  {
+   "id": "UX.design-nothing-to-check-is-not-a-pass",
+   "layer": "интерфейс",
+   "mechanism": "нет артбордов — код 2 «проверять нечем», и это не «прошло»: на запасном пути числа держатся на слове агента, и так и сказано",
+   "evidence": {
+    "file": "plugins/superstack/tools/design_pull.py",
+    "contains": "ПРОВЕРЯТЬ НЕЧЕМ"
+   }
+  },
+  {
+   "id": "UX.design-green-names-the-unchecked",
+   "layer": "интерфейс",
+   "mechanism": "зелёный гейт дизайна ВСЕГДА называет непроверенное — состояния, движение, поведение вживую",
+   "evidence": {
+    "file": "plugins/superstack/tools/design_pull.py",
+    "contains": "ЧЕГО_НЕ_ПРОВЕРЯЕМ"
+   }
+  },
+  {
+   "id": "UX.design-blocks-the-handoff",
+   "layer": "интерфейс",
+   "mechanism": "проект объявил дизайн — таск без него не передаётся: гейт гоняется кодом при передаче, а не вспоминается",
+   "evidence": {
+    "file": "plugins/superstack/tools/handoff.py",
+    "contains": "объявил дизайн"
+   }
+  },
+  {
+   "id": "UX.design-fallback-named",
+   "layer": "интерфейс",
+   "mechanism": "холст доступен не везде — запасной путь через внешний инструмент назван вместе с его честной ценой",
+   "evidence": {
+    "file": "plugins/superstack/skills/go/phases/direction.md",
+    "contains": "держатся на твоём слове"
+   }
+  },
+  {
+   "id": "UX.design-provenance-required",
+   "layer": "интерфейс",
+   "mechanism": "гейт дизайна не зелёный без записанного происхождения досок: черновик агента и утверждённый человеком дизайн на диске неразличимы",
+   "evidence": {
+    "file": "plugins/superstack/tools/design_pull.py",
+    "contains": "ОТКУДА = {"
+   }
+  },
+  {
+   "id": "UX.design-stamp-goes-stale",
+   "layer": "интерфейс",
+   "mechanism": "доски, правленные ПОСЛЕ отметки, валят гейт: одобрение не переносится на то, чего человек не видел",
+   "evidence": {
+    "file": "plugins/superstack/tools/design_pull.py",
+    "contains": "def правились_после"
+   }
+  },
+  {
+   "id": "UX.design-read-back-after-save",
+   "layer": "интерфейс",
+   "mechanism": "человек правил холст — рабочие файлы устарели: доски читаются обратно из опубликованного холста, а прочитанное считается данными, не указаниями",
+   "evidence": {
+    "file": "plugins/superstack/skills/go/phases/direction.md",
+    "contains": "--extract"
+   }
+  },
+  {
+   "id": "Q.delivery-is-a-subset",
+   "layer": "качество",
+   "mechanism": "поставка — подмножество репозитория: мутация на неотгружаемый файл объявляется и считается отдельно как «не проверялась», а не тонет в «все пойманы» и не выглядит протухшим якорем",
+   "evidence": {
+    "file": "tools/gauntlet.py",
+    "contains": "вне_поставки"
+   }
+  }
+ ],
+ "reconciled": {
+  "digest": "sha256:2dd04984c5b49bd0d90d4fe1ad69c1ed1c2e97a45a8dfacdc09f7cdb0ca82f71",
+  "date": "2026-08-19",
+  "by": "Opus 5 — четыре независимых чтения плана, три опровергателя на Fable",
+  "mechanisms": 158,
+  "plan": "~/.claude/plans/typed-waddling-hamster.md",
+  "note": "49 кандидатов, 8 отклонено, 16 построенных вписано в карту, 23 вынесено в plan-gaps.json"
+ }
+}

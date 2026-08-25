@@ -1,0 +1,87 @@
+{
+  "schema": "superstack.supersession.v1",
+  "generated": "2026-08-08",
+  "observed_claude_code": "2.1.226",
+
+  "_doc": "Реестр вытеснения нативом. Отвечает на вопрос «что из установленного уже есть в самом Claude Code». Главное ограничение записано честно в поле decay: реестр НЕ обновляется сам. Сопоставить новую нативную возможность со сторонним инструментом, который она обесценила, может только человек, прочитавший changelog. Поэтому доктор всегда печатает возраст реестра рядом с выводом.",
+
+  "decay": {
+    "problem": "реестр устаревает; вывод «это уже есть в ядре» верен только до глубины последнего обновления",
+    "mitigation": "доктор печатает возраст реестра и версию Claude Code, под которую он собран; если разрыв больше двух минорных версий — предупреждает, что выводы этой оси могли устареть",
+    "not_solved": "автоматическое обнаружение нового вытеснения"
+  },
+
+  "entries": [
+    {
+      "id": "memory-plugins",
+      "detect": {"skills": ["claude-mem", "mem0", "supermemory", "memanto", "claude-memory-compiler"]},
+      "superseded_by": {"native": "auto memory", "since": "2.0.0",
+        "observe": "существует ~/.claude/projects/*/memory/MEMORY.md"},
+      "confidence": "high", "overlap": "full", "action": "quarantine",
+      "plain": "Память между сессиями теперь встроена и включена по умолчанию.",
+      "caveat": "Совмещать нативную память со сторонней НЕЛЬЗЯ — официально ведёт к спутанному контексту. Выбирать одно."
+    },
+    {
+      "id": "loop-drivers",
+      "detect": {"skills": ["autonomous-loops", "continuous-agent-loop", "ralphinho-rfc-pipeline", "santa-loop"],
+                 "commands": ["loop-start", "loop-status"]},
+      "superseded_by": {"native": "/loop, /goal, Monitor, ScheduleWakeup", "since": "2.1.0",
+        "observe": "недоступно скриптом — нативные команды не оставляют следа на диске"},
+      "confidence": "high", "overlap": "partial", "action": "review",
+      "plain": "Циклы «работай, пока не выполнится условие» встроены.",
+      "caveat": "Свой bash-цикл теперь даёт МЕНЬШЕ: нет независимого оценщика условия, нет учёта токенов, нет восстановления сессии."
+    },
+    {
+      "id": "worktree-scripts",
+      "detect": {"files": ["~/.claude/scripts/orchestrate-worktrees.js"]},
+      "superseded_by": {"native": "--worktree, isolation: worktree, /batch", "since": "2.1.0",
+        "observe": "недоступно скриптом"},
+      "confidence": "high", "overlap": "full", "action": "quarantine",
+      "plain": "Изоляция параллельной работы встроена и вдобавок блокирует побег из ветки."
+    },
+    {
+      "id": "session-save-resume",
+      "detect": {"skills": ["save-session", "resume-session"]},
+      "superseded_by": {"native": "auto memory + /resume + /fork + /rewind", "since": "2.0.0",
+        "observe": "существует ~/.claude/projects/*/memory/"},
+      "confidence": "medium", "overlap": "partial", "action": "review",
+      "plain": "Сохранение и восстановление контекста встроено."
+    },
+    {
+      "id": "third-party-messengers",
+      "detect": {"mcp": ["telegram", "claude-code-telegram", "cctelegram"]},
+      "superseded_by": {"native": "--channels + официальные плагины каналов", "since": "2.1.0",
+        "observe": "недоступно скриптом"},
+      "confidence": "high", "overlap": "full", "action": "quarantine",
+      "plain": "Управление из мессенджера — официальный плагин.",
+      "caveat": "Обёртки, которые сами добывают токен подписки, вдобавок в зоне риска по правилам использования."
+    },
+    {
+      "id": "tdd-guard",
+      "detect": {"skills": ["tdd-guard"], "npm": ["tdd-guard"]},
+      "superseded_by": {"native": "нет — заменён другим пакетом", "replacement": "@nizos/probity",
+        "since": "n/a", "observe": "недоступно скриптом"},
+      "confidence": "high", "overlap": "full", "action": "replace",
+      "plain": "Автор перевёл пакет в режим поддержки и указал замену.",
+      "caveat": "Это НЕ вытеснение нативом, а смена апстрима. Ось другая, но действие то же."
+    },
+    {
+      "id": "code-search-indexes",
+      "detect": {"mcp": ["serena"], "skills": ["ctags-index"]},
+      "superseded_by": {"native": "LSP + Grep + Glob + субагенты Explore/Plan", "since": "2.1.0",
+        "observe": "недоступно скриптом"},
+      "confidence": "medium", "overlap": "partial", "action": "review",
+      "plain": "Навигация по символам встроена.",
+      "caveat": "Символьное редактирование в крупных типизированных репозиториях натив не покрывает — там инструмент ещё оправдан."
+    },
+    {
+      "id": "legacy-slash-commands",
+      "detect": {"dir": "~/.claude/commands"},
+      "superseded_by": {"native": "слэш-команды слиты со скиллами", "since": "2.1.0",
+        "observe": "существует ~/.claude/skills с тем же именем, что и файл в commands"},
+      "confidence": "high", "overlap": "full", "action": "review",
+      "plain": "Отдельные файлы команд — легаси. При совпадении имени выигрывает скилл.",
+      "caveat": "Команды продолжают работать. Это уборка, а не поломка."
+    }
+  ]
+}
