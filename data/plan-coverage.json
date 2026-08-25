@@ -2220,6 +2220,96 @@
     "file": "tools/gauntlet.py",
     "contains": "вне_поставки"
    }
+  },
+  {
+   "id": "Q.criterion-has-an-address",
+   "layer": "качество",
+   "mechanism": "критерий приёмки обязан назвать где смотреть и что считать выполненным; безадресный возвращает исполнителю решение, ради которого критерий и заведён",
+   "evidence": {
+    "file": "plugins/superstack/tools/criteria.py",
+    "contains": "ОБЯЗАТЕЛЬНЫЕ = "
+   }
+  },
+  {
+   "id": "Q.address-that-leads-nowhere",
+   "layer": "качество",
+   "mechanism": "путь в адресе критерия обязан существовать: адрес в никуда хуже отсутствующего, он выглядит адресом",
+   "evidence": {
+    "file": "plugins/superstack/tools/criteria.py",
+    "contains": "def похоже_на_путь"
+   }
+  },
+  {
+   "id": "Q.criteria-do-not-bleed",
+   "layer": "качество",
+   "mechanism": "два критерия на один адрес без «мимо» — отказ: один изъян уронит оба, а то, что проверял второй, не проверит никто",
+   "evidence": {
+    "file": "plugins/superstack/tools/criteria.py",
+    "contains": "перетекают друг в друга"
+   }
+  },
+  {
+   "id": "Q.strictness-is-declared",
+   "layer": "качество",
+   "mechanism": "строгость критериев объявляется проектом явно: молчаливое ужесточение сломало бы проект, начатый до проверки, на середине волны",
+   "evidence": {
+    "file": "plugins/superstack/tools/criteria.py",
+    "contains": "def строгие"
+   }
+  },
+  {
+   "id": "Q.criterion-reaches-the-builder",
+   "layer": "качество",
+   "mechanism": "адресный критерий печатается исполнителю по полям, а не объектом, и рядом стоит веление судить по наблюдаемому выводу",
+   "evidence": {
+    "file": "plugins/superstack/tools/handoff.py",
+    "contains": "ПО_НАБЛЮДАЕМОМУ"
+   }
+  },
+  {
+   "id": "R.stall-is-detected-by-code",
+   "layer": "прогон",
+   "mechanism": "признаки застревания читаются из журнала механически — петля, работа вслепую, незакрытая ошибка, разговор — без модели и без токенов",
+   "evidence": {
+    "file": "plugins/superstack/tools/stall.py",
+    "contains": "def разобрать"
+   }
+  },
+  {
+   "id": "R.loop-needs-repetition",
+   "layer": "прогон",
+   "mechanism": "петлёй считается третье подряд падение одной и той же команды: вторая попытка — норма отладки, и валить на ней значит мешать работе",
+   "evidence": {
+    "file": "plugins/superstack/tools/stall.py",
+    "contains": "ПЕТЛЯ = 3"
+   }
+  },
+  {
+   "id": "R.readonly-work-is-work",
+   "layer": "прогон",
+   "mechanism": "разговором считаются ходы без единого вызова инструмента, а не работа без правок: прогон, который читает и проверяет, работает",
+   "evidence": {
+    "file": "plugins/superstack/tools/stall.py",
+    "contains": "def холостые_ходы"
+   }
+  },
+  {
+   "id": "R.too-early-to-judge",
+   "layer": "прогон",
+   "mechanism": "мало шагов или нет журнала — код 2 «судить нечем», отдельно от «идёт»",
+   "evidence": {
+    "file": "plugins/superstack/tools/stall.py",
+    "contains": "МИНИМУМ_ШАГОВ"
+   }
+  },
+  {
+   "id": "R.movement-is-not-correctness",
+   "layer": "прогон",
+   "mechanism": "зелёный отказ от вмешательства всегда называет, чего не знает: видно движение, а не верность направления",
+   "evidence": {
+    "file": "plugins/superstack/tools/stall.py",
+    "contains": "ЧЕГО_НЕ_ЗНАЕМ"
+   }
   }
  ],
  "reconciled": {

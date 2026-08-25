@@ -241,9 +241,44 @@ def design_status(каталог: "Path") -> "tuple":
     return (1, "; ".join(итог["отказы"])[:400])
 
 
+def criteria_status(task: dict, корень: "Path") -> "tuple":
+    """Есть ли у критериев адрес? Отвечает КОД, а не взгляд на список.
+
+    Прежний блокер проверял непустоту — и «работает корректно» уезжало
+    исполнителю, возвращая ему то самое решение, ради которого критерий и
+    заводится: где смотреть и что считать выполненным.
+
+    Импорт узкий и вслух: пропажа модуля — ОТКАЗ, а не тишина. Проверка,
+    которую нечем исполнить, не имеет права выглядеть пройденной.
+    """
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    try:
+        import criteria
+    except ImportError as e:
+        return (1, f"проверить критерии нечем: {e}")
+    итог = criteria.проверить(task, Path(корень))
+    if итог["код"] == 0:
+        return (0, "")
+    if итог["код"] == 2:
+        return (2, итог["почему"])
+    return (1, "; ".join(итог["отказы"])[:400])
+
+
+def строгие_критерии(state: dict) -> bool:
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    try:
+        import criteria
+    except ImportError:
+        # Не смогли прочитать объявление — считаем строгим: пропустить
+        # безадресный критерий дороже, чем лишний раз отказать.
+        return True
+    return criteria.строгие(state)
+
+
 def blockers(state: dict, task: dict, interfaces: str, spec: str,
              test_cmd: str, adr_dir: "Path | None" = None,
-             design_dir: "Path | None" = None) -> list:
+             design_dir: "Path | None" = None,
+             корень: "Path | None" = None) -> list:
     """Почему этот таск передавать НЕЛЬЗЯ. Пустой список — можно."""
     bad = []
     if not (task.get("requirements") or []):
@@ -283,6 +318,11 @@ def blockers(state: dict, task: dict, interfaces: str, spec: str,
     # Та же лазейка, что и с решениями, но дороже: проект объявил каталог
     # дизайна, а таск уходит без него. Тогда интерфейс задаст тот, кто дизайна
     # не видел, и увидит его человек уже собранным.
+    if строгие_критерии(state):
+        код, почему = criteria_status(task, корень or Path("."))
+        if код:
+            bad.append(f"критерии без адреса: {почему}")
+
     заявлен = state.get("design_dir")
     if заявлен and design_dir is None:
         bad.append(f"проект объявил дизайн в `{заявлен}`, а передача идёт без "
@@ -318,6 +358,35 @@ def holdout_leak(task: dict, prompt: str) -> list:
     return out
 
 
+#: Строка, которую исполнитель видит РЯДОМ С КАЖДЫМ критерием. Без неё критерий
+#: читается как «убеди себя, что сделано»: агент, оценивающий свою же работу по
+#: собственному пересказу, всегда находит совпадение. Единственная опора, не
+#: принадлежащая его петле, — то, что напечатала команда.
+ПО_НАБЛЮДАЕМОМУ = ("Судить по НАБЛЮДАЕМОМУ ВЫВОДУ — тому, что напечатали "
+                   "команды, — а не по собственному пересказу сделанного.")
+
+
+def _критерий(c) -> str:
+    """Критерий в промпт. Адресный печатается по полям, а не как объект.
+
+    Прежняя строка `f"- [ ] {c}"` на адресном критерии печатала питоновский
+    словарь: исполнитель получал `{'что': ..., 'где': ...}` и читал его как
+    попало. Форма, ради которой всё затевалось, до него не доезжала.
+    """
+    if not isinstance(c, dict):
+        return f"- [ ] {c}"
+    строки = [f"- [ ] {c.get('что', '')}"]
+    if c.get("где"):
+        строки.append(f"      где смотреть: {c['где']}")
+    if c.get("высоко"):
+        строки.append(f"      засчитано: {c['высоко']}")
+    if c.get("низко"):
+        строки.append(f"      НЕ засчитано: {c['низко']}")
+    if c.get("мимо"):
+        строки.append(f"      мимо этого критерия: {c['мимо']}")
+    return "\n".join(строки)
+
+
 def build(state: dict, task: dict, interfaces: str, spec_excerpt: str,
           test_cmd: str, adrs: list = None) -> str:
     """Промпт исполнителю. Обязательные куски вложены здесь, а не вспомнены.
@@ -326,7 +395,7 @@ def build(state: dict, task: dict, interfaces: str, spec_excerpt: str,
     """
     reqs = ", ".join(task.get("requirements") or [])
     zone = " · ".join(task.get("zone") or [])
-    crit = "\n".join(f"- [ ] {c}" for c in (task.get("acceptance") or []))
+    crit = "\n".join(_критерий(c) for c in (task.get("acceptance") or []))
     quotes = "\n".join(f"> «{q}»" for q in (task.get("quotes") or []))
 
     parts = [
@@ -343,7 +412,7 @@ def build(state: dict, task: dict, interfaces: str, spec_excerpt: str,
         # Дословные слова человека стоят около сорока токенов и стоят между
         # свежим контекстом и правдоподобным перетолкованием заказа.
         parts += ["", "## Из брифа, дословно", "", quotes]
-    parts += ["", "## Критерии приёмки", "", crit or "—"]
+    parts += ["", "## Критерии приёмки", "", ПО_НАБЛЮДАЕМОМУ, "", crit or "—"]
     ruling = governing_adrs(adrs or [], task.get("zone") or [])
     if ruling:
         # Решения идут ДО разделов спеки и до кода: они очерчивают, внутри чего
@@ -423,7 +492,8 @@ def main() -> int:
     adr_dir = Path(adr_arg) if adr_arg else None
     design_arg = _flag(argv, "--design")
     design_dir = Path(design_arg) if design_arg else None
-    bad = blockers(state, task, interfaces, spec, test_cmd, adr_dir, design_dir)
+    bad = blockers(state, task, interfaces, spec, test_cmd, adr_dir, design_dir,
+                   Path.cwd())
     if bad:
         print("ПЕРЕДАВАТЬ НЕЧЕГО", file=sys.stderr)
         for b in bad:

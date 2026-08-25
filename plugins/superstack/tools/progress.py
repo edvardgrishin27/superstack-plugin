@@ -37,8 +37,12 @@
                             [--goal "..."] [--acceptance "a;b"] [--quotes "..."]
                             [--spec-sections "..."]   — без них таск не передать
                             [--holdout "a;b"]  проверки, скрытые от исполнителя
+                            [--criterion "что|где|высоко|низко[|мимо]"] — можно
+                                              несколько раз; критерий с адресом
   python3 progress.py debt  <файл> <вид> <текст>        вид: stub|assumption|env
   python3 progress.py debt  <файл> <вид> --none         смотрели, закрывать нечего
+  python3 progress.py criteria <файл> строгие|свободные
+                            строгие: критерий без адреса дальше не передаётся
   python3 progress.py source <файл> <путь>              где лежат требования и задачи
   python3 progress.py req   <файл> --total N --covered N [--dropped N] [--deferred N]
   python3 progress.py show  <файл>
@@ -477,6 +481,42 @@ def _flag(argv: list, name: str, default=None):
     return argv[argv.index(name) + 1] if name in argv and argv.index(name) + 1 < len(argv) else default
 
 
+#: Поля критерия в порядке записи через `|`. Пятое — «мимо» — необязательно.
+ПОЛЯ_КРИТЕРИЯ = ("что", "где", "высоко", "низко", "мимо")
+
+
+def _критерии(rest: list) -> list:
+    """Все `--criterion` из строки вызова. Неполный — отказ, а не тихий пропуск.
+
+    Критерий, потерявший поле по дороге, выглядит как обычный: он просто не
+    проверяет того, что должен был. Молчание здесь стоило бы ровно того, ради
+    чего форма и заведена.
+    """
+    out = []
+    for i, a in enumerate(rest):
+        if a != "--criterion" or i + 1 >= len(rest):
+            continue
+        части = [ч.strip() for ч in rest[i + 1].split("|")]
+        if len(части) < 4 or not all(части[:4]):
+            raise ValueError(
+                "--criterion: нужно «что|где|высоко|низко[|мимо]», "
+                f"получено: {rest[i + 1][:60]!r}")
+        out.append(dict(zip(ПОЛЯ_КРИТЕРИЯ, части)))
+    return out
+
+
+def _приёмка(acc: "str | None", крит: list) -> "list | None":
+    """Строки и адресные критерии в одном списке — старая форма не отменяется.
+
+    None означает «не трогай существующее»: перезапись таска не должна терять
+    критерии только потому, что в этот раз меняли статус.
+    """
+    if acc is None and not крит:
+        return None
+    строки = [x.strip() for x in (acc or "").split(";") if x.strip()]
+    return строки + крит
+
+
 def main() -> int:
     halt_if_paused()
     argv = sys.argv[1:]
@@ -493,7 +533,13 @@ def main() -> int:
     data = load(path)
 
     try:
-        if cmd == "init":
+        if cmd == "criteria":
+            # Строгость объявляется ЯВНО: молчаливое ужесточение сломало бы
+            # проект, начатый до этой проверки, на середине волны.
+            if not rest or rest[0] not in ("строгие", "свободные"):
+                return _fail("вызов: progress.py criteria <файл> строгие|свободные")
+            data["criteria"] = rest[0]
+        elif cmd == "init":
             if not rest:
                 return _fail("нужно название проекта")
             data = json.loads(json.dumps(EMPTY))
@@ -517,6 +563,10 @@ def main() -> int:
             started = _flag(rest, "--started")
             goal = _flag(rest, "--goal")
             acc = _flag(rest, "--acceptance")
+            # Критерий с адресом. Флаг повторяемый, поля через `|` — писать
+            # JSON в командной строке значит воевать с кавычками оболочки, а
+            # эта война уже стоила одного молча испорченного файла.
+            крит = _критерии(rest)
             quo = _flag(rest, "--quotes")
             sec = _flag(rest, "--spec-sections")
             hold = _flag(rest, "--holdout")
@@ -544,8 +594,7 @@ def main() -> int:
                             # Критерии и цитаты режутся по «;», а не по запятой:
                             # запятая внутри критерия — обычное дело, и разбор
                             # по ней порезал бы одно условие на два бессмысленных.
-                            [x.strip() for x in acc.split(";") if x.strip()]
-                            if acc is not None else None,
+                            _приёмка(acc, крит),
                             [x.strip() for x in quo.split(";") if x.strip()]
                             if quo is not None else None,
                             [x.strip() for x in sec.split(";") if x.strip()]

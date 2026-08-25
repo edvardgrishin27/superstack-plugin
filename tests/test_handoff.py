@@ -251,3 +251,39 @@ class TestInterfaceTaskWaitsForTheDesign(unittest.TestCase):
             st = dict(state(task()), design_dir=tmp)
             b = self._b(st, Path(tmp))
             self.assertTrue(any("дизайн не подтянут" in x for x in b), b)
+
+
+class TestStrictCriteriaStopTheHandoff(unittest.TestCase):
+    """Критерий без адреса возвращает исполнителю решение, ради которого он заведён."""
+
+    АДРЕСНЫЙ = {"что": "заявка доходит до подтверждения",
+                "где": "npm test",
+                "высоко": "набор зелёный",
+                "низко": "красный или не запускался"}
+
+    def _b(self, st, t=None, корень=None):
+        return ho.blockers(st, t or task(), "что-то", "", "npm test",
+                           None, None, корень)
+
+    def test_loose_project_is_untouched(self):
+        """Проект, не объявлявший строгость, продолжает жить как жил."""
+        self.assertEqual(self._b(state(task())), [])
+
+    def test_string_criterion_is_refused_when_strict(self):
+        t = task(acceptance=["работает корректно"])
+        st = dict(state(t), criteria="строгие")
+        b = self._b(st, t)
+        self.assertTrue(any("критерии без адреса" in x for x in b), b)
+
+    def test_addressed_criterion_passes_when_strict(self):
+        t = task(acceptance=[self.АДРЕСНЫЙ])
+        st = dict(state(t), criteria="строгие")
+        self.assertEqual(self._b(st, t), [])
+
+    def test_missing_file_in_where_is_refused(self):
+        """Адрес, ведущий в никуда, хуже отсутствующего: он выглядит адресом."""
+        with tempfile.TemporaryDirectory() as tmp:
+            t = task(acceptance=[dict(self.АДРЕСНЫЙ, где="tests/нет.py::x")])
+            st = dict(state(t), criteria="строгие")
+            b = self._b(st, t, Path(tmp))
+            self.assertTrue(any("не существует" in x for x in b), b)

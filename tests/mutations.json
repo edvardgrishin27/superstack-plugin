@@ -1196,8 +1196,8 @@
   {
    "id": "handoff.incomplete-task-goes-out",
    "file": "plugins/superstack/tools/handoff.py",
-   "find": "    bad = blockers(state, task, interfaces, spec, test_cmd, adr_dir, design_dir)\n    if bad:",
-   "replace": "    bad = blockers(state, task, interfaces, spec, test_cmd, adr_dir, design_dir)\n    if False:",
+   "find": "    bad = blockers(state, task, interfaces, spec, test_cmd, adr_dir, design_dir,\n                   Path.cwd())\n    if bad:",
+   "replace": "    bad = blockers(state, task, interfaces, spec, test_cmd, adr_dir, design_dir,\n                   Path.cwd())\n    if False:",
    "why": "неполный таск уходит исполнителю: без критериев приёмки он закончит там, где показалось достаточным, без команды тестов «зелёный прогон» будет означать «я не запускал»"
   },
   {
@@ -3311,8 +3311,8 @@
   {
    "id": "design.handoff-treats-empty-as-pass",
    "file": "plugins/superstack/tools/handoff.py",
-   "find": "    if итог[\"код\"] == 2:\n        return (2, итог[\"почему\"])",
-   "replace": "    if итог[\"код\"] == 2:\n        return (0, \"\")",
+   "find": "    итог = design_pull.проверить(Path(каталог))\n    if итог[\"код\"] == 0:\n        return (0, \"\")\n    if итог[\"код\"] == 2:\n        return (2, итог[\"почему\"])",
+   "replace": "    итог = design_pull.проверить(Path(каталог))\n    if итог[\"код\"] == 0:\n        return (0, \"\")\n    if итог[\"код\"] == 2:\n        return (0, \"\")",
    "why": "«проверять нечем» превращается в «проверено» на этаж выше самого инструмента: таск уходит строителю при пустом каталоге дизайна"
   },
   {
@@ -3370,6 +3370,104 @@
    "find": "    хвост = (f\" — ещё {len(вне)} не проверялись: файла нет в этом дереве \"",
    "replace": "    хвост = (\"\" or f\"\" or f\" — ещё {0} не проверялись: файла нет в этом дереве \"",
    "why": "число непроверенных исчезает из отчёта: «все мутации пойманы» читается как полная проверка, хотя часть не исполнялась вовсе"
+  },
+  {
+   "id": "criteria.address-optional",
+   "file": "plugins/superstack/tools/criteria.py",
+   "find": "    for поле in ОБЯЗАТЕЛЬНЫЕ:",
+   "replace": "    for поле in ():",
+   "why": "поля критерия перестают быть обязательными — «работает корректно» снова уезжает исполнителю, и где смотреть решает он"
+  },
+  {
+   "id": "criteria.string-is-good-enough",
+   "file": "plugins/superstack/tools/criteria.py",
+   "find": "    if isinstance(критерий, str):",
+   "replace": "    if False:",
+   "why": "критерий-строка перестаёт отличаться от адресного: старая форма молча проезжает строгий проект"
+  },
+  {
+   "id": "criteria.ghost-path-passes",
+   "file": "plugins/superstack/tools/criteria.py",
+   "find": "    if путь and not (корень / путь).exists():",
+   "replace": "    if False:",
+   "why": "адрес, ведущий в несуществующий файл, принимается за адрес — проверяющий пойдёт туда, где ничего нет, и решит, что проверил"
+  },
+  {
+   "id": "criteria.bleeding-allowed",
+   "file": "plugins/superstack/tools/criteria.py",
+   "find": "        for i in без_границы:",
+   "replace": "        for i in []:",
+   "why": "два критерия на один адрес снова разрешены: один изъян валит оба, а то, что должен был проверять второй, не проверяет никто"
+  },
+  {
+   "id": "criteria.no-criteria-is-green",
+   "file": "plugins/superstack/tools/criteria.py",
+   "find": "        return {\"код\": 2, \"разбор\": [], \"отказы\": [],",
+   "replace": "        return {\"код\": 0, \"разбор\": [], \"отказы\": [],",
+   "why": "таск без единого критерия приёмки становится зелёным — исполнитель закончит там, где посчитает нужным, и это назовут проверенным"
+  },
+  {
+   "id": "criteria.strict-project-ignored",
+   "file": "plugins/superstack/tools/handoff.py",
+   "find": "    if строгие_критерии(state):",
+   "replace": "    if False:",
+   "why": "объявленная строгость перестаёт действовать при передаче: гейт построен, объявлен человеком и не исполняется"
+  },
+  {
+   "id": "criteria.missing-module-is-silence",
+   "file": "plugins/superstack/tools/handoff.py",
+   "find": "        return (1, f\"проверить критерии нечем: {e}\")",
+   "replace": "        return (0, \"\")",
+   "why": "пропажа модуля проверки читается как «всё чисто» — ровно тот отказ, который однажды уже выключил проверку молча при переносе зависимости"
+  },
+  {
+   "id": "criteria.dict-printed-raw",
+   "file": "plugins/superstack/tools/handoff.py",
+   "find": "    if not isinstance(c, dict):\n        return f\"- [ ] {c}\"",
+   "replace": "    if True:\n        return f\"- [ ] {c}\"",
+   "why": "адресный критерий снова печатается исполнителю питоновским словарём — форма, ради которой всё затевалось, до него не доезжает"
+  },
+  {
+   "id": "stall.loop-fires-on-first-failure",
+   "file": "plugins/superstack/tools/stall.py",
+   "find": "ПЕТЛЯ = 3",
+   "replace": "ПЕТЛЯ = 1",
+   "why": "петлёй объявляется первое же падение — инструмент начинает рвать нормальную отладку, и его выключат целиком вместе с настоящими находками"
+  },
+  {
+   "id": "stall.blind-run-passes",
+   "file": "plugins/superstack/tools/stall.py",
+   "find": "    if всего >= ВСЛЕПУЮ_ПОСЛЕ and not проверок:",
+   "replace": "    if False:",
+   "why": "работа вслепую перестаёт замечаться: десятки шагов без единого запуска проверок доигрываются до конца и оплачиваются полностью"
+  },
+  {
+   "id": "stall.readonly-called-talking",
+   "file": "plugins/superstack/tools/stall.py",
+   "find": "    if холостых >= ХОЛОСТЫХ:",
+   "replace": "    if холостых >= 0:",
+   "why": "разговором объявляется любой прогон — возвращается ровно тот ложный признак, который валил живой read-only прогон и был из-за этого переформулирован"
+  },
+  {
+   "id": "stall.nothing-to-judge-is-green",
+   "file": "plugins/superstack/tools/stall.py",
+   "find": "        return {\"код\": 2, \"причины\": [], \"шагов\": len(ш), \"журнал\": f.name,",
+   "replace": "        return {\"код\": 0, \"причины\": [], \"шагов\": len(ш), \"журнал\": f.name,",
+   "why": "прогон, о котором нечего сказать, объявляется идущим: два шага в журнале читаются как здоровая работа"
+  },
+  {
+   "id": "stall.unclosed-error-ignored",
+   "file": "plugins/superstack/tools/stall.py",
+   "find": "    if первое is not None and not any(ш[\"упал\"] is False for ш in хвост[первое:]):",
+   "replace": "    if False:",
+   "why": "хвост журнала в незакрытых ошибках перестаёт быть признаком — прогон, который уже сломался, доигрывает до конца"
+  },
+  {
+   "id": "stall.error-guessed-from-text",
+   "file": "plugins/superstack/tools/stall.py",
+   "find": "                    шаг[\"упал\"] = bool(блок.get(\"is_error\"))",
+   "replace": "                    шаг[\"упал\"] = \"error\" in json.dumps(блок, ensure_ascii=False).lower()",
+   "why": "падение начинает угадываться по слову в выводе вместо поля записи — каждый тест, печатающий слово «error» в своём отчёте, считается упавшим"
   }
  ]
 }
