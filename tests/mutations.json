@@ -727,8 +727,8 @@
   {
    "id": "verify.attempts-not-persisted",
    "file": "plugins/superstack/tools/verify.py",
-   "find": "    attempt = int(state.get(key, 0)) + 1\n    state[key] = attempt\n    _save_attempts(state_path, state)",
-   "replace": "    attempt = int(state.get(key, 0)) + 1\n    state[key] = attempt",
+   "find": "    state[key] = entry\n    _save_attempts(state_path, state)",
+   "replace": "    state[key] = entry",
    "why": "счётчик попыток не пишется на диск: гейт перезапускается новым процессом на каждый вызов, и без персистентности серия провалов забывается сразу же, потолок никогда не срабатывает"
   },
   {
@@ -3451,9 +3451,9 @@
   {
    "id": "stall.nothing-to-judge-is-green",
    "file": "plugins/superstack/tools/stall.py",
-   "find": "        return {\"код\": 2, \"причины\": [], \"шагов\": len(ш), \"журнал\": f.name,",
-   "replace": "        return {\"код\": 0, \"причины\": [], \"шагов\": len(ш), \"журнал\": f.name,",
-   "why": "прогон, о котором нечего сказать, объявляется идущим: два шага в журнале читаются как здоровая работа"
+   "find": "    if len(ш) < МИНИМУМ_ШАГОВ:\n        return {\"код\": 2, \"причины\": [], \"шагов\": len(ш), \"проверок\": 0,",
+   "replace": "    if len(ш) < МИНИМУМ_ШАГОВ:\n        return {\"код\": 0, \"причины\": [], \"шагов\": len(ш), \"проверок\": 0,",
+   "why": "прогон, о котором нечего сказать, объявляется идущим: два шага в журнале читаются как здоровая работа, и «судить рано» перестаёт отличаться от «идёт»"
   },
   {
    "id": "stall.unclosed-error-ignored",
@@ -3468,6 +3468,230 @@
    "find": "                    шаг[\"упал\"] = bool(блок.get(\"is_error\"))",
    "replace": "                    шаг[\"упал\"] = \"error\" in json.dumps(блок, ensure_ascii=False).lower()",
    "why": "падение начинает угадываться по слову в выводе вместо поля записи — каждый тест, печатающий слово «error» в своём отчёте, считается упавшим"
+  },
+  {
+   "id": "scope.enable-accepts-anything-again",
+   "file": "plugins/superstack/tools/enable.py",
+   "find": "    reason = too_broad(path)\n    if reason:\n        raise TooBroad(reason)\n",
+   "replace": "",
+   "why": "заведение снова принимает любой каталог, включая домашний: новый чат в десктопном приложении заведёт все проекты машины разом, и гейт верификации начнёт срабатывать там, где человек систему не звал"
+  },
+  {
+   "id": "scope.forget-requires-exact-match-again",
+   "file": "plugins/superstack/tools/enable.py",
+   "find": "    target = enabled_for(path)",
+   "replace": "    target = str(path.resolve()) if str(path.resolve()) in known() else None",
+   "why": "отмена из подкаталога снова отвечает «не был заведён» и ничего не делает, хотя проверка в том же месте говорит «заведён» — путь назад недоступен именно оттуда, где человек находится"
+  },
+  {
+   "id": "scope.profile-phase-lies-again",
+   "file": "plugins/superstack/skills/superstack/SKILL.md",
+   "find": "В твоём проекте ничего\nне поменяю — только отмечу у себя",
+   "replace": "Ничего менять не буду —\nтолько смотреть. И ещё отмечу у себя",
+   "why": "агент снова обещает человеку, что ничего не изменится, хотя следующей же строкой пишет отметку на диск — ложь в первой фразе знакомства с продуктом"
+  },
+  {
+   "id": "scope.refusal-swallowed-by-next-command",
+   "file": "plugins/superstack/skills/superstack/SKILL.md",
+   "find": "python3 \"$CLAUDE_PLUGIN_ROOT/tools/enable.py\" . || exit $?",
+   "replace": "python3 \"$CLAUDE_PLUGIN_ROOT/tools/enable.py\" .",
+   "why": "отказ заведения перестаёт останавливать фазу: следующая команда отрабатывает успешно и маскирует его, человек не узнаёт, что система здесь работать не будет"
+  },
+  {
+   "id": "oops.undo-confirms-unconditionally",
+   "file": "plugins/superstack/tools/oops.py",
+   "find": "        if rc == 0:",
+   "replace": "        if True:",
+   "why": "«откатил» снова печатается при провале отката — человек читает подтверждение в прошедшем времени о том, чего не произошло, и остаётся с неоткаченными настройками"
+  },
+  {
+   "id": "oops.undo-calls-into-known-failure",
+   "file": "plugins/superstack/tools/oops.py",
+   "find": "    if not preview[\"found\"]:",
+   "replace": "    if False:",
+   "why": "незащищённый откат снова зовётся при заведомо известном провале — на битом манифесте это голый traceback вместо точной причины"
+  },
+  {
+   "id": "oops.undo-crash-guard-removed",
+   "file": "plugins/superstack/tools/oops.py",
+   "find": "    except _UNDO_PARSE_ERRORS as e:",
+   "replace": "    except () as e:",
+   "why": "снята защита вокруг отката: ошибка разбора манифеста снова летит наружу traceback'ом, и человек видит стек вместо объяснения"
+  },
+  {
+   "id": "oops.describe-accepts-non-object-manifest",
+   "file": "plugins/superstack/tools/oops.py",
+   "find": "    if not isinstance(manifest, dict):",
+   "replace": "    if False:",
+   "why": "снята проверка формы манифеста: валидный JSON, который не словарь (`[]`, `42`, `null`), снова роняет manifest.get(...) AttributeError'ом — голый traceback вместо человеческой строки, причём и в `what`, и в `undo`"
+  },
+  {
+   "id": "blind.manifest-id-context-disabled",
+   "file": "plugins/superstack/tools/blind_accept.py",
+   "find": "            if rx is _MANIFEST_ID and not (_RETELLING_PHRASE.search(line)\n                                            or \".superstack\" in line):",
+   "replace": "            if False:",
+   "why": "идентификатор манифеста снова ловится без контекста: приложение с кубиком D20, местом A12 или цветом #A00 перестаёт собирать пакет приёмки вовсе"
+  },
+  {
+   "id": "blind.gitignore-exception-disabled",
+   "file": "plugins/superstack/tools/blind_accept.py",
+   "find": "            if rx is _RUN_DIR and _IGNORE_FILE.search(current_file):",
+   "replace": "            if rx is _RUN_DIR and False:",
+   "why": "строка .superstack/ в .gitignore, которую пишет сам сборщик, снова считается протечкой — приёмка не собирается из-за собственного следа продукта"
+  },
+  {
+   "id": "blind.gitignore-exception-too-wide",
+   "file": "plugins/superstack/tools/blind_accept.py",
+   "find": "_IGNORE_FILE = re.compile(r\"(?:^|/)\\.gitignore$\")",
+   "replace": "_IGNORE_FILE = re.compile(r\".*\")",
+   "why": "исключение расползается на любой файл: путь рабочего каталога в обычном коде перестаёт считаться протечкой, и судья увидит пересказ просьбы"
+  },
+  {
+   "id": "design_pull.contrast-loses-the-step",
+   "file": "plugins/superstack/tools/design_pull.py",
+   "find": "сохрани холст и переотметь происхождение через --record",
+   "replace": "поправь как-нибудь",
+   "why": "отказ по контрасту снова называет только число: человек не знает ни что такое 4.5:1, ни что цвет надо править в холсте, а не в коде"
+  },
+  {
+   "id": "crew.vanished-builder-loses-the-restart",
+   "file": "plugins/superstack/tools/crew.py",
+   "find": "запусти эту задачу заново",
+   "replace": "ничего не поделаешь",
+   "why": "отказ про пропавшего исполнителя снова констатирует беду и молчит о выходе — человек ждёт задачу, которой уже нет"
+  },
+  {
+   "id": "handoff.no-requirements-loses-the-step",
+   "file": "plugins/superstack/tools/handoff.py",
+   "find": "; либо привяжи, либо срежь",
+   "replace": "",
+   "why": "теряется шаг у отказа про задачу без требований: сказано, что не так, и не сказано, что с этим делать"
+  },
+  {
+   "id": "verify.series-key-ignores-signature",
+   "file": "plugins/superstack/tools/verify.py",
+   "find": "    if series.get(\"sig\") != signature:",
+   "replace": "    if False:",
+   "why": "смена поломки перестаёт сбрасывать серию: сборка, упавшая дважды, и следующий за ней красный линт считаются одной серией — система сдаётся на поломке, для которой это первый заход"
+  },
+  {
+   "id": "verify.fingerprint-dedup-disabled",
+   "file": "plugins/superstack/tools/verify.py",
+   "find": "series.get(\"fp\") == fingerprint",
+   "replace": "False",
+   "why": "повтор на непочиненном дереве снова тратит попытку — один цикл починки съедает две-три, и потолок «сдаюсь» берётся раньше, чем человек успел что-то исправить"
+  },
+  {
+   "id": "verify.fingerprint-cache-noise-unfiltered",
+   "file": "plugins/superstack/tools/verify.py",
+   "find": "        if any(part in _FINGERPRINT_SKIP for part in Path(name).parts):",
+   "replace": "        if False:",
+   "why": "кэш, который проверка создаёт первым же прогоном, читается вторым вызовом как правка дерева — дедуп не срабатывает ни в одном проекте без .gitignore на кэш"
+  },
+  {
+   "id": "panel.empty-tasks-read-as-all-done",
+   "file": "plugins/superstack/tools/live_panel.py",
+   "find": "  if (!tasks.length) { $('eta').textContent = W.copy.no_tasks; return; }",
+   "replace": "  if (false) { $('eta').textContent = W.copy.no_tasks; return; }",
+   "why": "пустой список снова читается как «всё сделано»: работа ещё не разбита на части — это вся первая половина прогона, часы, — а панель показывает «все части закончены» с первой минуты"
+  },
+  {
+   "id": "panel.run-owners-never-go-stale",
+   "file": "plugins/superstack/tools/live_panel.py",
+   "find": "  if ((ph.owner === 'система' || ph.owner === 'исполнитель') && ph.since &&",
+   "replace": "  if (false &&",
+   "why": "застревание перестаёт замечаться у держателей «система» и «исполнитель» — упавшая сессия на этапе «Пишем код» выглядит живой бесконечно, и человек ждёт того, чего уже нет"
+  },
+  {
+   "id": "panel.check-always-confirms",
+   "file": "plugins/superstack/tools/live_panel.py",
+   "find": "        if not ok:",
+   "replace": "        if False:",
+   "why": "проверка живости отдаёт ссылку даже на мёртвом или чужом порту — человек получает нерабочую ссылку в первые минуты знакомства, ровно тот отказ, ради которого она заведена"
+  },
+  {
+   "id": "doctor.footer-removed-from-the-end",
+   "file": "plugins/superstack/tools/doctor.py",
+   "find": "    out += [\"\", L,\n            \"Ничего не изменено. Доктор только смотрит.\",\n            \"Применить: /superstack apply <id>\", L]",
+   "replace": "    pass",
+   "why": "подвал пропадает из отчёта: человек не узнаёт ни что доктор ничего не менял, ни как применить найденное — а вернуть его на прежнее место между разделами значит снова спрятать за ним находки про безопасность"
+  },
+  {
+   "id": "panel.stale-run-text-reverts-to-human",
+   "file": "plugins/superstack/tools/live_panel.py",
+   "find": ".since.stale-run::after { content: \"__STALE_RUN_SUFFIX__\"; color: var(--muted); }",
+   "replace": ".since.stale-run::after { content: \"__WAIT_LONG__\"; color: var(--muted); }",
+   "why": "адресный текст застревания у держателей «система» и «исполнитель» подменяется общим «ждём давно» — слово «ждём» не про тех, кого никто не ждёт, и человек не поймёт, что смотреть надо в разговор"
+  },
+  {
+   "id": "design.dictated-provenance-key-renamed",
+   "file": "plugins/superstack/tools/design_pull.py",
+   "find": "    \"продиктован\": \"холст не давал редактировать — правки продиктованы \"",
+   "replace": "    \"продиктован_\": \"холст не давал редактировать — правки продиктованы \"",
+   "why": "третье происхождение исчезает под своим именем — случай «не смог отредактировать» снова нечем отметить честно, кроме подмены под «принял как есть»"
+  },
+  {
+   "id": "design.silent-guess-on-cannot-edit",
+   "file": "plugins/superstack/skills/go/phases/direction.md",
+   "find": "Спроси ОДНИМ вопросом: «Всё устраивает как\nесть, или пробовал поменять и не вышло?»",
+   "replace": "Прими это как согласие.",
+   "why": "вопрос, различающий «устраивает» и «не смог», пропадает — фаза снова решает за человека и засчитывает несостоявшуюся правку утверждением"
+  },
+  {
+   "id": "design.save-reminder-dropped",
+   "file": "plugins/superstack/skills/go/phases/direction.md",
+   "find": "Скажи прямо: «Когда закончишь — нажми \"Сохранить\"».",
+   "replace": "Скажи прямо, что работа на холсте закончена.",
+   "why": "человеку перестают говорить нажать «Сохранить» — правки остаются на экране, а агент прочитает холст таким, каким он был до них, и не заметит разницы"
+  },
+  {
+   "id": "notify.link-validation-disabled",
+   "file": "plugins/superstack/tools/notify.py",
+   "find": "        беда = link_problem(сырое)\n        if беда:\n            return {\"status\": \"fail\", \"detail\": беда}",
+   "replace": "        беда = link_problem(сырое)\n        if False:\n            return {\"status\": \"fail\", \"detail\": беда}",
+   "why": "форма ссылки перестаёт проверяться: человек присылает фразу вместо адреса, канал «заводится», и о поломке он узнаёт только не получив ни одного сообщения"
+  },
+  {
+   "id": "notify.off-does-not-persist-decline",
+   "file": "plugins/superstack/tools/notify.py",
+   "find": "        спека = {\"quiet\": True}",
+   "replace": "        спека = {\"quiet\": False}",
+   "why": "отказ от канала перестаёт записываться: человек сказал «не нужно», а система считает канал включённым и молча пытается писать в никуда"
+  },
+  {
+   "id": "phase0.channel-setup-not-offered",
+   "file": "plugins/superstack/skills/go/phases/0-завести.md",
+   "find": "python3 \"$CLAUDE_PLUGIN_ROOT/tools/notify.py\" . --set \"<ссылка от человека>\"",
+   "replace": "python3 \"$CLAUDE_PLUGIN_ROOT/tools/notify.py\" . --check",
+   "why": "фаза перестаёт заводить канал за человека: просьба остаётся текстом, а действие для не-разработчика исчезает — и обещание «позову, если тебя нет» не работает"
+  },
+  {
+   "id": "stall.wave-aggregate-ignores-stuck",
+   "file": "plugins/superstack/tools/stall.py",
+   "find": "    if 1 in коды:\n        return 1",
+   "replace": "    if False:\n        return 1",
+   "why": "застрявший перестаёт перевешивать идущих в общем вердикте волны — «застрял один из пяти» читается как «всё идёт», и обречённый прогон доигрывает час"
+  },
+  {
+   "id": "stall.all-journals-collapses-to-freshest-again",
+   "file": "plugins/superstack/tools/stall.py",
+   "find": "        свежайший = max(свои, key=lambda p: p.stat().st_mtime)\n        return sorted(свежайший.parent.glob(\"agent-*.jsonl\"), key=lambda p: p.name)",
+   "replace": "        свежайший = max(свои, key=lambda p: p.stat().st_mtime)\n        return [свежайший]",
+   "why": "волна снова судится по одному самому свежему журналу: застрявший может быть не тем, чей журнал свежее, и о нём не скажет никто"
+  },
+  {
+   "id": "watchdog.recovered-agent-forgets-it-was-stuck",
+   "file": "plugins/superstack/tools/watchdog.py",
+   "find": "    if any(h[\"когда_либо_1\"] for h in история.values()):\n        return КОД_ЗАСТРЯЛ",
+   "replace": "    if False:\n        return КОД_ЗАСТРЯЛ",
+   "why": "агент, который застревал и потом выбрался, перестаёт числиться застревавшим — потерянный час не виден в отчёте, и причину не найти"
+  },
+  {
+   "id": "plain-ru.design-words-removed",
+   "file": "plugins/superstack/data/plain-ru.json",
+   "find": "      \"артборд\": \"доска дизайна\"",
+   "replace": "      \"артборд_УДАЛЕНО\": \"доска дизайна\"",
+   "why": "слово тихо выпадает из словаря — «артборд» снова доедет до человека необнаруженным, и проверка жаргона промолчит, потому что не знает этого слова"
   }
  ]
 }

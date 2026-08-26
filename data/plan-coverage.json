@@ -2310,6 +2310,278 @@
     "file": "plugins/superstack/tools/stall.py",
     "contains": "ЧЕГО_НЕ_ЗНАЕМ"
    }
+  },
+  {
+   "id": "L1.scope-refuses-too-broad",
+   "layer": "L1 конституция",
+   "mechanism": "заведение отказывает на домашнем каталоге, его предках и корне файловой системы — иначе покрытие по дереву включило бы все проекты машины разом",
+   "evidence": {
+    "file": "plugins/superstack/tools/enable.py",
+    "contains": "def too_broad(path: Path)"
+   }
+  },
+  {
+   "id": "L1.scope-forget-covers",
+   "layer": "L1 конституция",
+   "mechanism": "отмена заведения находит покрывающую запись и называет последствие: молчание наступает везде внутри неё, а не только здесь",
+   "evidence": {
+    "file": "plugins/superstack/tools/enable.py",
+    "contains": "target = enabled_for(path)"
+   }
+  },
+  {
+   "id": "UX.profile-phase-is-honest",
+   "layer": "интерфейс",
+   "mechanism": "фаза профиля не называет себя «только чтением»: она честно говорит, что не меняет проект, но ставит отметку о заходе",
+   "evidence": {
+    "file": "plugins/superstack/skills/superstack/SKILL.md",
+    "contains": "не меняет проект, только ставит отметку о заходе"
+   }
+  },
+  {
+   "id": "UX.refusal-in-phase-one-is-wired",
+   "layer": "интерфейс",
+   "mechanism": "отказ заведения останавливает фазу: следующая команда не запускается и не маскирует его своим успехом, а агенту велено сказать человеку словами",
+   "evidence": {
+    "file": "plugins/superstack/skills/superstack/SKILL.md",
+    "contains": "python3 \"$CLAUDE_PLUGIN_ROOT/tools/enable.py\" . || exit $?"
+   }
+  },
+  {
+   "id": "SAFE.undo-confirms-only-on-success",
+   "layer": "L5 гарантии",
+   "mechanism": "«откатил» печатается только после того, как код возврата подтвердил успех, — подтверждение не опережает результат",
+   "evidence": {
+    "file": "plugins/superstack/tools/oops.py",
+    "contains": "if rc == 0:"
+   }
+  },
+  {
+   "id": "SAFE.undo-skips-known-failure",
+   "layer": "L5 гарантии",
+   "mechanism": "если предпросмотр уже сказал «нечего вернуть», незащищённый откат не зовётся вовсе — инструмент без защиты не спрашивают о том, что уже известно",
+   "evidence": {
+    "file": "plugins/superstack/tools/oops.py",
+    "contains": "if not preview[\"found\"]:"
+   }
+  },
+  {
+   "id": "SAFE.undo-parse-crash-caught",
+   "layer": "L5 гарантии",
+   "mechanism": "падение отката на манифесте неожиданной формы ловится поимённым списком исключений и становится человеческой строкой, а не traceback",
+   "evidence": {
+    "file": "plugins/superstack/tools/oops.py",
+    "contains": "except _UNDO_PARSE_ERRORS as e:"
+   }
+  },
+  {
+   "id": "L5.blind-manifest-id-needs-context",
+   "layer": "L5 гарантии",
+   "mechanism": "идентификатор манифеста считается протечкой только с маркером пересказа в той же строке: иначе кубик D20, место A12 и цвет #A00 неотличимы от него по форме",
+   "evidence": {
+    "file": "plugins/superstack/tools/blind_accept.py",
+    "contains": "_MANIFEST_ID and not (_RETELLING_PHRASE.search(line)"
+   }
+  },
+  {
+   "id": "L5.blind-gitignore-is-not-a-leak",
+   "layer": "L5 гарантии",
+   "mechanism": "путь рабочего каталога внутри .gitignore не считается протечкой: это техническая строка, которую пишет сам сборщик",
+   "evidence": {
+    "file": "plugins/superstack/tools/blind_accept.py",
+    "contains": "_IGNORE_FILE = re.compile"
+   }
+  },
+  {
+   "id": "L5.blind-refusal-is-human",
+   "layer": "L5 гарантии",
+   "mechanism": "отказ слепой приёмки называет, что просочилось и что делать, без слов diff и «вырезать»",
+   "evidence": {
+    "file": "plugins/superstack/tools/blind_accept.py",
+    "contains": "Перепиши эти места своими словами"
+   }
+  },
+  {
+   "id": "UX.design-contrast-names-the-fix",
+   "layer": "интерфейс",
+   "mechanism": "отказ по контрасту объясняет, что это читаемость, и называет шаг — править в холсте, а не в коде, иначе упрёшься во второй отказ",
+   "evidence": {
+    "file": "plugins/superstack/tools/design_pull.py",
+    "contains": "сохрани холст и переотметь происхождение через --record"
+   }
+  },
+  {
+   "id": "L4.vanished-builder-names-restart",
+   "layer": "L4 исполнение",
+   "mechanism": "отказ про пропавшего исполнителя называет спасительный шаг — перезапустить задачу, а не только сообщает о беде",
+   "evidence": {
+    "file": "plugins/superstack/tools/crew.py",
+    "contains": "запусти эту задачу заново"
+   }
+  },
+  {
+   "id": "L4.attempt-key-is-project-and-failure",
+   "layer": "L4 исполнение",
+   "mechanism": "серия попыток считается по паре (проект, признак поломки): сменилась поломка — счёт начинается заново, а не наследует чужую серию",
+   "evidence": {
+    "file": "plugins/superstack/tools/verify.py",
+    "contains": "if series.get(\"sig\") != signature:"
+   }
+  },
+  {
+   "id": "L4.attempt-dedup-by-tree-fingerprint",
+   "layer": "L4 исполнение",
+   "mechanism": "повтор на неизменившемся дереве не тратит попытку: один и тот же красный прогон спрашивают трое — фаза, планка и гейт закрытия хода",
+   "evidence": {
+    "file": "plugins/superstack/tools/verify.py",
+    "contains": "def _tree_fingerprint(project: Path)"
+   }
+  },
+  {
+   "id": "L4.fingerprint-ignores-own-cache",
+   "layer": "L4 исполнение",
+   "mechanism": "отпечаток дерева пропускает кэши, которые проверка создаёт сама: иначе первый же прогон менял бы отпечаток и дедуп не срабатывал бы никогда",
+   "evidence": {
+    "file": "plugins/superstack/tools/verify.py",
+    "contains": "_FINGERPRINT_SKIP = {"
+   }
+  },
+  {
+   "id": "SAFE.manifest-form-is-checked",
+   "layer": "L5 гарантии",
+   "mechanism": "валидный JSON — ещё не запись отката: список, число или null отклоняются человеческой строкой, а не падением по AttributeError",
+   "evidence": {
+    "file": "plugins/superstack/tools/oops.py",
+    "contains": "if not isinstance(manifest, dict):"
+   }
+  },
+  {
+   "id": "UX.eta-not-split-yet",
+   "layer": "интерфейс",
+   "mechanism": "оценка «сколько ещё ждать» отличает «работа ещё не разбита на части» от «все части закончены»: раньше оба случая давали пустой список и читались как одно",
+   "evidence": {
+    "file": "tests/test_live_panel.py",
+    "contains": "test_no_parts_yet_is_not_reported_as_all_done"
+   },
+   "note": "сама правка живёт в вёрстке внутри строкового литерала live_panel.py, а ворота «план» вырезают из .py прозу вместе с ним — проверено запуском executable_text(). Улика привязана к тесту, который механизм держит; регресс ловит мутация panel.empty-tasks-read-as-all-done"
+  },
+  {
+   "id": "UX.stale-run-owners",
+   "layer": "интерфейс",
+   "mechanism": "тревога о застревании срабатывает не только на ожидании человека, но и на держателях «система» и «исполнитель» — своим порогом, и без утверждения «умерло»",
+   "evidence": {
+    "file": "plugins/superstack/tools/live_panel.py",
+    "contains": "STALE_MINUTES_RUN = 60"
+   }
+  },
+  {
+   "id": "UX.link-confirmed-before-handout",
+   "layer": "интерфейс",
+   "mechanism": "ссылка на панель выдаётся только после того, как отдельная синхронная проверка подтвердит, что порт отвечает именно этой панелью: запуск отвязан, и его падение иначе уходит в никуда",
+   "evidence": {
+    "file": "plugins/superstack/tools/live_panel.py",
+    "contains": "def panel_is_live(run_dir: Path, port: int) -> tuple[bool, str]:"
+   }
+  },
+  {
+   "id": "UX.doctor-footer-prints-last",
+   "layer": "интерфейс",
+   "mechanism": "подвал «ничего не изменено» печатается последним, после всех шести осей: раньше он стоял между C и E, и человек, закрывший вывод на нём, не видел находок про безопасность своей настройки",
+   "evidence": {
+    "file": "tests/test_doctor_axes.py",
+    "contains": "test_подвал_после_всех_шести_разделов"
+   },
+   "note": "улика привязана к тесту намеренно: ПОРЯДОК печати нельзя доказать подстрокой — присутствие подвала в файле не означает, что он последний. Первоначальная улика указывала на комментарий, который ворота вырезают из .py вместе с прозой (проверено запуском executable_text)"
+  },
+  {
+   "id": "UX.design-save-told-explicitly",
+   "layer": "интерфейс",
+   "mechanism": "агент обязан сказать человеку нажать «Сохранить»: не сохранённые правки остаются на экране и не долетают до опубликованного холста, который агент читает обратно",
+   "evidence": {
+    "file": "plugins/superstack/skills/go/phases/direction.md",
+    "contains": "нажми \"Сохранить\""
+   }
+  },
+  {
+   "id": "UX.design-cannot-edit-branch",
+   "layer": "интерфейс",
+   "mechanism": "«ничего не поменял» не читается как утверждение молча: фаза одним вопросом различает «устраивает как есть» и «пробовал и не вышло», прежде чем ставить отметку",
+   "evidence": {
+    "file": "plugins/superstack/skills/go/phases/direction.md",
+    "contains": "пробовал поменять и не вышло"
+   }
+  },
+  {
+   "id": "UX.design-provenance-dictated",
+   "layer": "интерфейс",
+   "mechanism": "третье происхождение досок — холст не давал править, правки продиктованы человеком — не маскируется ни под «прочитано после правок», ни под «принял как есть»",
+   "evidence": {
+    "file": "plugins/superstack/tools/design_pull.py",
+    "contains": "\"продиктован\":"
+   }
+  },
+  {
+   "id": "L6.channel-set-by-human-words",
+   "layer": "L6 наблюдаемость",
+   "mechanism": "канал уведомлений заводится ответом человека своими словами: инструмент сам разбирает ссылку и называет, что с ней не так, вместо требования собрать файл настроек руками",
+   "evidence": {
+    "file": "plugins/superstack/tools/notify.py",
+    "contains": "def link_problem"
+   }
+  },
+  {
+   "id": "L6.decline-is-recorded-not-repeated",
+   "layer": "L6 наблюдаемость",
+   "mechanism": "отказ человека от канала записывается явно и не переспрашивается на каждой фазе прогона",
+   "evidence": {
+    "file": "plugins/superstack/tools/notify.py",
+    "contains": "{\"quiet\": True}"
+   }
+  },
+  {
+   "id": "L6.handoff-to-human-pings-if-away",
+   "layer": "L6 наблюдаемость",
+   "mechanism": "ход, переходящий к человеку посреди работы или на приёмке, сопровождается коротким внешним сигналом, а не только записью в чат, которую он не увидит, если отошёл",
+   "evidence": {
+    "file": "plugins/superstack/skills/go/phases/4-работа.md",
+    "contains": "Ход переходит к человеку — позвать его, а не только написать в чат"
+   }
+  },
+  {
+   "id": "R.wave-code-is-the-worst-not-the-average",
+   "layer": "прогон",
+   "mechanism": "общий вердикт волны берётся по худшему: застрявший не тонет среди идущих, а тот, о ком судить рано, не мешает остальным быть засчитанными",
+   "evidence": {
+    "file": "plugins/superstack/tools/stall.py",
+    "contains": "def агрегировать"
+   }
+  },
+  {
+   "id": "R.watchdog-runs-during-the-wave",
+   "layer": "прогон",
+   "mechanism": "фоновый сторож поднимается ДО отправки волны и опрашивает журналы на таймере, пока оркестратор занят одним ходом и позвать проверку сам не может",
+   "evidence": {
+    "file": "plugins/superstack/tools/watchdog.py",
+    "contains": "def _cmd_serve"
+   }
+  },
+  {
+   "id": "R.watchdog-remembers-who-was-stuck",
+   "layer": "прогон",
+   "mechanism": "сторож помнит, кто застревал за всю волну, и говорит это при остановке — даже если к концу журнал уже чист: иначе застревание, которое само рассосалось, стоило часа и осталось незамеченным",
+   "evidence": {
+    "file": "plugins/superstack/tools/watchdog.py",
+    "contains": "if any(h[\"когда_либо_1\"] for h in история.values()):"
+   }
+  },
+  {
+   "id": "UX.jargon-findings-stay-closed",
+   "layer": "интерфейс",
+   "mechanism": "слова, о которые человек уже спотыкался, остаются в словаре жаргона вместе с названием находки: список растёт только с новой находкой, а не про запас",
+   "evidence": {
+    "file": "tests/test_plain_ru.py",
+    "contains": "НАЙДЕНО_РАНЕЕ = {"
+   }
   }
  ],
  "reconciled": {

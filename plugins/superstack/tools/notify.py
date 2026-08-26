@@ -28,9 +28,14 @@
 
   python3 notify.py <корень> --text «итог» [--json]
   python3 notify.py <корень> --check          проверить, куда пойдёт
+  python3 notify.py <корень> --set <ссылка>   записать канал самому — такой
+                                               файл человеку не собрать руками
+  python3 notify.py <корень> --off            записать явный отказ человека:
+                                               дальше работать молча
 
-  код 0 — доставлено (или канал молчит намеренно), 1 — канал ответил ошибкой,
-  2 — отправлять некуда, 3 — ошибка вызова
+  код 0 — доставлено (или канал молчит намеренно, или --set/--off записали
+  файл), 1 — канал ответил ошибкой, 2 — отправлять некуда, 3 — ошибка вызова
+  (для --set — в том числе ссылка не годится)
 """
 from __future__ import annotations
 
@@ -79,9 +84,33 @@ def channel(root: Path) -> tuple:
     if d.get("quiet"):
         return d, ""
     if not (d.get("webhook") or "").startswith("https://"):
-        return None, ("канал объявлен наполовину: нужен webhook по https — "
-                      "по http итог уедет открытым текстом")
+        return None, ("канал объявлен наполовину: нужна ссылка именно по "
+                      "https — по http итог уедет открытым текстом")
     return d, ""
+
+
+def link_problem(сырое: str) -> str:
+    """Что не так со ссылкой человеческими словами; "" — годится.
+
+    Пишет не разработчик — он не даст url по спецификации, он даст то, что
+    скопировал. Проверка ловит три реальных промаха нетехнического человека:
+    пустую строку, фразу вместо адреса и адрес без защиты. Разбирать URL по
+    частям смысла нет — это подсказка, что поправить, а не парсер.
+    """
+    s = (сырое or "").strip()
+    if not s:
+        return "ссылка не пришла — здесь пусто"
+    if any(ch.isspace() for ch in s):
+        return ("это похоже на фразу, а не на ссылку — пришли только сам "
+                "адрес, без лишних слов")
+    if s.startswith("http://"):
+        return ("адрес без защиты: начинается с http, а не https — по "
+                "такому текст уйдёт открытым текстом")
+    if not s.startswith("https://"):
+        return "не похоже на ссылку — она обязана начинаться с https://"
+    if len(s) <= len("https://") + 3:
+        return "ссылка обрублена — после https:// почти ничего не осталось"
+    return ""
 
 
 def _post(url: str, тело: dict) -> tuple:
@@ -125,6 +154,28 @@ def send(root: Path, текст: str, отправитель=_post) -> dict:
                       (f", вырезано секретов: {вырезано}" if вырезано else "")}
 
 
+def _set_channel(root: Path, сырое: str, выключить: bool) -> dict:
+    """Записать решение человека о канале — файлом, который он не составит сам.
+
+    Не-разработчик не напишет `{"webhook": "..."}` руками: одна забытая
+    кавычка — и канал молчит, а причину не видит никто. Здесь ровно две
+    развилки: ссылка или явный отказ, и обе входят готовым значением, а не
+    текстом, который потом кто-то вручную кладёт в файл настроек.
+    """
+    if выключить:
+        спека = {"quiet": True}
+        деталь = "канал выключен по просьбе человека — сообщений не будет"
+    else:
+        беда = link_problem(сырое)
+        if беда:
+            return {"status": "fail", "detail": беда}
+        спека = {"webhook": сырое.strip()}
+        деталь = "канал записан — сообщения пойдут по этой ссылке"
+    (root / ".superstack").mkdir(parents=True, exist_ok=True)
+    (root / СПЕКА).write_text(json.dumps(спека, ensure_ascii=False), encoding="utf-8")
+    return {"status": "pass", "detail": деталь}
+
+
 def halt_if_paused() -> None:
     if os.environ.get("SUPERSTACK_IGNORE_PAUSE") == "1":
         return
@@ -136,7 +187,7 @@ def halt_if_paused() -> None:
 def main() -> int:
     halt_if_paused()
     argv = sys.argv[1:]
-    берут = {"--text"}
+    берут = {"--text", "--set"}
     plain, пропуск = [], False
     for a in argv:
         if пропуск:
@@ -147,17 +198,33 @@ def main() -> int:
         elif not a.startswith("--"):
             plain.append(a)
     if len(plain) != 1:
-        print("вызов: notify.py <корень> --text «итог» | --check", file=sys.stderr)
+        print("вызов: notify.py <корень> --text «итог» | --check | "
+              "--set <ссылка> | --off", file=sys.stderr)
         return 3
     root = Path(plain[0]).resolve()
     if not root.is_dir():
         print(f"НЕ УДАЛОСЬ: нет каталога {root}", file=sys.stderr)
         return 3
 
+    if "--set" in argv or "--off" in argv:
+        # Отдельная ветка, а не общий код 0/1/2: неверная ссылка — это ошибка
+        # вызова (3), а не «канал ответил ошибкой» (1) — с сервером ещё не
+        # разговаривали, отказало распознавание того, что дал человек.
+        i = argv.index("--set") if "--set" in argv else -1
+        сырое = argv[i + 1] if i >= 0 and i + 1 < len(argv) else ""
+        v = _set_channel(root, сырое, выключить="--off" in argv)
+        if v["status"] == "fail":
+            print(f"НЕ ЗАПИСАНО: {v['detail']}", file=sys.stderr)
+            return 3
+        if "--json" not in argv:
+            print(f"ЗАПИСАНО: {v['detail']}", file=sys.stderr)
+        print(json.dumps(v, ensure_ascii=False, indent=1))
+        return 0
+
     if "--check" in argv:
         спека, отказ = channel(root)
         v = ({"status": "pass", "detail": "канал объявлен: "
-              + ("выключен намеренно" if спека.get("quiet") else "вебхук по https")}
+              + ("выключен намеренно" if спека.get("quiet") else "ссылка на https")}
              if спека else {"status": "unknown", "detail": отказ})
     else:
         i = argv.index("--text") if "--text" in argv else -1

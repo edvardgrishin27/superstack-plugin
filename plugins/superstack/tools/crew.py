@@ -68,7 +68,7 @@ def compute_waves(tasks: list) -> "tuple[dict, list]":
     unknown = sorted({b for t in tasks for b in (t.get("blockedBy") or [])
                       if b not in by})
     if unknown:
-        return {}, [f"таски ссылаются на несуществующие блокеры: {', '.join(unknown)}"]
+        return {}, [f"задачи ссылаются на несуществующие блокеры: {', '.join(unknown)}"]
 
     wave, guard = {}, len(by) + 1
     for _ in range(guard):
@@ -135,21 +135,21 @@ def tier_check(tasks: list, declared: str = None) -> dict:
     n = len(tasks)
     if n > CEILING:
         return {"status": "fail", "tasks": n,
-                "detail": f"тасков {n} при потолке {CEILING} — мелкая нарезка не "
+                "detail": f"задач {n} при потолке {CEILING} — мелкая нарезка не "
                           "покупает надёжность, она покупает расход; либо "
                           "обоснуй в спеке, либо раздели на два прогона"}
     actual = tier_of(n)
     if actual is None:
         return {"status": "fail", "tasks": n,
-                "detail": f"тасков {n} — это между ярусами (T0 без разбивки, "
-                          "T1 от двух): один таск дороже, чем ноль или два"}
+                "detail": f"задач {n} — это между ярусами (T0 без разбивки, "
+                          "T1 от двух): одна задача дороже, чем ноль или два"}
     if declared and declared != actual:
         return {"status": "fail", "tasks": n, "tier": actual,
-                "detail": f"объявлен {declared}, а тасков {n} — это {actual}; "
+                "detail": f"объявлен {declared}, а задач {n} — это {actual}; "
                           "ярус читается из продукта, и разойтись с фактом он "
                           "не может"}
     return {"status": "pass", "tasks": n, "tier": actual,
-            "detail": f"{n} тасков — ярус {actual}"}
+            "detail": f"{n} задач — ярус {actual}"}
 
 
 def _at(t: dict) -> "datetime | None":
@@ -236,8 +236,8 @@ def stalled(tasks: list, now: "datetime | None" = None) -> list:
 def check(state: dict, declared: str = None) -> dict:
     tasks = rows(state)
     if not tasks:
-        return {"status": "unknown", "detail": "тасков нет — план не нарезан",
-                "problems": [], "unmeasured": ["тасков нет"]}
+        return {"status": "unknown", "detail": "задач нет — план не нарезан",
+                "problems": [], "unmeasured": ["задач нет"]}
 
     computed, wave_bad = compute_waves(tasks)
     stated = declared_waves(state)
@@ -274,15 +274,16 @@ def check(state: dict, declared: str = None) -> dict:
     for t_ in stalled(tasks):
         problems.append(
             f"{t_['id']} в работе {t_['minutes']} мин и молчит — исполнитель "
-            "пропал, не вернув контракт; таск не сделан и не провален, он "
-            "просто исчез, и без этой проверки он останется «в работе» навсегда")
+            "пропал, не сообщив, что сделал; задача не сделана и не провалена, "
+            "она просто пропала вместе с ним; запусти эту задачу заново — "
+            "прежний запуск пропал бесследно и ничего из сделанного не испортил")
 
     return {"status": "fail" if problems else ("unknown" if unmeasured else "pass"),
             "problems": problems, "unmeasured": unmeasured,
             "computed_waves": computed, "tier": t, "zone_clashes": clashes,
             "serial_flight": f["serial"],
             "detail": (f"{len(problems)} нарушений" if problems
-                       else f"{len(tasks)} тасков, волн {len(set(use.values()))}, "
+                       else f"{len(tasks)} задач, волн {len(set(use.values()))}, "
                             "зоны не пересекаются")}
 
 

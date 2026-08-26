@@ -83,6 +83,57 @@ class TestTheRegistry(unittest.TestCase):
         self.assertTrue(en.forget(self.proj))
         self.assertIsNone(en.enabled_for(self.proj))
 
+    def test_forget_falls_back_to_a_covering_entry(self):
+        """Дефект 2: `forget()` требовал ТОЧНОГО совпадения. Человек стоит в
+        подкаталоге заведённого дерева и говорит «убери отсюда» — точной
+        записи на подкаталог никогда не было, есть только запись на корень
+        дерева. Раньше это отвечало «не был заведён» и не убирало ничего,
+        хотя `--check` в том же каталоге отвечает «да, заведён»: путь назад
+        был недоступен именно оттуда, где человек находится."""
+        en.enable(self.proj)
+        sub = self.proj / "src" / "глубоко"
+        sub.mkdir(parents=True)
+        removed = en.forget(sub)
+        self.assertEqual(removed, str(self.proj.resolve()))
+        self.assertIsNone(en.enabled_for(self.proj))
+        self.assertIsNone(en.enabled_for(sub))
+
+    def test_forget_reports_which_covering_entry_it_removed(self):
+        """Человек просил «убери ОТСЮДА», а убралась запись выше по дереву —
+        это обязано быть видно в выводе, а не молчаливо подразумеваться."""
+        en.enable(self.proj)
+        sub = self.proj / "src" / "глубоко"
+        sub.mkdir(parents=True)
+        p = subprocess.run([sys.executable, str(ENABLE), str(sub), "--forget"],
+                           capture_output=True, text=True, timeout=30,
+                           env={**os.environ, "SUPERSTACK_STATE_DIR": str(self.state)})
+        self.assertIn(str(self.proj.resolve()), p.stderr,
+                     "в выводе не названа покрывающая запись, которую реально убрали")
+
+    def test_forget_states_the_consequence_in_plain_words(self):
+        """Мало назвать механизм («убрана более широкая отметка») — нужно
+        сказать ПОСЛЕДСТВИЕ: система теперь молчит не только здесь, а везде
+        внутри убранного. Без этой фразы человек узнает о выключенных
+        проверках в другом своём проекте и не свяжет это с сегодняшней
+        просьбой «убери отсюда». Термины устройства («покрывающая запись»,
+        «выше по дереву») в выводе для человека не место."""
+        en.enable(self.proj)
+        sub = self.proj / "src" / "глубоко"
+        sub.mkdir(parents=True)
+        p = subprocess.run([sys.executable, str(ENABLE), str(sub), "--forget"],
+                           capture_output=True, text=True, timeout=30,
+                           env={**os.environ, "SUPERSTACK_STATE_DIR": str(self.state)})
+        self.assertIn("не только здесь", p.stderr,
+                     "не сказано, что молчание не ограничено этим каталогом")
+        for термин in ("покрывающая запись", "выше по дереву"):
+            self.assertNotIn(термин, p.stderr,
+                             f"в выводе для человека остался термин устройства «{термин}»")
+
+    def test_forget_without_any_matching_entry_still_reports_absence(self):
+        """Обратный контроль: поведение при полном отсутствии записи не
+        должно было измениться правкой — иначе почини одно, сломай другое."""
+        self.assertIsNone(en.forget(self.proj))
+
     def test_check_exits_one_when_not_enabled(self):
         p = subprocess.run([sys.executable, str(ENABLE), str(self.proj), "--check"],
                            capture_output=True, text=True, timeout=30,
@@ -95,6 +146,139 @@ class TestTheRegistry(unittest.TestCase):
                            capture_output=True, text=True, timeout=30,
                            env={**os.environ, "SUPERSTACK_STATE_DIR": str(self.state)})
         self.assertEqual(p.returncode, 0)
+
+
+class TestEnableRefusesTooBroadDirectories(unittest.TestCase):
+    """Дефект 1: `enable()` заводил ЛЮБОЙ каталог, включая $HOME. В десктопном
+    приложении новый чат нередко открывается прямо в $HOME — это не крайний
+    случай, а обычный. Заведённым по префиксу дерева (`enabled_for()`)
+    становилось бы вообще всё на машине, включая проекты, где систему никто
+    не звал, — ровно та болезнь, ради лечения которой сам реестр придуман.
+
+    $HOME здесь ПОДСТАВНОЙ, задаётся переменной окружения: иначе тест либо не
+    воспроизводил бы дефект на «безопасной» машине, либо и правда пытался бы
+    завести настоящий $HOME при падении проверки.
+    """
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.state = Path(self.tmp.name) / "state"
+        self.state.mkdir()
+        os.environ["SUPERSTACK_STATE_DIR"] = str(self.state)
+        self.addCleanup(os.environ.pop, "SUPERSTACK_STATE_DIR", None)
+
+        self._real_home = os.environ.get("HOME")
+        self.home_parent = Path(self.tmp.name) / "домашние"
+        self.home = self.home_parent / "пользователь"
+        self.home.mkdir(parents=True)
+        os.environ["HOME"] = str(self.home)
+        self.addCleanup(self._restore_home)
+
+        self.proj = self.home / "проекты" / "мой-проект"
+        self.proj.mkdir(parents=True)
+
+    def _restore_home(self):
+        if self._real_home is None:
+            os.environ.pop("HOME", None)
+        else:
+            os.environ["HOME"] = self._real_home
+
+    def test_enabling_home_itself_is_refused(self):
+        """Обычный случай, не крайний: новый чат в десктопном приложении,
+        если человек ещё не зашёл ни в один проект, живёт прямо в $HOME."""
+        with self.assertRaises(en.TooBroad):
+            en.enable(self.home)
+        self.assertEqual(en.known(), [], "отказ не должен заводить наполовину")
+
+    def test_enabling_an_ancestor_of_home_is_refused(self):
+        """Каталог НАД домом (аналог /Users) заводить нельзя: под ним лежат
+        домашние каталоги всех, кто пользуется машиной, а не только автора."""
+        with self.assertRaises(en.TooBroad):
+            en.enable(self.home_parent)
+        self.assertEqual(en.known(), [])
+
+    def test_enabling_the_filesystem_root_is_refused(self):
+        """Тот же случай в пределе: корень — предок вообще всего."""
+        with self.assertRaises(en.TooBroad):
+            en.enable(Path("/"))
+        self.assertEqual(en.known(), [])
+
+    def test_an_ordinary_project_under_home_still_enables_normally(self):
+        """Обратный контроль: правило обязано ловить ровно три широких
+        случая и не задевать обычный проект внутри дома — иначе чинили бы
+        одну беду, создав другую."""
+        p = en.enable(self.proj)
+        self.assertEqual(p, str(self.proj.resolve()))
+        self.assertIn(p, en.known())
+
+    def test_the_cli_exits_with_a_dedicated_code_and_names_the_next_step(self):
+        """`main()`: отдельный код возврата (не общий код ошибки вызова) и
+        человеческая причина с шагом дальше — не молчаливый провал."""
+        env = {**os.environ, "SUPERSTACK_STATE_DIR": str(self.state),
+               "HOME": str(self.home)}
+        p = subprocess.run([sys.executable, str(ENABLE), str(self.home)],
+                           capture_output=True, text=True, timeout=30, env=env)
+        self.assertEqual(p.returncode, en.EXIT_TOO_BROAD)
+        self.assertIn("перейди", p.stderr,
+                     "не назван следующий шаг — что делать вместо этого")
+        self.assertEqual(en.known(), [],
+                         "CLI не должен был завести каталог наполовину")
+
+
+class TestPhaseOneStopsClaimingItChangesNothing(unittest.TestCase):
+    """Дефект 3: фаза 1 называла себя «только чтение, ничего не меняет» и
+    заставляла агента сказать вслух «ничего менять не буду», хотя тут же по
+    ходу фазы вызывается enable.py, который пишет отметку на диск. Ложь
+    именно здесь особенно вредна: она произносится ЧЕЛОВЕКУ раньше, чем
+    становится неправдой."""
+
+    def test_the_heading_no_longer_claims_the_phase_changes_nothing(self):
+        текст = skill_text("superstack")
+        self.assertNotIn("только чтение, ничего не меняет", текст,
+                         "заголовок фазы 1 всё ещё обещает, что ничего не "
+                         "меняется, хотя следом идёт запись на диск")
+        self.assertIn("не меняет проект", текст,
+                      "новый заголовок обязан прямо сказать, что не "
+                      "меняется, — иначе неясно, что вообще поправили")
+
+    def test_the_spoken_line_no_longer_promises_nothing_will_change(self):
+        текст = skill_text("superstack")
+        self.assertNotIn("Ничего менять не буду", текст,
+                         "фраза, которую агент произносит вслух, всё ещё "
+                         "обещает не менять ничего")
+        self.assertIn("не поменяю", текст,
+                      "честная замена не найдена — человеку обязаны сказать "
+                      "правду о том, что проект не меняется")
+
+
+class TestPhaseOneReactsWhenEnablingFails(unittest.TestCase):
+    """`enable.py` умеет отказывать широким каталогам (см.
+    `TestEnableRefusesTooBroadDirectories`) и возвращает ненулевой код, но до
+    этой правки фаза 1 никак не разбирала исход: `enable.py` и сбор проб
+    стояли в одном bash-блоке подряд, без разбора кода между ними, — команда
+    отказывала, вывод уходил в stderr, а следующая строка всё равно
+    запускалась и своим успехом маскировала отказ. Агент по старой
+    инструкции шёл дальше, а человек так и не узнавал, что система здесь
+    работать не будет: механизм построен, а сообщить о нём некому."""
+
+    def test_the_bash_block_stops_before_running_probes_on_refusal(self):
+        """Без `|| exit $?` блок продолжает выполняться после отказа:
+        `enable.py` мог вернуть ненулевой код, а сбор проб всё равно
+        запускался бы следующей строкой и скрывал бы отказ своим успехом."""
+        текст = skill_text("superstack")
+        self.assertIn('enable.py" . || exit $?', текст,
+                     "bash-блок фазы 1 не останавливается на отказе "
+                     "заведения — следующая команда маскирует его код")
+
+    def test_the_skill_tells_the_agent_not_to_continue_silently_on_refusal(self):
+        текст = skill_text("superstack")
+        self.assertIn("Если заведение отказало", текст,
+                      "фаза 1 не называет случай, когда enable.py отказал")
+        self.assertIn("в какой папке лежит его проект", текст,
+                      "фаза 1 не велит спросить человека, где его проект")
+        self.assertIn("молча продолжать", текст,
+                      "фаза 1 не запрещает молча продолжать после отказа")
 
 
 class TestHooksAreSilentInForeignProjects(unittest.TestCase):

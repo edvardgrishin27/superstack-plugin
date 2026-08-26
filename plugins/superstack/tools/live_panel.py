@@ -28,14 +28,24 @@ JSON; отдаётся любым статическим сервером из �
 
   python3 live_panel.py <каталог .superstack>     -> пишет panel.html
   python3 live_panel.py <каталог> --serve [порт]  -> и поднимает сервер
+  python3 live_panel.py <каталог> --check [порт]  -> отвечает ли уже панель
 
-  код 0 — панель записана, 2 — нечего показывать, 3 — ошибка вызова
+  `--serve` в прогоне всегда запускают отвязанным (`nohup … &`), и весь его
+  вывод летит в /dev/null — если порт занят, узнать об этом изнутри того же
+  процесса неоткуда. `--check` — отдельная синхронная команда: она сама
+  опрашивает порт и сверяет ответ с panel.html на диске, и её код возврата
+  виден снаружи, в отличие от вывода отвязанного процесса.
+
+  код 0 — готово, 2 — нечего показывать, 3 — ошибка вызова,
+  4 — порт занят или панель не ответила вовремя
 """
 from __future__ import annotations
 
 import json
 import os
 import sys
+import time
+import urllib.request
 from pathlib import Path
 
 # Дизайн-система берётся из ОДНОГО места — того же, что рисует отчёт и план.
@@ -50,6 +60,20 @@ import derive_phase  # noqa: E402
 
 PANEL = "panel.html"
 DEFAULT_PORT = 8787
+HOST = "127.0.0.1"
+
+#: Код возврата, когда порт занят или панель не подтвердила себя за отведённое
+#: время. Отдельный от «3 — ошибка вызова»: это не опечатка в команде, а факт
+#: о сети, и агенту важно отличить «почини вызов» от «порт занят, разберись».
+PORT_BUSY = 4
+
+#: Сколько всего ждать ответа при --check и с каким шагом опрашивать. Сервер
+#: подняли только что и отвязанно (`nohup … &`) — секунда-другая на старт
+#: Python и импорт http.server это норма, а не повод сразу объявлять порт
+#: занятым.
+CHECK_BUDGET_SECONDS = 3.0
+CHECK_POLL_SECONDS = 0.25
+CHECK_TIMEOUT_SECONDS = 1.0
 
 #: Фазы прогона в порядке, в котором они идут. Панель показывает ВСЕ, а не
 #: только текущую: человек, видящий одну строку «идёт фаза 3», не знает ни
@@ -81,6 +105,18 @@ PHASES = (
 #: на обычной паузе, больше не спасает от вечера, потерянного на взаимном
 #: ожидании.
 STALE_MINUTES = 20
+
+#: Тот же вопрос для держателей «система» и «исполнитель». Раньше тревога
+#: умела срабатывать только на ожидании человека: упавшая сессия или уснувший
+#: ноутбук на этапе «Пишем код» оставляет ход на исполнителе навсегда, а
+#: панель бесконечно показывала «пишет помощник» как ни в чём не бывало.
+#: Порог НАРОЧНО больше человеческого: их собственная работа в норме идёт
+#: часами без единой новой записи в state.json (один таск, много помощников,
+#: полный прогон проверок) — человеческий порог в двадцать минут звонил бы на
+#: каждой обычной фазе, а после пары ложных тревог панель перестают читать.
+#: Час не спасает от ноутбука, закрытого на всю ночь, но ловит обрыв в
+#: пределах одного рабочего захода, а не только назавтра.
+STALE_MINUTES_RUN = 60
 
 #: Этап, на котором пишут код. Названо константой, потому что на него ссылается
 #: и `progress.py`: переход задачи в работу обязан сам двигать этап сюда.
@@ -120,6 +156,10 @@ _HTML = """<!doctype html>
          color: var(--muted); margin-top: .5rem; }
 .since.stale { color: var(--primary); }
 .since.stale::after { content: "__WAIT_LONG__"; color: var(--muted); }
+/* Держатели «система»/«исполнитель»: тот же цвет через общий .stale, но свой
+   текст. Правило идёт ПОСЛЕ .since.stale::after с той же специфичностью —
+   у псевдоэлемента одна content, и здесь она обязана победить последней. */
+.since.stale-run::after { content: "__STALE_RUN_SUFFIX__"; color: var(--muted); }
 ol.phases { list-style: none; margin: 0; padding: 0; }
 ol.phases li { display: flex; align-items: center; gap: .75rem;
                padding: .42rem 0; color: var(--faint);
@@ -190,6 +230,7 @@ li[data-state="now"] .tick { color: var(--primary); font-size: 1.3rem; }
 <script>
 const PHASES = __PHASES__;
 const STALE_MS = __STALE__ * 60000;
+const STALE_RUN_MS = __STALE_RUN__ * 60000;
 // Слова для человека приезжают из общего словаря, а не пишутся здесь. Иначе
 // правка формулировки становится правкой кода, и человеку приходится просить
 // о ней отдельно — а он и так уже попросил дважды.
@@ -221,6 +262,12 @@ function minutes(ms) {
 function drawEta(tasks) {
   $('etarub').textContent = W.copy.eta_rubric;
   $('etanote').textContent = '';
+  // Пустой список — это НЕ «всё сделано». Это вся первая половина прогона
+  // (просьба, спека, дизайн, план — часы), пока работу ещё не разбили на
+  // части: у этого случая тот же tasks.length === 0, что и у «все части
+  // кончились» ниже. Старый код не различал их и показывал «Все части
+  // закончены» в первую же минуту разговора, не сделав ровно ничего.
+  if (!tasks.length) { $('eta').textContent = W.copy.no_tasks; return; }
   const spans = tasks
     .filter(t => t.started && t.finished)
     .map(t => new Date(t.finished) - new Date(t.started))
@@ -312,6 +359,19 @@ async function tick() {
   // делается яркостью: строка становится белой вместо приглушённой.
   $('since').className = 'since' + (ph.owner === 'человек' && ph.since &&
     (Date.now() - new Date(ph.since)) > STALE_MS ? ' stale' : '');
+  // Держатели «система» и «исполнитель»: тот же обрыв — упавшая сессия,
+  // уснувший ноутбук — раньше тревогу не поднимал вовсе, она умела
+  // срабатывать только на ожидании человека. Свой порог (STALE_RUN_MS): их
+  // работа в норме идёт часами без единой записи, и порог человека звонил бы
+  // на каждой обычной фазе. Свой текст (stale_run), а не «ждём давно»: там
+  // ждут человека, здесь — нет, и слово «ждём» было бы не про то. Утверждать
+  // «умер» текст всё равно не имеет права — система не отличает обрыв от
+  // «долго думает», и словарь называет только то, что известно: давно не
+  // менялось.
+  if ((ph.owner === 'система' || ph.owner === 'исполнитель') && ph.since &&
+      (Date.now() - new Date(ph.since)) > STALE_RUN_MS) {
+    $('since').className += ' stale stale-run';
+  }
 
   drawPhases(ph.name);
 
@@ -386,7 +446,9 @@ def write_panel(run_dir: Path) -> Path:
                  .replace("__BRAND__", BRAND)
                  .replace("__PHASES__", json.dumps(PHASES, ensure_ascii=False))
                  .replace("__STALE__", str(STALE_MINUTES))
+                 .replace("__STALE_RUN__", str(STALE_MINUTES_RUN))
                  .replace("__WAIT_LONG__", words["copy"]["map"]["waiting_long"])
+                 .replace("__STALE_RUN_SUFFIX__", words["copy"]["map"]["stale_run"])
                  .replace("__TITLE__", words["copy"]["map"]["title"])
                  .replace("__BUILD_PHASE__",
                           json.dumps(BUILD_PHASE, ensure_ascii=False))
@@ -398,6 +460,62 @@ def write_panel(run_dir: Path) -> Path:
                  }, ensure_ascii=False)),
                  encoding="utf-8")
     return p
+
+
+def panel_is_live(run_dir: Path, port: int) -> tuple[bool, str]:
+    """Отвечает ли НА ЭТОМ порту именно panel.html из run_dir, а не сосед.
+
+    Раньше ссылку печатали ДО того, как `--serve` пытался занять порт, а сама
+    попытка шла отвязанным процессом (`nohup … &`) с выводом в /dev/null —
+    если порт был занят чужим приложением, человек получал рабочую на вид
+    ссылку на мёртвый сервер в первые минуты знакомства с продуктом.
+
+    Просто «получили ответ 200» здесь недостаточно: чужой процесс на том же
+    порту вполне может отвечать 200 на что угодно — это и есть тот самый
+    занятый порт, который нужно поймать, а не спутать с живой панелью.
+    Доказательство — побайтовое совпадение с файлом, который панель только
+    что записала на диск: только оно значит, что отвечает НАША панель.
+
+    Опрос повторяется в пределах CHECK_BUDGET_SECONDS: сервер подняли только
+    что и отвязанно, и секунда-другая на старт Python — это норма, а не повод
+    сразу объявлять порт занятым.
+    """
+    panel_path = run_dir / PANEL
+    if not panel_path.is_file():
+        return False, f"на диске нет {PANEL} — панель ещё не собрана"
+    expected = panel_path.read_bytes()
+    url = f"http://{HOST}:{port}/{PANEL}"
+    deadline = time.monotonic() + CHECK_BUDGET_SECONDS
+    others_answer = False
+    while True:
+        try:
+            with urllib.request.urlopen(url, timeout=CHECK_TIMEOUT_SECONDS) as resp:
+                if resp.read() == expected:
+                    return True, "отвечает"
+                others_answer = True
+        except OSError:
+            pass
+        if time.monotonic() >= deadline:
+            break
+        time.sleep(CHECK_POLL_SECONDS)
+    if others_answer:
+        return False, (f"на порту {port} отвечает не эта панель — порт занят "
+                       "чем-то другим")
+    return False, f"порт {port} не отвечает — сервер не поднялся или ещё не успел"
+
+
+def announce(p: Path, port: int) -> None:
+    """Единственное место, печатающее ссылку.
+
+    Вызывается только тогда, когда её уже не стыдно давать: либо панель
+    просто записана на диск без --serve (сервер поднимет кто-то другой), либо
+    порт только что успешно привязан, либо --check только что подтвердил, что
+    на порту отвечает именно эта панель.
+    """
+    print(f"панель: {p}", file=sys.stderr)
+    print(f"открыть: http://localhost:{port}/{PANEL}", file=sys.stderr)
+    print(json.dumps({"panel": str(p), "url": f"http://localhost:{port}/{PANEL}"},
+                     ensure_ascii=False))
 
 
 def halt_if_paused() -> None:
@@ -413,13 +531,26 @@ def main() -> int:
     argv = sys.argv[1:]
     plain = [a for a in argv if not a.startswith("--")]
     if not plain:
-        print("вызов: live_panel.py <каталог .superstack> [--serve [порт]]",
-              file=sys.stderr)
+        print("вызов: live_panel.py <каталог .superstack> "
+              "[--serve [порт] | --check [порт]]", file=sys.stderr)
         return 3
     run_dir = Path(plain[0]).resolve()
     if not run_dir.is_dir():
         print(f"НЕ УДАЛОСЬ: нет каталога {run_dir}", file=sys.stderr)
         return 3
+    port = int(plain[1]) if len(plain) > 1 else DEFAULT_PORT
+
+    if "--check" in argv:
+        # Отдельная синхронная команда — снаружи `--serve`, который в прогоне
+        # всегда отвязан (`nohup … &`) и весь свой вывод роняет в /dev/null.
+        # Только код возврата ЭТОЙ команды и решает, давать ли ссылку.
+        ok, why = panel_is_live(run_dir, port)
+        if not ok:
+            print(f"НЕ УДАЛОСЬ: {why}", file=sys.stderr)
+            return PORT_BUSY
+        announce(run_dir / PANEL, port)
+        return 0
+
     if not (run_dir / "state.json").is_file():
         # Панель без состояния показала бы пустые полосы — то есть «ничего не
         # происходит» вместо «нечего показывать». Это разные утверждения.
@@ -427,59 +558,77 @@ def main() -> int:
         return 2
 
     p = write_panel(run_dir)
-    port = int(plain[1]) if len(plain) > 1 else DEFAULT_PORT
-    print(f"панель: {p}", file=sys.stderr)
-    print(f"открыть: http://localhost:{port}/{PANEL}", file=sys.stderr)
-    print(json.dumps({"panel": str(p), "url": f"http://localhost:{port}/{PANEL}"},
-                     ensure_ascii=False))
 
-    if "--serve" in argv:
-        import functools
-        import http.server
-        import socketserver
+    if "--serve" not in argv:
+        announce(p, port)
+        return 0
 
-        class Fresh(http.server.SimpleHTTPRequestHandler):
-            """Отдаёт всегда свежее — и этап считает сам.
+    import functools
+    import http.server
+    import socketserver
 
-            Две вещи, каждая из живого прогона.
+    class Fresh(http.server.SimpleHTTPRequestHandler):
+        """Отдаёт всегда свежее — и этап считает сам.
 
-            Первая: обычный статический сервер отвечает «не менялось» по дате
-            файла, и браузер оставляет прежнюю страницу. Проверено вживую —
-            панель на диске уже новая, сервер отдаёт новую, а на экране
-            прежняя. Человек смотрит на устаревшее и не может об этом узнать.
+        Две вещи, каждая из живого прогона.
 
-            Вторая, и она важнее: этап раньше приходил из записи, которую
-            делают отдельной командой. Команду забывали — за один вечер
-            дважды, — и панель уверенно показывала не тот этап. Здесь состояние
-            отдаётся с этапом, ВЫЧИСЛЕННЫМ по следам на диске: панель
-            переключается сама, без чьей-либо дисциплины.
-            """
+        Первая: обычный статический сервер отвечает «не менялось» по дате
+        файла, и браузер оставляет прежнюю страницу. Проверено вживую —
+        панель на диске уже новая, сервер отдаёт новую, а на экране
+        прежняя. Человек смотрит на устаревшее и не может об этом узнать.
 
-            def end_headers(self):
-                self.send_header("Cache-Control", "no-store, must-revalidate")
-                super().end_headers()
+        Вторая, и она важнее: этап раньше приходил из записи, которую
+        делают отдельной командой. Команду забывали — за один вечер
+        дважды, — и панель уверенно показывала не тот этап. Здесь состояние
+        отдаётся с этапом, ВЫЧИСЛЕННЫМ по следам на диске: панель
+        переключается сама, без чьей-либо дисциплины.
+        """
 
-            def do_GET(self):                                  # noqa: N802
-                if self.path.split("?")[0].rstrip("/") not in ("/state.json",):
-                    return super().do_GET()
-                body = json.dumps(state_with_phase(run_dir),
-                                  ensure_ascii=False).encode("utf-8")
-                self.send_response(200)
-                self.send_header("Content-Type", "application/json; charset=utf-8")
-                self.send_header("Content-Length", str(len(body)))
-                self.end_headers()
-                self.wfile.write(body)
+        def end_headers(self):
+            self.send_header("Cache-Control", "no-store, must-revalidate")
+            super().end_headers()
 
-            def log_message(self, *a):  # тишина: опрос идёт раз в 3 секунды
-                pass
+        def do_GET(self):                                  # noqa: N802
+            if self.path.split("?")[0].rstrip("/") not in ("/state.json",):
+                return super().do_GET()
+            body = json.dumps(state_with_phase(run_dir),
+                              ensure_ascii=False).encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
 
-        handler = functools.partial(Fresh, directory=str(run_dir))
-        # allow_reuse_address: панель перезапускают часто, и «порт занят» после
-        # каждого перезапуска сделало бы её неудобной ровно настолько, чтобы
-        # ею перестали пользоваться.
-        socketserver.TCPServer.allow_reuse_address = True
-        with socketserver.TCPServer(("127.0.0.1", port), handler) as httpd:
-            httpd.serve_forever()
+        def log_message(self, *a):  # тишина: опрос идёт раз в 3 секунды
+            pass
+
+    handler = functools.partial(Fresh, directory=str(run_dir))
+    # allow_reuse_address: панель перезапускают часто, и «порт занят» после
+    # каждого перезапуска сделало бы её неудобной ровно настолько, чтобы ею
+    # перестали пользоваться.
+    socketserver.TCPServer.allow_reuse_address = True
+    try:
+        # Порт привязывается ДО первой печати ссылки — раньше их порядок был
+        # обратным, и человек получал ссылку раньше, чем становилось известно,
+        # жив ли сервер вообще.
+        httpd = socketserver.TCPServer((HOST, port), handler)
+    except OSError as e:
+        # Соседний свободный порт здесь НЕ берём, хотя это и решило бы неудобство
+        # само по себе. Во-первых, тихая замена порта разошлась бы с портом,
+        # жёстко вписанным в фазу `0-завести.md`, и ссылка, которую отдаёт агент,
+        # снова стала бы неверной — ровно тот же отказ, только на шаг дальше.
+        # Во-вторых, занятый порт может значить, что жива ПРОШЛАЯ панель этого
+        # же прогона — переезд на соседний порт тогда молча оставил бы две
+        # панели вместо одной, и обе выглядели бы легитимными. Явный отказ
+        # дешевле: человек тратит минуту на освобождение порта, а не гадает,
+        # какая из двух ссылок настоящая.
+        print(f"НЕ УДАЛОСЬ: порт {port} занят, панель не поднялась ({e})",
+              file=sys.stderr)
+        return PORT_BUSY
+
+    announce(p, port)
+    with httpd:
+        httpd.serve_forever()
     return 0
 
 

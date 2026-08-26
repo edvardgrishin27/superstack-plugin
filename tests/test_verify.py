@@ -13,6 +13,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -229,6 +230,30 @@ class TestVerdict(unittest.TestCase):
                                 f"пустой прогон не опознан: {out}")
 
 
+class TestFailureSignature(unittest.TestCase):
+    """Признак поломки для ключа серии (apply_attempt_ceiling). Числа и
+    похожее на путь обязаны вычищаться — иначе один и тот же провал с другим
+    кодом возврата или другой временной директорией читался бы как новая
+    поломка, и серия обнулялась бы там, где обязана продолжаться."""
+
+    def test_different_return_codes_are_the_same_signature(self):
+        a = vf._failure_signature("тесты: код возврата 1")
+        b = vf._failure_signature("тесты: код возврата 2")
+        self.assertEqual(a, b, "разные коды возврата дали разные подписи")
+
+    def test_different_temp_paths_are_the_same_signature(self):
+        a = vf._failure_signature("линт: не смог проверить — /tmp/run-abc123/log")
+        b = vf._failure_signature("линт: не смог проверить — /tmp/run-xyz987/log")
+        self.assertEqual(a, b, "разные временные пути дали разные подписи")
+
+    def test_different_labels_are_different_signatures(self):
+        """Обратный контроль: нормализация не должна ослеплять подпись
+        целиком — сборка и линт обязаны остаться разными поломками."""
+        a = vf._failure_signature("сборка: код возврата 1")
+        b = vf._failure_signature("линт: код возврата 1")
+        self.assertNotEqual(a, b, "разные поломки схлопнулись в одну подпись")
+
+
 class TestEmptyIsNotConfusedWithReal(ProjectFixture):
     """Граница между «прогон был, тестов ноль» и «тесты есть» проверяется на
     выводе настоящих прогонщиков. Ошибка в любую сторону одинаково дорога:
@@ -352,6 +377,12 @@ class TestAttemptCeilingUnit(ProjectFixture):
                 "blockers": ["проект не объявил ни одной проверки"], "evidence": [],
                 "next": "завести хотя бы один тест"}
 
+    def _fail_verdict_with(self, blockers: list, next_text: str) -> dict:
+        """Провал с ЗАДАННЫМ блокером — нужен, чтобы отличить два РАЗНЫХ
+        провала друг от друга (_fail_verdict всегда даёт один и тот же)."""
+        return {"gate": "verify", "status": "fail", "project": str(self.p),
+                "blockers": blockers, "evidence": [], "next": next_text}
+
     def test_below_ceiling_keeps_the_original_next(self):
         v1 = vf.apply_attempt_ceiling(self._fail_verdict(), self.p, self.state_path)
         self.assertEqual(v1["attempt"], 1)
@@ -379,10 +410,20 @@ class TestAttemptCeilingUnit(ProjectFixture):
     def test_state_persists_across_separate_calls(self):
         """Счётчик обязан жить МЕЖДУ вызовами: гейт перезапускается заново
         (новый процесс) на каждый прогон, единственный носитель памяти —
-        файл на диске, а не переменная внутри процесса."""
+        файл на диске, а не переменная внутри процесса.
+
+        Запись на диске — вложенный словарь `{"attempt": N, "sig": ...}` на
+        проект, не голое число: `on_disk[str(self.p)] == 1` было верно, пока
+        ключ серии был только проектом. С ключом (проект, признак поломки)
+        рядом со счётчиком обязан жить и признак — иначе после перезапуска
+        процесса не по чем понять, та же это серия или уже другая, — то
+        утверждение это и проверяло не полностью, оно проверяло только то,
+        что число вообще что-то пишет на диск.
+        """
         vf.apply_attempt_ceiling(self._fail_verdict(), self.p, self.state_path)
         on_disk = json.loads(self.state_path.read_text("utf-8"))
-        self.assertEqual(on_disk[str(self.p)], 1, "счётчик не записан на диск")
+        self.assertEqual(on_disk[str(self.p)]["attempt"], 1,
+                         "счётчик не записан на диск")
         v2 = vf.apply_attempt_ceiling(self._fail_verdict(), self.p, self.state_path)
         self.assertEqual(v2["attempt"], 2, "счётчик не пережил отдельный вызов")
 
@@ -412,6 +453,129 @@ class TestAttemptCeilingUnit(ProjectFixture):
         vf.apply_attempt_ceiling(self._fail_verdict(), self.p, self.state_path)
         v_other = vf.apply_attempt_ceiling(self._fail_verdict(), other, self.state_path)
         self.assertEqual(v_other["attempt"], 1, "счётчик утёк из чужого проекта")
+
+    def test_failure_signature_change_starts_a_new_series(self):
+        """Ключ серии — ПАРА (проект, признак поломки), а не один проект.
+
+        Раньше счётчик был общим на ВСЕ провалы проекта: сборка падала
+        дважды, потом начинал падать линт — и это читалось как третий заход
+        одной и той же серии, хотя линт провалился впервые. Смена подписи
+        обязана обнулить счёт, а не продолжить чужую серию.
+        """
+        build = self._fail_verdict_with(["сборка: код возврата 1"], "почини сборку")
+        self.assertEqual(
+            vf.apply_attempt_ceiling(build, self.p, self.state_path)["attempt"], 1)
+        self.assertEqual(
+            vf.apply_attempt_ceiling(build, self.p, self.state_path)["attempt"], 2)
+
+        lint = self._fail_verdict_with(["линт: код возврата 1"], "почини линт")
+        v = vf.apply_attempt_ceiling(lint, self.p, self.state_path)
+        self.assertEqual(v["attempt"], 1,
+                         "новая поломка унаследовала счёт от чужой серии")
+        self.assertFalse(v["gave_up"])
+
+    def test_surrender_names_the_failure_that_actually_repeated(self):
+        """Текст сдачи обязан называть поломку, на которой серия РЕАЛЬНО
+        застряла, и число заходов именно по ней — не поломку из чужой,
+        уже закрытой серии, которая просто попалась первой на глаза."""
+        build = self._fail_verdict_with(["сборка: код возврата 1"], "почини сборку")
+        vf.apply_attempt_ceiling(build, self.p, self.state_path)      # серия сборки: 1
+
+        lint = self._fail_verdict_with(["линт: код возврата 1"], "почини линт")
+        v = None
+        for _ in range(vf.MAX_ATTEMPTS):
+            v = vf.apply_attempt_ceiling(lint, self.p, self.state_path)
+        self.assertEqual(v["attempt"], vf.MAX_ATTEMPTS,
+                         "серия линта унаследовала счёт серии сборки")
+        self.assertTrue(v["gave_up"])
+        self.assertIn("линт", v["next"], f"сдача назвала не ту поломку: {v['next']}")
+        self.assertNotIn("сборка", v["next"],
+                         "сдача унаследовала поломку из чужой, уже закрытой серии")
+
+    def test_same_fingerprint_does_not_count_as_a_new_attempt(self):
+        """Тот же провал, тот же отпечаток дерева — не новый заход починки,
+        а тот же прогон, спрошенный другим вызывающим: bar.py зовёт
+        verify.py тем же подпроцессом, что и Stop-хук, и фаза 5 — на одном и
+        том же непочиненном дереве без дедупликации это утраивало счёт без
+        единой починки (см. докстринг apply_attempt_ceiling)."""
+        fail = self._fail_verdict()
+        v1 = vf.apply_attempt_ceiling(fail, self.p, self.state_path, "fp-A")
+        self.assertEqual(v1["attempt"], 1)
+        v2 = vf.apply_attempt_ceiling(fail, self.p, self.state_path, "fp-A")
+        self.assertEqual(v2["attempt"], 1,
+                         "повтор без изменений в дереве засчитан новым заходом")
+        v3 = vf.apply_attempt_ceiling(fail, self.p, self.state_path, "fp-B")
+        self.assertEqual(v3["attempt"], 2,
+                         "изменение в дереве не засчитано новым заходом")
+
+    def test_unknown_fingerprint_falls_back_to_the_old_behaviour(self):
+        """fingerprint=None ("сигнала нет", например git недоступен) обязан
+        вести себя как ДО этого механизма: каждый провал — новый заход.
+        Иначе неспособность снять отпечаток тихо выключила бы весь потолок
+        попыток, а не только его дедуп-часть."""
+        fail = self._fail_verdict()
+        v1 = vf.apply_attempt_ceiling(fail, self.p, self.state_path)
+        v2 = vf.apply_attempt_ceiling(fail, self.p, self.state_path)
+        self.assertEqual((v1["attempt"], v2["attempt"]), (1, 2))
+
+
+class TestTreeFingerprint(ProjectFixture):
+    """_tree_fingerprint — сигнал для дедупликации из TestAttemptCeilingUnit,
+    проверенный на настоящем git, а не на подставных данных: это ровно то же
+    дерево, что видит verify.py в реальном проекте."""
+
+    def _git(self, *args) -> None:
+        # Свои -c на каждый вызов, а не глобальный git config: тест обязан
+        # быть герметичным к чужому ~/.gitconfig (в т.ч. commit.gpgsign=true
+        # на машине разработчика) так же, как STATE_ENV — к настоящему
+        # ~/.claude пользователя.
+        subprocess.run(
+            ["git", "-c", "user.email=t@example.com", "-c", "user.name=t",
+             "-c", "commit.gpgsign=false", "-c", "init.defaultBranch=main",
+             *args],
+            cwd=str(self.p), check=True, capture_output=True, text=True)
+
+    def setUp(self):
+        super().setUp()
+        if not shutil.which("git"):
+            self.skipTest("git не установлен — отпечаток снять нечем")
+        self._git("init", "-q")
+        self.write("a.txt", "начало\n")
+        self._git("add", "-A")
+        self._git("commit", "-q", "-m", "initial")
+
+    def test_unchanged_tree_gives_the_same_fingerprint(self):
+        fp1 = vf._tree_fingerprint(self.p)
+        fp2 = vf._tree_fingerprint(self.p)
+        self.assertIsNotNone(fp1, "в свежем git-репозитории отпечаток не снялся")
+        self.assertEqual(fp1, fp2, "одно и то же дерево дало разные отпечатки")
+
+    def test_editing_a_tracked_file_changes_the_fingerprint(self):
+        fp1 = vf._tree_fingerprint(self.p)
+        self.write("a.txt", "правка\n")
+        fp2 = vf._tree_fingerprint(self.p)
+        self.assertNotEqual(fp1, fp2, "правка отслеживаемого файла не замечена")
+
+    def test_adding_an_untracked_file_changes_the_fingerprint(self):
+        fp1 = vf._tree_fingerprint(self.p)
+        self.write("b.txt", "новый файл\n")
+        fp2 = vf._tree_fingerprint(self.p)
+        self.assertNotEqual(fp1, fp2, "новый неотслеживаемый файл не замечен")
+
+    def test_editing_an_untracked_file_changes_the_fingerprint(self):
+        """Список неотслеживаемых сам по себе ловит НОВЫЙ файл, но не правку
+        его содержимого — git его не видит вовсе, пока не добавлен. Отпечаток
+        обязан ловить это через размер и mtime, не только через имя."""
+        self.write("b.txt", "черновик\n")
+        fp1 = vf._tree_fingerprint(self.p)
+        self.write("b.txt", "черновик значительно длиннее прежнего\n")
+        fp2 = vf._tree_fingerprint(self.p)
+        self.assertNotEqual(fp1, fp2, "правка неотслеживаемого файла не замечена")
+
+    def test_not_a_git_repo_gives_no_fingerprint(self):
+        with tempfile.TemporaryDirectory() as other:
+            self.assertIsNone(vf._tree_fingerprint(Path(other)),
+                              "не git-репозиторий, а отпечаток снялся")
 
 
 class TestAttemptCeilingIntegration(ProjectFixture):
@@ -451,6 +615,35 @@ class TestAttemptCeilingIntegration(ProjectFixture):
         self.assertEqual(v.get("attempt"), 1,
                          "зелёный прогон между провалами не сбросил счётчик попыток")
         self.assertFalse(v.get("gave_up", False))
+
+    def test_repeated_calls_with_no_tree_change_do_not_double_count(self):
+        """Прямое воспроизведение дефекта №3: bar.py (builtin verify) и
+        Stop-хук verify-gate.py зовут этот же verify.py подпроцессом на ОДНО
+        и то же красное дерево, что и фаза 5. Без дедупликации по отпечатку
+        два вызова подряд без единой починки уже дважды увеличивали
+        счётчик — потолок брался раньше, чем человек успевал что-то
+        изменить."""
+        if not shutil.which("git"):
+            self.skipTest("git не установлен — отпечаток снять нечем")
+        git = ["git", "-c", "user.email=t@example.com", "-c", "user.name=t",
+               "-c", "commit.gpgsign=false", "-c", "init.defaultBranch=main"]
+        subprocess.run(git + ["init", "-q"], cwd=str(self.p), check=True)
+        self.write("tests/test_x.py", "def test_broken():\n    assert 1 == 2\n")
+        subprocess.run(git + ["add", "-A"], cwd=str(self.p), check=True)
+        subprocess.run(git + ["commit", "-q", "-m", "x"], cwd=str(self.p), check=True)
+
+        first = json.loads(run_gate(self.p).stdout)
+        second = json.loads(run_gate(self.p).stdout)   # тот же провал, другой вызывающий
+        self.assertEqual(first["attempt"], 1)
+        self.assertEqual(second["attempt"], 1,
+                         "повторный вызов на непочиненном дереве увеличил счётчик")
+
+        # Починка — и следующий вызов ОБЯЗАН засчитаться новым заходом:
+        # дедупликация не должна прятать настоящий следующий заход.
+        self.write("tests/test_x.py", "def test_broken():\n    assert 1 == 3\n")
+        third = json.loads(run_gate(self.p).stdout)
+        self.assertEqual(third["attempt"], 2,
+                         "правка в дереве не засчитана новым заходом")
 
 
 class TestOutputIsMachineReadable(ProjectFixture):

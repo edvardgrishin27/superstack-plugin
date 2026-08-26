@@ -282,7 +282,7 @@ def blockers(state: dict, task: dict, interfaces: str, spec: str,
     """Почему этот таск передавать НЕЛЬЗЯ. Пустой список — можно."""
     bad = []
     if not (task.get("requirements") or []):
-        bad.append("таск не служит ни одному требованию — это работа, которую "
+        bad.append("задача не служит ни одному требованию — это работа, которую "
                    "никто не заказывал; либо привяжи, либо срежь")
     if not (task.get("acceptance") or []):
         bad.append("нет критериев приёмки — исполнитель не узнает, когда "
@@ -295,7 +295,7 @@ def blockers(state: dict, task: dict, interfaces: str, spec: str,
 
     first = not any(rows(state)) or task["id"] == min(t["id"] for t in rows(state))
     if not interfaces.strip() and not first:
-        bad.append("interfaces.md пуст, а таск не первый — архитектуру задаст "
+        bad.append("interfaces.md пуст, а задача не первая — архитектуру задаст "
                    "тот, кто увидел одну восьмую задачи, и остальные будут её "
                    "обходить")
 
@@ -475,7 +475,7 @@ def main() -> int:
         return 3
     task = find_task(state, plain[1])
     if task is None:
-        print(f"НЕ УДАЛОСЬ: нет таска {plain[1]}", file=sys.stderr)
+        print(f"НЕ УДАЛОСЬ: нет задачи {plain[1]}", file=sys.stderr)
         return 3
 
     def _read(p):

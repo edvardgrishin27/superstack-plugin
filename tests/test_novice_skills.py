@@ -32,7 +32,9 @@ tools/oops.py делает `import apply` и работает через `apply.
 """
 from __future__ import annotations
 
+import contextlib
 import importlib.util
+import io
 import json
 import re
 import os
@@ -325,7 +327,7 @@ class TestWhatPriority(WhatFixture):
         self.pause()
         r = what_mod.evaluate(self.project)
         self.assertEqual(r["reason"], "paused")
-        self.assertIn("pause.sh off", r["next"])
+        self.assertIn("включи", r["next"])
 
     def test_line_and_next_are_both_single_lines(self):
         """Скилл обещает РОВНО одну строку состояния и одну — следующего шага."""
@@ -333,6 +335,20 @@ class TestWhatPriority(WhatFixture):
         r = what_mod.evaluate(self.project)
         self.assertNotIn("\n", r["line"])
         self.assertNotIn("\n", r["next"])
+
+    def test_paused_next_is_words_not_a_shell_command(self):
+        """Человек попал на паузу через /stop — скилл, написанный ровно для
+        того, чтобы не открывать терминал (см. skills/stop/SKILL.md: «тормоз
+        обязан срабатывать с фразы»). Ответ на «где я» не имеет права выдать
+        ему то же самое, от чего /stop его избавил, — команду оболочки или
+        путь к файлу инструмента, которые он не может исполнить."""
+        self.pause()
+        r = what_mod.evaluate(self.project)
+        self.assertEqual(r["reason"], "paused")
+        for кусок in ("pause.sh", "sh ", "tools/"):
+            with self.subTest(кусок=кусок):
+                self.assertNotIn(кусок, r["next"])
+                self.assertNotIn(кусок, r["line"])
 
 
 class TestWhatCLI(WhatFixture):
@@ -393,6 +409,24 @@ class TestOopsDescribesBeforeUndoing(OopsFixture):
     def test_no_backups_is_named_honestly(self):
         r = oops_mod.describe(oops_mod.last_backup_id() or "nope")
         self.assertFalse(r["found"])
+
+    def test_manifest_that_is_valid_json_but_not_an_object(self):
+        """`[]`, `42`, `"текст"`, `null` — валидный JSON, но НЕ словарь.
+        json.loads() на таком не бросает ничего (except выше ловит только
+        OSError/ValueError), и следующая же строка manifest.get("applied")
+        роняла AttributeError наружу — голым traceback'ом, причём и в
+        `oops.py what`, и в `oops.py undo`: describe() зовут обе ветки.
+        Мутация: убрать проверку isinstance(manifest, dict) в describe() —
+        тест краснеет именно этим AttributeError."""
+        bdir = real_apply.BACKUPS / "20260101-000000"
+        bdir.mkdir(parents=True)
+        for raw in ("[]", "42", '"текст"', "null"):
+            with self.subTest(manifest=raw):
+                (bdir / "manifest.json").write_text(raw, encoding="utf-8")
+                r = oops_mod.describe("20260101-000000")
+                self.assertFalse(r["found"])
+                self.assertEqual(r["id"], "20260101-000000")
+                self.assertIn("20260101-000000", r["line"])
 
     def test_describe_names_the_field_and_value(self):
         self.make_backup_with_change()
@@ -467,6 +501,126 @@ class TestOopsRespectsThePause(OopsFixture):
         self.assertEqual(rc, 0, "если это утверждение когда-нибудь станет "
                                 "неверным — тормоз в oops.py стал избыточным, "
                                 "и об этом стоит сказать явно, а не молчать")
+
+
+class TestOopsUndoFailsHonestly(OopsFixture):
+    """Дефект: `oops.py undo` печатал «откатил «id»: …» БЕЗУСЛОВНО, до
+    проверки кода возврата — при провале отката человек читал подтверждение
+    в прошедшем времени про действие, которого не было (код при этом был
+    честный: `0 if rc == 0 else 1`, но человек читает строку, а не код).
+
+    Сросшийся с ним дефект: undo() вызывался даже когда describe() уже
+    сказал found=False, а apply.cmd_undo() читает manifest.json заново без
+    единой проверки (apply.py, cmd_undo, ~строка 519) — битый или
+    отсутствующий файл ронял голый traceback вместо человеческой строки.
+
+    Мутация (для буквальной проверки красноты обеих причин сразу): вернуть
+    в oops.py безусловный print(f"откатил «{backup_id}»: …") ДО проверки rc
+    и убрать ветку `if not preview["found"]:` вместе с try/except вокруг
+    undo() — ровно то, что было в исходном коде; см. ответ агента за точным
+    диффом."""
+
+    def _run_undo(self, backup_id: str) -> tuple:
+        """main() как «oops.py undo <id>» в этом же процессе, без --json —
+        иначе человеческая строка не печатается вовсе и проверять нечего.
+        Возвращает (код, stderr, stdout)."""
+        argv_orig = sys.argv
+        sys.argv = ["oops.py", "undo", backup_id]
+        out, err = io.StringIO(), io.StringIO()
+        try:
+            with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+                rc = oops_mod.main()
+        finally:
+            sys.argv = argv_orig
+        return rc, err.getvalue(), out.getvalue()
+
+    def test_unknown_id_is_not_reported_as_rolled_back(self):
+        """Отката с таким id никогда не было — describe() честно отдаёт
+        found=False. Дальше звать apply.cmd_undo незачем: она бы либо
+        повторила тот же отказ, либо (если каталог есть без манифеста)
+        упала traceback'ом — ни то ни другое не повод писать «откатил»."""
+        rc, err, out = self._run_undo("nope-never-existed")
+        self.assertEqual(rc, 1)
+        self.assertNotIn("откатил", err)
+        self.assertIn("ОТКАЗ", err)
+        self.assertEqual(json.loads(out)["undo_exit"], 1)
+
+    def test_corrupt_manifest_is_refused_not_traceback(self):
+        """manifest.json есть, но не разбирается json.loads'ом. describe()
+        ловит это сам (found=False — OSError/ValueError уже пойманы внутри
+        него) — и это обязано остановить undo ДО вызова apply.cmd_undo(),
+        у которой такой защиты нет: тот же файл она читает заново без
+        единого try/except (apply.py, cmd_undo, ~строка 519)."""
+        bdir = real_apply.BACKUPS / "20260101-000000"
+        bdir.mkdir(parents=True)
+        (bdir / "manifest.json").write_text("{не json вовсе", encoding="utf-8")
+        rc, err, out = self._run_undo("20260101-000000")
+        self.assertEqual(rc, 1)
+        self.assertNotIn("откатил", err)
+        self.assertNotIn("Traceback", err)
+        self.assertIn("не читается", err)  # строка из describe(), не выдумка
+
+    def test_structurally_broken_manifest_does_not_crash(self):
+        """manifest.json — валидный JSON-словарь с "applied" (describe()
+        говорит found=True: ей этого ключа достаточно), но БЕЗ ключа
+        "backup". apply.cmd_undo() индексирует manifest["backup"]["files"]
+        без проверки формы — предсказать этот KeyError на стороне describe()
+        нельзя, он ловится только вокруг самого вызова undo()."""
+        bdir = real_apply.BACKUPS / "20260101-000000"
+        bdir.mkdir(parents=True)
+        manifest = {"created": "2026-01-01T00:00:00+00:00", "applied": []}
+        (bdir / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+        rc, err, out = self._run_undo("20260101-000000")
+        self.assertEqual(rc, 1)
+        self.assertNotIn("откатил", err)
+        self.assertNotIn("Traceback", err)
+        self.assertIn("код apply.py", err)
+
+    def test_manifest_that_is_not_an_object_is_refused_not_traceback(self):
+        """Та же битая форма (валидный JSON, но не словарь), но через CLI:
+        describe() отдаёт found=False, значит apply.cmd_undo() не зовётся
+        вовсе и человек читает отказ. Без проверки формы в describe() падало
+        бы РАНЬШЕ — внутри самой describe(), до ветки `not preview["found"]`,
+        то есть до любого шанса напечатать человеческую строку."""
+        bdir = real_apply.BACKUPS / "20260101-000000"
+        bdir.mkdir(parents=True)
+        (bdir / "manifest.json").write_text("[]", encoding="utf-8")
+        rc, err, out = self._run_undo("20260101-000000")
+        self.assertEqual(rc, 1)
+        self.assertNotIn("откатил", err)
+        self.assertNotIn("Traceback", err)
+        self.assertIn("ОТКАЗ", err)
+        self.assertEqual(json.loads(out)["undo_exit"], 1)
+
+    def test_undo_failure_without_a_caught_exception_does_not_say_none(self):
+        """crash остаётся None, когда apply.cmd_undo() вернула 1 БЕЗ
+        исключения — у неё всего два выхода (проверено чтением: ранний
+        `return 1`, когда bdir.is_dir() ложно, и финальный `return 0`), и
+        этот путь не бросает ничего, что ловит except выше. Достижимо это
+        гонкой: describe() сказала found=True, а к моменту вызова undo()
+        каталог отката исчез. Гонка смоделирована без потока — describe()
+        подменена на синтетический found=True для id, которого на диске
+        нет вовсе, — apply.cmd_undo() увидит ровно то же самое, что и в
+        настоящей гонке. `Причина: None.` была бы враньём о том, что у
+        отказа нет причины, — причина есть, просто не эта строка её знает."""
+        orig_describe = oops_mod.describe
+        oops_mod.describe = lambda backup_id: {
+            "found": True, "id": backup_id, "line": "неважно для этого теста"}
+        try:
+            rc, err, out = self._run_undo("this-id-do" "es-not-exi" "st-on-disk")
+        finally:
+            oops_mod.describe = orig_describe
+        self.assertEqual(rc, 1)
+        self.assertNotIn("None", err)
+        self.assertIn("ОТКАЗ", err)
+
+    def test_successful_undo_is_still_reported_as_such(self):
+        """Красная пара к пяти тестам выше: на честном успехе «откатил»
+        обязан остаться, иначе выше проверяется дефект, которого нет."""
+        self.make_backup_with_change()
+        rc, err, out = self._run_undo("20260101-000000")
+        self.assertEqual(rc, 0)
+        self.assertIn("откатил «20260101-000000»", err)
 
 
 # ============================================================================

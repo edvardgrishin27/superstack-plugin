@@ -46,6 +46,19 @@ def diff_for(*paths: str) -> str:
     return "".join(out)
 
 
+def diff_with_body(path: str, body: str) -> str:
+    """Diff одного файла с заданным телом строки — нужен там, где важен
+    именно ПУТЬ файла (например, правило для .gitignore), а не только
+    содержимое."""
+    return (f"diff --git a/{path} b/{path}\n--- a/{path}\n+++ b/{path}\n"
+            f"@@ -1 +1,2 @@\n+{body}\n")
+
+
+def verdict_for(path: str, body: str) -> dict:
+    """verdict() по одному файлу с заданными путём и телом."""
+    return ba.verdict(ba.build_packet("хочу сайт", diff_with_body(path, body)))
+
+
 class TestBlindnessIsEnforcedNotRequested(unittest.TestCase):
     """Судья не видит пересказ — потому что пересказа нет в пакете."""
 
@@ -113,7 +126,10 @@ class TestLeaksInsideTheBodyAreCaught(unittest.TestCase):
         return ba.verdict(ba.build_packet("хочу сайт", d))
 
     def test_a_manifest_id_in_a_comment_is_a_leak(self):
-        v = self._v("// R03: форма отправляется")
+        """Голая форма R03 сама по себе больше не протечка (см.
+        TestManifestIdNeedsContext) — здесь рядом есть маркер «критерий
+        приёмки», и это тот случай, который правило обязано ловить."""
+        v = self._v("// критерий приёмки R03: форма отправляется")
         self.assertEqual(v["status"], "leaked", v)
 
     def test_a_path_to_the_run_directory_is_a_leak(self):
@@ -134,6 +150,91 @@ class TestLeaksInsideTheBodyAreCaught(unittest.TestCase):
         """Судья, увидевший пересказ, вынесет вердикт о совпадении пересказа
         с кодом — и вердикт будет выглядеть точно как настоящий."""
         self.assertEqual(ba.EXIT["leaked"], 1)
+
+
+class TestManifestIdNeedsContext(unittest.TestCase):
+    """Форма «буква R/G/A/D + две цифры» у идентификатора манифеста —
+    ровно та же форма, что у кубика в настолке (D20), места в брони (A12),
+    hex-цвета в CSS (#A00, #D12) или номера релиза (R02). Отличить их
+    нечем, КРОМЕ контекста: протечка засчитывается только если рядом, в
+    ТОЙ ЖЕ строке diff-а, действительно звучит пересказ — маркер-фраза или
+    путь `.superstack`. Без этого сужения приложение с собственной
+    буквенно-цифровой нотацией не собирает пакет ни разу.
+    """
+
+    def test_a_css_hex_color_is_not_a_leak(self):
+        v = verdict_for("src/theme.css",
+                        ".badge-warning { color: #A00; } .badge-info { color: #D12; }")
+        self.assertEqual(v["status"], "ready", v)
+
+    def test_a_dice_notation_is_not_a_leak(self):
+        v = verdict_for("src/dice.js", "const roll = () => rollDie('D20');")
+        self.assertEqual(v["status"], "ready", v)
+
+    def test_ordinary_two_digit_codes_are_not_leaks(self):
+        """Обратный контроль на форму: место в зале, номер релиза, уровень
+        сложности — у всех буква R/G/A/D и две цифры, и ни один из них не
+        имеет отношения к манифесту требований."""
+        for body in ("место A12 в зале уже занято",
+                     "релиз R02 опубликован вчера",
+                     "сложность A15 выбрана в настройках",
+                     "уровень G10 открыт после уровня 9"):
+            with self.subTest(body=body):
+                v = verdict_for("src/copy.txt", body)
+                self.assertEqual(v["status"], "ready", v)
+
+    def test_a_manifest_id_next_to_the_marker_phrase_is_still_a_leak(self):
+        v = verdict_for("src/game.test.js",
+                        "// критерий приёмки R03 — форма отправляется")
+        self.assertEqual(v["status"], "leaked", v)
+
+    def test_a_manifest_id_next_to_a_superstack_mention_is_still_a_leak(self):
+        v = verdict_for("src/game.test.js",
+                        "// см. .superstack/manifest.json, пункт A12")
+        self.assertEqual(v["status"], "leaked", v)
+
+    def test_context_on_a_different_line_does_not_count(self):
+        """Узкое правило — это строка, а не файл целиком: иначе граница
+        снова расползается и начинает ловить случайные соседства внутри
+        одного diff-куска."""
+        text = ("diff --git a/src/game.js b/src/game.js\n"
+                "--- a/src/game.js\n+++ b/src/game.js\n"
+                "@@ -1,2 +1,2 @@\n"
+                "+// критерий приёмки описан в тикете отдельно\n"
+                "+const roll = () => rollDie('D20');\n")
+        out = ba.leaks_in(text)
+        self.assertFalse(any(x["match"] == "D20" for x in out),
+                         f"маркер с другой строки утёк в контекст: {out}")
+
+
+class TestGitignoreMentionIsNotALeak(unittest.TestCase):
+    """.gitignore — список путей-паттернов по строке, без прозы: вписать
+    в него пересказ просьбы физически нечем. Сборщик продукта сам вписывает
+    туда рабочий каталог прогона, как и любой другой служебный путь, и это
+    не то же самое, что протечка манифеста в код или комментарий."""
+
+    def test_run_directory_in_gitignore_is_not_a_leak(self):
+        v = verdict_for(".gitignore", ".superstack/")
+        self.assertEqual(v["status"], "ready", v)
+
+    def test_nested_gitignore_is_recognised_too(self):
+        v = verdict_for("apps/web/.gitignore", ".superstack/")
+        self.assertEqual(v["status"], "ready", v)
+
+    def test_the_same_mention_elsewhere_is_still_a_leak(self):
+        """Обратный контроль: исключение сделано по ИМЕНИ ФАЙЛА, а не по
+        самому упоминанию `.superstack/` — в обычном коде след рабочего
+        каталога остаётся протечкой, как и раньше."""
+        v = verdict_for("src/a.js",
+                        "const plan = require('../.superstack/state.json')")
+        self.assertEqual(v["status"], "leaked", v)
+
+    def test_a_retelling_phrase_inside_gitignore_is_still_a_leak(self):
+        """Исключение узкое: оно закрывает только путь `.superstack/`,
+        а не файл `.gitignore` целиком. Случайная строка пересказа в
+        комментарии внутри него обязана остаться протечкой."""
+        v = verdict_for(".gitignore", "# по спецификации сюда ничего не класть")
+        self.assertEqual(v["status"], "leaked", v)
 
 
 class TestNothingToJudgeIsNotSuccess(unittest.TestCase):

@@ -70,6 +70,17 @@ def describe(backup_id: str) -> dict:
     except (OSError, ValueError) as e:
         return {"found": False, "id": backup_id,
                 "line": f"запись отката «{backup_id}» не читается: {e}."}
+    if not isinstance(manifest, dict):
+        # Валидный JSON — ещё не запись отката: `[]`, `42`, `"текст"`, `null`
+        # разбираются БЕЗ исключения, и except выше их не ловит по сути дела —
+        # это не ошибка чтения и не ошибка разбора, а не та форма данных
+        # (расширять его под AttributeError значило бы записать ошибку формы
+        # в ошибки чтения). Без этой проверки следующая же строка
+        # manifest.get(...) роняла AttributeError голым traceback'ом — и в
+        # `oops.py what`, и в `oops.py undo`: describe() зовут обе ветки.
+        return {"found": False, "id": backup_id,
+                "line": f"запись отката «{backup_id}» повреждена — внутри "
+                        f"не запись отката, а {type(manifest).__name__}."}
 
     applied = manifest.get("applied", [])
     changed = [a for a in applied if a.get("changed")]
@@ -128,6 +139,29 @@ def _resolve_id(rest: list) -> tuple:
     return found, None
 
 
+#: Куда посмотреть, когда откат не состоялся. Само по себе «не откатил»
+#: оставляет человека там же, где раньше оставляло враньё «откатил»: без
+#: следующего шага.
+_UNDO_FAILED_HINT = "Проверь список откатов: python3 oops.py list."
+
+#: Что ЛОВИМ вокруг вызова undo() ниже — поимённо, а не Exception целиком.
+#: apply.cmd_undo() читает manifest.json ЗАНОВО своим json.loads() —
+#: describe() выше его не подменяет и не защищает — и не проверяет, что
+#: распарсенное имеет форму словаря с ключами "backup"/"files". Ровно эти
+#: четыре типа она и бросает на битых входных данных (apply.py, cmd_undo,
+#: ~строка 519):
+#:   OSError    — файла нет, нет прав, диск отвалился (FileNotFoundError,
+#:                PermissionError — его подклассы);
+#:   ValueError — JSON битый (json.JSONDecodeError — подкласс) или файл не
+#:                в utf-8 (UnicodeDecodeError — тоже подкласс ValueError);
+#:   KeyError   — словарь разобрался, но без ключа "backup" или "files";
+#:   TypeError  — то, что лежит в manifest.json, — не словарь вовсе.
+#: Exception целиком здесь нарочно не ловится: широкий except вокруг чужого
+#: модуля в этом проекте уже маскировал однажды настоящую поломку под «всё
+#: чисто» — здесь ловится поимённо, и что случилось — говорится вслух.
+_UNDO_PARSE_ERRORS = (OSError, ValueError, KeyError, TypeError)
+
+
 def main() -> int:
     args = sys.argv[1:]
     quiet = "--json" in args
@@ -163,10 +197,54 @@ def main() -> int:
 
     # cmd == "undo"
     preview = describe(backup_id)
-    rc = undo(backup_id)
+    if not preview["found"]:
+        # apply.cmd_undo() не знает того, что уже знает describe(): свой
+        # bdir.is_dir() она бы прошла (каталог есть), а на manifest.json —
+        # битом или отсутствующем — упала бы голым traceback'ом, потому что
+        # такой защиты у неё нет (apply.py, cmd_undo, ~строка 519). Раз
+        # здесь уже известно, что возвращать нечего, — не зовём её вовсе:
+        # спрашивать инструмент без защиты о том, что мы и так знаем, —
+        # риск без пользы. Тормоз на паузе всё равно нужен явно: раньше он
+        # срабатывал внутри undo(), а теперь она в этой ветке не вызывается.
+        apply.halt_if_paused()
+        result = {"id": backup_id, "preview": preview, "undo_exit": 1}
+        if not quiet:
+            print(f"ОТКАЗ: откат «{backup_id}» не сделан, ничего не менял "
+                  f"— {preview['line']} {_UNDO_FAILED_HINT}", file=sys.stderr)
+        print(json.dumps(result, ensure_ascii=False, indent=1))
+        return 1
+
+    try:
+        rc = undo(backup_id)
+        crash = None
+    except _UNDO_PARSE_ERRORS as e:
+        # preview["found"] был True — manifest.json разобрался в словарь с
+        # "applied". Но apply.cmd_undo() ждёт от того же файла ещё и
+        # "backup"/"files" и заново читает с диска каждый файл бэкапа — не
+        # совпала форма или потерялся отдельный файл копии, и падает ИМЕННО
+        # здесь, а не в describe(). Цикл внутри копирует файлы по одному, так
+        # что часть могла обновиться до падения, а часть нет — ниже это не
+        # выдаётся за «ничего не тронуто», выдаётся только сам факт ошибки.
+        rc, crash = 1, str(e)
+
     result = {"id": backup_id, "preview": preview, "undo_exit": rc}
     if not quiet:
-        print(f"откатил «{backup_id}»: {preview['line']}", file=sys.stderr)
+        if rc == 0:
+            print(f"откатил «{backup_id}»: {preview['line']}", file=sys.stderr)
+        else:
+            # crash бывает None: у apply.cmd_undo() всего два выхода — ранний
+            # return 1 (bdir.is_dir() ложно) и финальный return 0, — и первый
+            # не бросает исключения, которое ловит except выше. Достижимо
+            # гонкой: describe() успела увидеть found=True, а каталог отката
+            # исчез до вызова undo(). «Причина: None.» было бы враньём о том,
+            # что у отказа нет причины, — причина есть, просто не этот слой
+            # её знает; apply.py уже написал её сам чуть выше по stderr.
+            reason = crash or ("apply.py отказал, не бросив исключения, — "
+                                "смотри его вывод выше")
+            print(f"ОТКАЗ: откат «{backup_id}» не сделан (код apply.py: {rc}). "
+                  f"Причина: {reason}. Что из настроек уже обновилось — не "
+                  f"считай известным, проверь руками. {_UNDO_FAILED_HINT}",
+                  file=sys.stderr)
     print(json.dumps(result, ensure_ascii=False, indent=1))
     return 0 if rc == 0 else 1
 

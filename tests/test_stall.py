@@ -24,6 +24,7 @@ import re
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
 
@@ -34,6 +35,11 @@ TOOL = PKG / "tools" / "stall.py"
 _s = importlib.util.spec_from_file_location("ss_stall", TOOL)
 st = importlib.util.module_from_spec(_s)
 _s.loader.exec_module(st)
+
+TOOL_WATCHDOG = PKG / "tools" / "watchdog.py"
+_w = importlib.util.spec_from_file_location("ss_watchdog", TOOL_WATCHDOG)
+wd = importlib.util.module_from_spec(_w)
+_w.loader.exec_module(wd)
 
 
 def ход(вызовы: list) -> str:
@@ -219,6 +225,339 @@ class ФазаЗовётПроверку(unittest.TestCase):
 
     def test_скилл_зовёт_инструмент(self):
         self.assertIn("stall.py", skill_text("go"))
+
+    def test_скилл_зовёт_сторожа(self):
+        self.assertIn("watchdog.py", skill_text("go"))
+
+
+# ---------------------------------------------------------------------------
+# Волна: проверка ВСЕХ журналов, а не одного случайного (второй дефект).
+# ---------------------------------------------------------------------------
+def подставной_дом(дом: Path, проект: Path) -> Path:
+    """Тот же путь, что вычислит инструмент, но от ПОДСТАВНОГО дома.
+
+    Тот же приём, что у `СудитьНечемНеЗначитИдёт.каталог`: `Path.home()` в
+    этом процессе настоящий, и без подмены журнал лёг бы в дом человека, а
+    подпроцесс искал бы его во временном.
+    """
+    slug = re.sub(r"[^A-Za-z0-9]", "-", str(проект.resolve()))
+    d = дом / ".claude" / "projects" / slug
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def запустить_stall(дом: Path, проект: Path, *флаги: str) -> tuple:
+    окружение = dict(os.environ, HOME=str(дом))
+    p = subprocess.run([sys.executable, str(TOOL), str(проект), *флаги],
+                       capture_output=True, text=True, timeout=120,
+                       env=окружение)
+    return p.returncode, p.stdout + p.stderr
+
+
+def волна(дом: Path, проект: Path, участники: dict) -> Path:
+    """Записать `subagents/agent-<имя>.jsonl` для каждого участника волны в
+    ОДНОЙ сессии, с управляемым mtime.
+
+    `участники`: имя -> (шаги, сдвиг_mtime_в_секундах_от_сейчас). Отрицательный
+    сдвиг делает файл СТАРШЕ остальных. Именно этим и проверяется второй
+    дефект: `max(mtime)` выбрал бы случайный файл волны, а не застрявший, —
+    здесь застрявшему намеренно даётся САМЫЙ старый штамп, а идущим — более
+    свежие, вплоть до нулевого сдвига («самый свежий», и он смирно идёт).
+    """
+    корень = подставной_дом(дом, проект)
+    subagents = корень / "сессия-1" / "subagents"
+    subagents.mkdir(parents=True, exist_ok=True)
+    сейчас = time.time()
+    for имя, (шаги_, сдвиг) in участники.items():
+        f = журнал(subagents / f"agent-{имя}.jsonl", шаги_)
+        t = сейчас + сдвиг
+        os.utime(f, (t, t))
+    return корень
+
+
+class ВолнаНесколькихЖурналов(unittest.TestCase):
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.дом = Path(self.tmp.name)
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_застрявший_ловится_даже_не_самым_свежим(self):
+        """Ровно второй дефект. На старом коде `журнал()` берёт
+        `max(mtime)` — здесь это agent-c, живой, — и проверка ни словом не
+        упомянула бы застрявший agent-a. Он здесь самый СТАРЫЙ из троих."""
+        проект = self.дом / "проект"
+        проект.mkdir()
+        застрявший = [bash("pytest tests/", True)] * 3 + [bash("ls")] * 4
+        живой1 = [bash("pytest tests/")] * 8
+        живой2 = [bash("pytest tests/")] * 8
+        волна(self.дом, проект, {
+            "a": (застрявший, -300),   # старше остальных на 5 минут
+            "b": (живой1, -60),
+            "c": (живой2, 0),          # САМЫЙ СВЕЖИЙ — и он не застрял
+        })
+        код, текст = запустить_stall(self.дом, проект)
+        self.assertEqual(код, 1, текст)
+        self.assertIn("ЗАСТРЯЛ", текст)
+        self.assertIn("agent-a", текст)
+
+    def test_все_идут_код_ноль_и_каждый_перечислен(self):
+        проект = self.дом / "проект"
+        проект.mkdir()
+        участники = {c: ([bash("pytest tests/")] * 8, -i * 10)
+                    for i, c in enumerate("abc")}
+        волна(self.дом, проект, участники)
+        код, текст = запустить_stall(self.дом, проект)
+        self.assertEqual(код, 0, текст)
+        for c in "abc":
+            self.assertIn(f"agent-{c}", текст)
+
+    def test_застрявший_перебивает_идущих_в_общем_коде(self):
+        """Приоритет агрегата: «застрял хотя бы один» обязан быть виден,
+        даже когда остальные в порядке — не средним, не большинством."""
+        проект = self.дом / "проект"
+        проект.mkdir()
+        волна(self.дом, проект, {
+            "a": ([bash("pytest tests/")] * 8, -20),
+            "b": ([bash("pytest tests/")] * 8, -10),
+            "c": ([bash("pytest tests/", True)] * 3 + [bash("ls")] * 4, 0),
+        })
+        код, текст = запустить_stall(self.дом, проект)
+        self.assertEqual(код, 1, текст)
+
+    def test_рано_не_маскирует_застрявшего(self):
+        проект = self.дом / "проект"
+        проект.mkdir()
+        волна(self.дом, проект, {
+            "a": ([bash("ls")] * 2, 0),
+            "b": ([bash("pytest tests/", True)] * 3 + [bash("ls")] * 4, -5),
+        })
+        код, текст = запустить_stall(self.дом, проект)
+        self.assertEqual(код, 1, текст)
+
+    def test_рано_и_идёт_без_застрявших_даёт_ноль_а_не_два(self):
+        """Один агент ещё не набрал шагов — это не повод объявить волну
+        целиком «судить нечем», пока другой явно идёт нормально."""
+        проект = self.дом / "проект"
+        проект.mkdir()
+        волна(self.дом, проект, {
+            "a": ([bash("ls")] * 2, 0),
+            "b": ([bash("pytest tests/")] * 8, -5),
+        })
+        код, текст = запустить_stall(self.дом, проект)
+        self.assertEqual(код, 0, текст)
+
+    def test_все_рано_код_два(self):
+        проект = self.дом / "проект"
+        проект.mkdir()
+        волна(self.дом, проект, {"a": ([bash("ls")], 0),
+                                 "b": ([bash("ls")] * 2, -5)})
+        код, текст = запустить_stall(self.дом, проект)
+        self.assertEqual(код, 2, текст)
+
+    def test_agent_остаётся_одиночной_проверкой(self):
+        """`--agent <id>` обязан остаться прежним однозначным путём, а не
+        волновым выводом — таково явное требование не ломать его."""
+        проект = self.дом / "проект"
+        проект.mkdir()
+        волна(self.дом, проект, {
+            "a": ([bash("pytest tests/", True)] * 3 + [bash("ls")] * 4, -300),
+            "b": ([bash("pytest tests/")] * 8, 0),
+        })
+        код, текст = запустить_stall(self.дом, проект, "--agent", "agent-b")
+        self.assertEqual(код, 0, текст)
+        self.assertNotIn("волна:", текст)
+
+
+class Агрегировать(unittest.TestCase):
+
+    def test_застрял_побеждает_идущих(self):
+        self.assertEqual(st.агрегировать([{"код": 0}, {"код": 1}, {"код": 0}]), 1)
+
+    def test_идёт_побеждает_рано(self):
+        self.assertEqual(st.агрегировать([{"код": 2}, {"код": 0}]), 0)
+
+    def test_пусто_или_всё_рано_даёт_нечем(self):
+        self.assertEqual(st.агрегировать([]), 2)
+        self.assertEqual(st.агрегировать([{"код": 2}, {"код": 2}]), 2)
+
+
+# ---------------------------------------------------------------------------
+# Сторож: фоновый опрос волны, пока оркестратор занят.
+# ---------------------------------------------------------------------------
+def _агент(имя: str, код: int, причины=()) -> dict:
+    return {"агент": имя, "код": код, "причины": list(причины), "шагов": 10,
+            "проверок": 1, "журнал": f"{имя}.jsonl", "почему": ""}
+
+
+class ИтоговыйКодСторожа(unittest.TestCase):
+
+    def test_пустая_история_нечем(self):
+        self.assertEqual(wd._итоговый_код({}), 2)
+
+    def test_все_идут_ноль(self):
+        история = {"a": {"код": 0, "когда_либо_1": False},
+                   "b": {"код": 0, "когда_либо_1": False}}
+        self.assertEqual(wd._итоговый_код(история), 0)
+
+    def test_когда_либо_застревал_держит_код_даже_после_починки(self):
+        """Форензика: последний срез агента — код 0 (починился), но общий
+        код волны обязан помнить, что застревание БЫЛО — иначе починка
+        секундой раньше `--stop` стирает из отчёта само происшествие."""
+        история = {"a": {"код": 0, "когда_либо_1": True}}
+        self.assertEqual(wd._итоговый_код(история), 1)
+
+
+class ИсторияПереходов(unittest.TestCase):
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.лог = Path(self.tmp.name) / "лог.log"
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def _строки(self) -> list:
+        return (self.лог.read_text("utf-8").splitlines()
+               if self.лог.is_file() else [])
+
+    def test_первое_появление_не_логируется(self):
+        """Начало наблюдения — не переход: волна из пяти агентов не обязана
+        оставить пять строк в логе в первую же секунду."""
+        wd._обновить_историю({}, [_агент("agent-a", 0)], self.лог)
+        self.assertEqual(self._строки(), [])
+
+    def test_переход_в_застревание_логируется(self):
+        история = wd._обновить_историю({}, [_агент("agent-a", 0)], self.лог)
+        wd._обновить_историю(история, [_агент("agent-a", 1, ["петля: x"])], self.лог)
+        строки = self._строки()
+        self.assertEqual(len(строки), 1, строки)
+        self.assertIn("ЗАСТРЯЛ agent-a", строки[0])
+
+    def test_переход_из_застревания_логируется_а_повтор_кода_не_дублирует(self):
+        история = wd._обновить_историю({}, [_агент("agent-a", 1, ["петля: x"])], self.лог)
+        история = wd._обновить_историю(история, [_агент("agent-a", 1, ["петля: x"])],
+                                      self.лог)
+        wd._обновить_историю(история, [_агент("agent-a", 0)], self.лог)
+        строки = self._строки()
+        self.assertEqual(len(строки), 1, строки)  # повтор кода 1 не продублировал
+        self.assertIn("БОЛЬШЕ НЕ ЗАСТРЯЛ agent-a", строки[0])
+
+    def test_история_не_мутирует_переданный_словарь(self):
+        """Правило проекта об иммутабельности: новая история — новый
+        объект, старый остаётся нетронутым у вызывающего."""
+        старая = {"agent-a": {"код": 0, "когда_либо_1": False}}
+        копия = dict(старая)
+        wd._обновить_историю(старая, [_агент("agent-a", 1, ["петля: x"])], self.лог)
+        self.assertEqual(старая, копия)
+
+
+class СрезИсключаетДоВолны(unittest.TestCase):
+    """`_срез()` — то, чем `--serve` меряет каждый опрос: судит только то,
+    чего не было в слепке, снятом ДО запуска сторожа."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.дом = Path(self.tmp.name)
+        self._старый_home = os.environ.get("HOME")
+        os.environ["HOME"] = str(self.дом)
+
+    def tearDown(self):
+        if self._старый_home is None:
+            os.environ.pop("HOME", None)
+        else:
+            os.environ["HOME"] = self._старый_home
+        self.tmp.cleanup()
+
+    def test_баз_слепок_исключает_файлы_из_прошлой_волны(self):
+        проект = self.дом / "проект"
+        проект.mkdir()
+        волна(self.дом, проект, {"old": ([bash("ls")] * 8, 0)})
+        вне_волны = set(wd._текущие(проект))  # слепок «до» — приём из --serve
+        волна(self.дом, проект, {
+            "old": ([bash("ls")] * 8, 0),
+            "new": ([bash("pytest tests/", True)] * 3 + [bash("ls")] * 4, 0),
+        })
+        срез = wd._срез(проект, [], вне_волны)
+        имена = {a["агент"] for a in срез["агенты"]}
+        self.assertEqual(имена, {"agent-new"})
+        self.assertEqual(срез["код"], 1)
+
+
+class СторожЖивойЦикл(unittest.TestCase):
+    """Сквозная проверка настоящим подпроцессом: `--serve`, реальный опрос
+    на таймере, `--stop` через настоящий SIGTERM. Интервал — 1 секунда, а
+    не боевые 90: тест обязан пройти за секунды, а не минуты."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.дом = Path(self.tmp.name)
+        self.проект = self.дом / "проект"
+        self.проект.mkdir()
+        self._proc = None
+
+    def tearDown(self):
+        if self._proc is not None and self._proc.poll() is None:
+            self._proc.terminate()
+            try:
+                self._proc.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                self._proc.kill()
+        self.tmp.cleanup()
+
+    def _watchdog(self, *флаги: str) -> tuple:
+        окружение = dict(os.environ, HOME=str(self.дом))
+        p = subprocess.run([sys.executable, str(TOOL_WATCHDOG), str(self.проект),
+                            *флаги], capture_output=True, text=True, timeout=30,
+                           env=окружение)
+        return p.returncode, p.stdout + p.stderr
+
+    def _дождаться_живого(self, попыток: int = 20) -> tuple:
+        код, текст = 4, ""
+        for _ in range(попыток):
+            код, текст = self._watchdog("--check")
+            if код == 0:
+                return код, текст
+            time.sleep(0.25)
+        return код, текст
+
+    def test_ловит_застрявшего_не_самого_свежего_и_помнит_после_починки(self):
+        окружение = dict(os.environ, HOME=str(self.дом))
+        self._proc = subprocess.Popen(
+            [sys.executable, str(TOOL_WATCHDOG), str(self.проект),
+             "--serve", "--interval", "1"],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=окружение)
+
+        код, текст = self._дождаться_живого()
+        self.assertEqual(код, 0, f"сторож не поднялся: {текст}")
+
+        # agent-a СТАРШЕ agent-b и застрял; agent-b — самый свежий и идёт.
+        волна(self.дом, self.проект, {
+            "a": ([bash("pytest tests/", True)] * 3 + [bash("ls")] * 4, -60),
+            "b": ([bash("pytest tests/")] * 8, 0),
+        })
+        time.sleep(2.2)  # не меньше двух опросов при интервале в 1с
+
+        self.assertIsNone(self._proc.poll(), "сторож упал во время опроса волны")
+
+        снимок = json.loads((self.проект / ".superstack" / "stall-watch.json")
+                            .read_text("utf-8"))
+        self.assertEqual(снимок["код"], 1, снимок)
+        self.assertIn("agent-a", снимок["когда_либо_застревали"])
+
+        # agent-a «чинится» — переписываем его журнал идущим.
+        волна(self.дом, self.проект, {
+            "a": ([bash("pytest tests/")] * 8, -60),
+            "b": ([bash("pytest tests/")] * 8, 0),
+        })
+        time.sleep(1.5)
+
+        код, текст = self._watchdog("--stop")
+        self._proc = None  # --stop уже остановил процесс — tearDown его не трогает
+        self.assertEqual(код, 1, текст)  # форензика: помнит, хоть сейчас и чисто
+        self.assertIn("agent-a", текст)
 
 
 if __name__ == "__main__":
