@@ -127,6 +127,87 @@ class TestNumbersAreMeasuredNotTyped(unittest.TestCase):
             self.assertEqual((pub / "README.md").read_text("utf-8"), before)
 
 
+class TestShowcaseCannotFailSilently(unittest.TestCase):
+    """Три замены, ни одна из которых не совпала, — это не «обновлено».
+
+    Так витрина и отстала: README переписали, строки с числами из него ушли,
+    подстановки перестали совпадать — а скрипт всё это время печатал
+    «readme_refreshed: true» и выкладывал числа прошлого релиза.
+    """
+
+    ЧИСЛА = {"mutations": 545, "mechanisms": 302}
+
+    def _pub(self, текст: str) -> Path:
+        d = Path(tempfile.mkdtemp())
+        self.addCleanup(lambda: __import__("shutil").rmtree(d, ignore_errors=True))
+        (d / "README.md").write_text(текст, encoding="utf-8")
+        return d
+
+    def test_readme_without_any_numbers_is_not_success(self):
+        pub = self._pub("# SUPERSTACK\n\nПро продукт, ни одного числа.\n")
+        self.assertFalse(
+            sp.refresh_readme(pub, self.ЧИСЛА, 1621),
+            "ни одна подстановка не совпала, а витрина отчиталась об успехе")
+
+    def test_summary_line_is_actually_rewritten(self):
+        """Обратный контроль: проверка, никогда не зеленеющая, бесполезна."""
+        pub = self._pub("752 теста · 132 мутации, все ловятся · 59 механизмов.\n")
+        self.assertTrue(sp.refresh_readme(pub, self.ЧИСЛА, 1621))
+        self.assertIn("1621 тестов · 545 мутаций, все ловятся · 302 механизмов.",
+                      (pub / "README.md").read_text("utf-8"))
+
+    def test_deliberate_absence_is_said_out_loud(self):
+        """Витрина без чисел бывает намеренной — но тогда это сказано в файле,
+        а не угадывается по молчанию подстановок."""
+        pub = self._pub(f"# SUPERSTACK\n{sp.БЕЗ_ЧИСЕЛ}\nЧисел тут нет намеренно.\n")
+        self.assertTrue(sp.refresh_readme(pub, self.ЧИСЛА, 1621))
+
+
+class TestRepoDescriptionIsMeasuredToo(unittest.TestCase):
+    """Числа в описании репозитория — часть витрины: его видят раньше кода.
+
+    Шаг ходит в сеть, поэтому выкладку не блокирует. Цена этого послабления —
+    обязанность отличать «сделано» от «не смог»: несостоявшееся обновление,
+    записанное как успех, и есть то безусловное подтверждение, ради которого
+    вся эта проверка заводилась.
+    """
+
+    ЧИСЛА = {"mutations": 545, "mechanisms": 302}
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.pub = Path(self.tmp.name) / "публичное"
+        self.pub.mkdir()
+        subprocess.run(["git", "init", "-q"], cwd=str(self.pub), check=False)
+        subprocess.run(["git", "remote", "add", "origin",
+                        "https://github.com/octo-owner/superstack.git"],
+                       cwd=str(self.pub), check=False)
+
+    def test_адрес_берётся_из_origin_а_не_из_кода(self):
+        self.assertEqual(sp.repo_slug(self.pub), "octo-owner/superstack")
+
+    def test_текст_человека_переживает_обновление(self):
+        было = "Агентная ОС — 752 тестов · 132 мутаций · 59 механизмов"
+        self.assertEqual(sp.описание(было, self.ЧИСЛА, 1621),
+                         "Агентная ОС — 1621 тестов · 545 мутаций · "
+                         "302 механизмов")
+
+    def test_несостоявшееся_обновление_не_успех(self):
+        def gh(аргументы):
+            return (1, "gh: 404") if "PATCH" in аргументы else (0, "Агентная ОС")
+        v = sp.refresh_description(self.pub, self.ЧИСЛА, 1621, gh=gh)
+        self.assertNotEqual(v["status"], "pass",
+                            "описание не обновилось, а шаг отчитался «сделано»")
+        self.assertIn("НЕ ПРОВЕРЕНЫ", v["detail"])
+
+    def test_успешное_обновление_несёт_измеренные_числа(self):
+        v = sp.refresh_description(self.pub, self.ЧИСЛА, 1621,
+                                   gh=lambda а: (0, "Агентная ОС"))
+        self.assertEqual(v["status"], "pass")
+        self.assertIn("1621 тестов · 545 мутаций · 302 механизмов", v["text"])
+
+
 class TestPublicTreeCanPassItsOwnGates(unittest.TestCase):
     """Выложенное дерево обязано проходить собственные ворота плана.
 

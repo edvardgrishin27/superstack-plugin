@@ -23,7 +23,7 @@
 Прогресс без этих трёх — половина картины, и именно та половина, которую
 приятно показывать.
 
-  python3 progress.py init <файл> <название>
+  python3 progress.py init <файл> <название>   [--fresh]
   python3 progress.py phase <файл> <имя> <держатель> [--detail X]
                             держатель: человек|система|исполнитель|внешний-инструмент
   python3 progress.py stage <файл> <имя> <статус> [--detail X]
@@ -47,7 +47,8 @@
   python3 progress.py req   <файл> --total N --covered N [--dropped N] [--deferred N]
   python3 progress.py show  <файл>
 
-  код 0 — прочитано, 2 — состояние неполно, 3 — ошибка вызова
+  код 0 — прочитано, 2 — состояние неполно, 3 — ошибка вызова,
+  4 — файл уже есть и не пуст: ничего не тронуто (см. --fresh)
 """
 from __future__ import annotations
 
@@ -119,6 +120,67 @@ def load(path: Path) -> dict:
     return d
 
 
+#: Сколько байт файла-замка запирается там, где замок берётся не на весь
+#: дескриптор, а на область файла. Область у всех процессов одна и та же,
+#: поэтому одного байта достаточно, и файл при этом может быть пустым.
+_ОБЛАСТЬ_ЗАМКА = 1
+
+#: Сказано ли уже, что замка нет. Предупреждение печатается ОДИН раз за
+#: запуск: строка на каждый шаг волны превратилась бы в шум, который
+#: перестают читать вместе со всем остальным.
+_БЕЗ_ЗАМКА_СКАЗАНО = False
+
+
+def _сказать_без_замка(причина: object) -> None:
+    global _БЕЗ_ЗАМКА_СКАЗАНО
+    if _БЕЗ_ЗАМКА_СКАЗАНО:
+        return
+    _БЕЗ_ЗАМКА_СКАЗАНО = True
+    print(f"ВНИМАНИЕ: ход стройки пишется без замка ({причина}). Если по этой "
+          "папке прямо сейчас работает второй помощник, его правка может "
+          "пропасть без единой ошибки — запускай по одному.", file=sys.stderr)
+
+
+def _запереть(fh) -> bool:
+    """Запереть файл на время «прочитал, изменил, записал».
+
+    Вызов запирания у Windows и у POSIX разный, и `fcntl` на Windows просто
+    нет: безусловный импорт валил бы инструмент, которым пишется каждый шаг
+    волны, — то есть весь ход стройки, на ровном месте.
+
+    Возвращает False, если замка взять не удалось: работа продолжается, но об
+    этом сказано вслух. Молчаливая работа без замка — это молчаливая потеря
+    чужой правки, ради которой замок и заводился.
+    """
+    if os.name == "nt":
+        import msvcrt
+        fh.seek(0)
+        try:
+            msvcrt.locking(fh.fileno(), msvcrt.LK_LOCK, _ОБЛАСТЬ_ЗАМКА)
+        except OSError as e:
+            # Занятую область здесь ждут около десяти секунд, и только потом
+            # это исключение. Своя операция короткая — прочитать, изменить,
+            # записать, — поэтому ожидание почти всегда кончается замком, а
+            # не отказом.
+            _сказать_без_замка(e)
+            return False
+        return True
+    import fcntl
+    fcntl.flock(fh.fileno(), fcntl.LOCK_EX)
+    return True
+
+
+def _отпереть(fh) -> None:
+    """Снять то, что было взято. Зовётся только после удачного запирания."""
+    if os.name == "nt":
+        import msvcrt
+        fh.seek(0)
+        msvcrt.locking(fh.fileno(), msvcrt.LK_UNLCK, _ОБЛАСТЬ_ЗАМКА)
+        return
+    import fcntl
+    fcntl.flock(fh.fileno(), fcntl.LOCK_UN)
+
+
 class _Lock:
     """Замок на файл состояния — на всё время «прочитал, изменил, записал».
 
@@ -137,18 +199,20 @@ class _Lock:
     def __init__(self, path: Path):
         self.path = path.with_suffix(path.suffix + ".lock")
         self.fh = None
+        self.заперто = False
 
     def __enter__(self):
-        import fcntl
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self.fh = self.path.open("a+")
-        fcntl.flock(self.fh.fileno(), fcntl.LOCK_EX)
+        self.заперто = _запереть(self.fh)
         return self
 
     def __exit__(self, *exc):
-        import fcntl
         try:
-            fcntl.flock(self.fh.fileno(), fcntl.LOCK_UN)
+            # Отпирается только взятое: снимать замок, которого не брали,
+            # значит получить вторую ошибку поверх первой и потерять её.
+            if self.заперто:
+                _отпереть(self.fh)
         finally:
             self.fh.close()
         return False
@@ -168,6 +232,54 @@ def save(path: Path, data: dict, now: "str | None" = None) -> None:
     tmp = path.with_suffix(path.suffix + ".tmp")
     tmp.write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
     os.replace(tmp, path)
+
+
+#: Код отказа «здесь уже начата работа». Ноль здесь означал бы «завёл», а
+#: завести поверх начатого — это стереть ход вчерашней стройки молча. Число то
+#: же, что у manifest.py: для человека это одно событие, и разными кодами оно
+#: быть не может.
+ЗАНЯТО = 4
+
+
+def занято(path: Path) -> bool:
+    """Лежит ли по этому пути уже чья-то работа."""
+    try:
+        return path.is_file() and path.stat().st_size > 0
+    except OSError:
+        return False
+
+
+def отложить(path: Path) -> Path:
+    """Копия рядом, со временем в имени, ДО перезаписи.
+
+    Перезапись по явной просьбе остаётся возможной, а вот безвозвратной быть
+    не должна: человек, сказавший «начнём заново», отвечает за сегодняшний
+    выбор, а не за то, что вчерашний ход работ стёрся без следа.
+    """
+    from datetime import datetime, timezone
+    метка = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    копия = path.with_name(f"{path.name}.{метка}.bak")
+    n = 0
+    while копия.exists():
+        n += 1
+        копия = path.with_name(f"{path.name}.{метка}-{n}.bak")
+    копия.write_bytes(path.read_bytes())
+    return копия
+
+
+def уже_начато(path: Path, data: dict) -> str:
+    """Что сказать вместо заведения: что здесь лежит и какие есть два выхода."""
+    проект = data.get("project") or "без названия"
+    когда = (data.get("updated") or "").split("T")[0] or "неизвестно когда"
+    частей = sum(len(v) for v in (data.get("waves") or {}).values())
+    return ("НЕ ЗАВЁЛ: здесь уже начата работа, ничего не тронуто.\n"
+            f"  файл: {path}\n"
+            f"  проект: {проект}\n"
+            f"  частей работы в нём: {частей}, последняя запись: {когда}\n"
+            "  продолжить начатое — заводить заново не нужно, работай с этим "
+            "файлом;\n"
+            "  начать всё сначала — повтори с --fresh: прежнее сперва ляжет "
+            "копией рядом.")
 
 
 def _wave_of(data: dict, tid: str) -> int:
@@ -542,6 +654,18 @@ def main() -> int:
         elif cmd == "init":
             if not rest:
                 return _fail("нужно название проекта")
+            # Заведение поверх начатого — не заведение, а стирание. Повторный
+            # запуск в той же папке уносил ход вчерашней стройки целиком и
+            # молча: панель показывала пустую шкалу там, где вчера была
+            # половина работы.
+            if занято(path):
+                if "--fresh" not in rest:
+                    print(уже_начато(path, data), file=sys.stderr)
+                    lock.__exit__()
+                    return ЗАНЯТО
+                копия = отложить(path)
+                print(f"прежний ход работ отложен сюда: {копия}",
+                      file=sys.stderr)
             data = json.loads(json.dumps(EMPTY))
             data["project"] = rest[0]
         elif cmd == "phase":

@@ -73,7 +73,10 @@ class ВоротаБерутКопию(unittest.TestCase):
         finally:
             gt.stash, gt.ONLY_MUTATIONS = orig_stash, orig_only
 
-        self.assertIn(v["status"], ("pass", "fail"), v)
+        # «partial» — тоже прогон: выборка из одной мутации не даёт права
+        # сказать «взято», но ворота при этом отработали, а проверяем мы тут
+        # именно это.
+        self.assertIn(v["status"], ("pass", "fail", "partial"), v)
         self.assertEqual(звали, [], "ворота отложили копию файла — значит "
                                     "ломали рабочее дерево")
 

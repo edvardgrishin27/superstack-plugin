@@ -122,20 +122,48 @@ class TestUnreachableIsRed(Tree):
         """Обратный контроль, без которого предыдущий тест опасен.
 
         Если считать вызовом любое упоминание имени, ворота позеленеют на
-        строке справочника и на комментарии — то есть перестанут ловить ровно
-        ту болезнь, ради которой написаны. Именно так и вышло с картой
-        владельцев: имя было, вызова не было, ворота молчали.
+        строке справочника — то есть перестанут ловить ровно ту болезнь, ради
+        которой написаны. Именно так и вышло с картой владельцев: имя было,
+        вызова не было, ворота молчали.
+
+        Упоминание тут ЖИВОЕ, не комментарий: прозу теперь вырезает отдельный
+        механизм, и фикстура из одних комментариев проверяла бы его, а не
+        границу имени.
         """
-        self.tool("a", "panel.py", "# помощник живёт в helper и когда-нибудь\n"
-                                   "# пригодится: helper\n")
+        self.tool("a", "panel.py", "СПРАВОЧНИК = {'помощник': 'helper'}\n")
         self.tool("a", "helper.py")
         self.skill("a", "зовём panel.py")
         v = gt.gate_wiring()
         self.assertEqual(v["status"], "fail")
         self.assertTrue(any("helper.py" in x for x in v["dead"]), v)
 
+    def test_neither_prose_nor_a_longer_name_counts_as_a_call(self):
+        """Два способа выглядеть подключённым, не будучи вызванным. Оба были.
+
+        `lint_rules.py` встречался в пакете ровно один раз — в докстринге
+        соседнего инструмента, перечислявшего, кто что держит, — и ворота
+        считали его достижимым. `doctor.py` числился достижимым потому, что
+        входит в `project_doctor.py`: вхождение подстроки не знает границ
+        имени.
+
+        Обе половины проверяются одной фикстурой, потому что чинить их порознь
+        бессмысленно: вырезав прозу, но оставив голое вхождение, ворота всё
+        так же зеленеют на соседнем имени, а вернув прозу — на докстринге.
+        Сосед, которого зовут по-настоящему, обязан остаться достижимым:
+        строгость, которая обвиняет живое, не строгость.
+        """
+        self.tool("a", "project_doctor.py")
+        self.tool("a", "doctor.py")
+        self.tool("a", "panel.py",
+                  '"""Актуальность держит doctor.py, а мы держим своё."""\n'
+                  'СОСЕД = "project_doctor.py"\n')
+        self.skill("a", "зовём panel.py")
+        v = gt.gate_wiring()
+        self.assertEqual(v["status"], "fail", v)
+        self.assertEqual([Path(x).name for x in v["dead"]], ["doctor.py"], v)
+
     def test_hooks_and_agents_count_as_entry_points(self):
-        for kind, fname, body in (("hooks", "h.sh", "python3 x/tools/byhook.py"),
+        for kind, fname, body in (("hooks", "h.py", "python3 x/tools/byhook.py"),
                                   ("agents", "a.md", "зовёт byagent.py")):
             with self.subTest(kind=kind):
                 r = Path(tempfile.mkdtemp(dir=self.root))
@@ -231,7 +259,7 @@ class TestTheRealTreeCallsOnlyToolsThatExist(unittest.TestCase):
     проверка сопоставить с диском не могла.
     """
 
-    ГЛОБЫ = ("skills/**/*.md", "hooks/*.sh", "hooks/*.json",
+    ГЛОБЫ = ("skills/**/*.md", "hooks/*.py", "hooks/*.json",
              "agents/*.md", "commands/*.md")
     ВЫЗОВ = re.compile(r"\$\{?CLAUDE_PLUGIN_ROOT\}?/tools/([\w./]+\.py)")
 

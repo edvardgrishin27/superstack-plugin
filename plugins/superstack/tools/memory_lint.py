@@ -534,7 +534,7 @@ def halt_if_paused() -> None:
     flag = Path.home() / ".claude" / "superstack" / "PAUSE"
     if flag.exists():
         print(f"ОСТАНОВЛЕНО: система на паузе\n  флаг: {flag}\n"
-              f"  снять: tools/pause.sh off", file=sys.stderr)
+              f"  снять: скажи «включи» или позови /stop — сама пауза не пройдёт", file=sys.stderr)
         raise SystemExit(10)
 
 

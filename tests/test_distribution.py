@@ -545,19 +545,49 @@ class TestVerifyGateHook(unittest.TestCase):
 
     # --- песочница ---------------------------------------------------------
 
-    def stub(self, code: int, text: str = "") -> None:
-        """Подставная проверка: печатает что велено и выходит заданным кодом."""
+    #: Отпечаток дерева в подставной проверке. Контракт тот же, что у
+    #: настоящего `verify._tree_fingerprint`: строка, которая меняется вместе
+    #: с содержимым каталога проекта. Своя реализация — намеренно: тест
+    #: описывает КОНТРАКТ между хуком и проверкой, а не то, что покажет git
+    #: во временном каталоге на конкретной машине.
+    FINGERPRINT_SRC = (
+        "def _tree_fingerprint(project):\n"
+        "    import hashlib, os\n"
+        "    from pathlib import Path\n"
+        "    h = hashlib.sha256()\n"
+        "    for d, _, files in os.walk(str(project)):\n"
+        "        for name in sorted(files):\n"
+        "            f = Path(d) / name\n"
+        "            try:\n"
+        "                st = f.stat()\n"
+        "            except OSError:\n"
+        "                continue\n"
+        "            h.update(('%s:%s' % (f, st.st_size)).encode())\n"
+        "    return h.hexdigest()\n")
+
+    def stub(self, code: int, text: str = "", fingerprint: bool = False) -> None:
+        """Подставная проверка: печатает что велено и выходит заданным кодом.
+
+        Тело закрыто `if __name__ == "__main__"`, как у настоящего verify.py.
+        Граница здесь несущая, а не косметика: хук ЗАГРУЖАЕТ соседний модуль,
+        чтобы считать отпечаток дерева его же кодом, и подставка без этой
+        границы выполнялась бы прямо на загрузке — то есть описывала бы файл,
+        которым verify.py не является.
+        """
         src = ("import sys\n"
-               "open(%r, 'a').close()\n" % str(self.ran) +
-               "sys.stderr.write(%r)\n" % text +
-               "sys.exit(%d)\n" % code)
+               + (self.FINGERPRINT_SRC if fingerprint else "")
+               + 'if __name__ == "__main__":\n'
+               "    open(%r, 'a').close()\n" % str(self.ran) +
+               "    sys.stderr.write(%r)\n" % text +
+               "    sys.exit(%d)\n" % code)
         (self.plug / "tools" / "verify.py").write_text(src, encoding="utf-8")
 
     def stub_hangs(self, seconds: int = 60) -> None:
         (self.plug / "tools" / "verify.py").write_text(
             "import time\n"
-            "open(%r, 'a').close()\n" % str(self.ran) +
-            "time.sleep(%d)\n" % seconds, encoding="utf-8")
+            'if __name__ == "__main__":\n'
+            "    open(%r, 'a').close()\n" % str(self.ran) +
+            "    time.sleep(%d)\n" % seconds, encoding="utf-8")
 
     def stdin_for(self, session: str = "s1", active: bool = False) -> str:
         return json.dumps({"session_id": session, "hook_event_name": "Stop",
@@ -768,6 +798,43 @@ class TestVerifyGateHook(unittest.TestCase):
         self.assertFalse(self.ran.exists(),
                          "на повторном заходе проверка запустилась снова")
 
+    def test_an_untouched_tree_is_not_verified_a_second_time(self):
+        """Ход, в котором ничего не меняли, не стоит полного прогона набора.
+
+        Хук стоит на КАЖДОМ закрытии хода, включая разговорные: в заведённом
+        каталоге даже «расскажи анекдот» упирался в набор и держал человека
+        до бюджета. Дерево не тронуто — результат прошлого ЗЕЛЁНОГО прогона
+        всё ещё верен, и повторять его нечем оправдать.
+
+        Обратная половина проверяется тут же и важнее первой: правка в дереве
+        возвращает прогон, а КРАСНЫЙ прогон отпечаток не запоминает. Иначе
+        одна неудача заткнула бы проверку до ближайшей правки — молчание,
+        неотличимое от пройденного гейта.
+        """
+        (self.project / "src.py").write_text("x = 1\n", encoding="utf-8")
+        self.stub(0, fingerprint=True)
+        self.assertIsNone(self.decision(self.gate()))
+        self.assertTrue(self.ran.exists(), "первый ход проверку не запустил")
+
+        self.ran.unlink()
+        self.assertIsNone(self.decision(self.gate()))
+        self.assertFalse(self.ran.exists(),
+                         "дерево не трогали, а набор прогнали заново")
+
+        (self.project / "src.py").write_text("x = 2  # правка\n", encoding="utf-8")
+        self.stub(1, "НЕ ПРОШЛО\n", fingerprint=True)
+        self.assertEqual((self.decision(self.gate()) or {}).get("decision"),
+                         self.BLOCK_DECISION,
+                         "дерево правили, а проверка не состоялась")
+        self.assertTrue(self.ran.exists(), "дерево правили, а набор не прогнали")
+
+        self.ran.unlink()
+        self.assertEqual((self.decision(self.gate()) or {}).get("decision"),
+                         self.BLOCK_DECISION,
+                         "красный прогон запомнился как зелёный")
+        self.assertTrue(self.ran.exists(),
+                        "после красного прогона проверку не повторили")
+
     def test_it_does_not_hang(self):
         """Хук стоит на каждом закрытии хода: зависший хук — это зависшая работа.
 
@@ -856,6 +923,30 @@ class TestVerifyGateHook(unittest.TestCase):
         """
         self.assertTrue((GATE.parent / ".." / "tools" / "verify.py").resolve().is_file(),
                         "хук ищет verify.py не там, где он лежит")
+
+    def test_the_real_verify_loads_as_a_module_for_the_fingerprint(self):
+        """Отпечаток дерева хук берёт у настоящего verify.py, ЗАГРУЖАЯ его.
+
+        Подставная проверка описывает контракт и не описывает загрузку —
+        а ломается именно она. Первая живая попытка упала на `@dataclass`:
+        модуль, не положенный в sys.modules, не собирает свои классы.
+        Наружу это не выходит никак: неудачная загрузка честно читается как
+        «сигнала нет», набор после неё гоняется как раньше, и выключенный
+        механизм неотличим от работающего.
+
+        Здесь нет ни git, ни временного репозитория намеренно: проверяется
+        ровно одно звено — что файл рядом с хуком грузится и отдаёт нужную
+        функцию.
+        """
+        spec = importlib.util.spec_from_file_location("ss_gate_under_test", GATE)
+        hook = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(hook)
+        real = (GATE.parent.parent / "tools" / "verify.py").resolve()
+        модуль = hook.загрузить_verify(real)
+        self.assertIsNotNone(модуль, f"настоящий {real.name} не загрузился — "
+                                     "отпечаток дерева хуку взять неоткуда")
+        self.assertTrue(callable(getattr(модуль, "_tree_fingerprint", None)),
+                        "загруженный verify.py не отдаёт отпечаток дерева")
 
     def test_the_real_verify_runs_and_an_empty_project_is_not_blocked(self):
         """Сквозной прогон с НАСТОЯЩИМ verify.py.

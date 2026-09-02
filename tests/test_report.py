@@ -38,6 +38,11 @@ _r = importlib.util.spec_from_file_location(
 rv = importlib.util.module_from_spec(_r)
 _r.loader.exec_module(rv)
 
+_m = importlib.util.spec_from_file_location(
+    "ss_memory_file_report", PKG / "tools" / "memory_file.py")
+mf = importlib.util.module_from_spec(_m)
+_m.loader.exec_module(mf)
+
 
 def run_dir(tmp: str, tasks: list, findings: list = None, reqs: list = None) -> Path:
     d = Path(tmp)
@@ -113,6 +118,65 @@ class TestWhatTheHumanMustDoComesFirst(unittest.TestCase):
                         reqs=[{"id": "R01", "status": "placeholder",
                                "basis": "нужен телефон студии"}])
             self.assertIn("ЧТО ЖДЁТ ТЕБЯ", rp.human(rp.gather(d)))
+
+
+class TestTheRunEndsWithAWayIn(unittest.TestCase):
+    """Отчёт кончался текстом — и человек уходил, ни разу не открыв продукт.
+
+    За весь прогон живьём его поднимали только помощники: ведущий для снимка и
+    приёмщик для вердикта. Три ссылки, которые человек получал, вели в рабочую
+    страницу, план и холст дизайна — ни одна в то, что построено.
+    """
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.root = Path(self.tmp.name)
+        self.run = self.root / ".superstack"
+        self.run.mkdir()
+        run_dir(str(self.run), [{"id": "01", "name": "к", "status": "proven"}])
+
+    def _команды(self, body: str) -> None:
+        """Память проекта пишется ТЕМ ЖЕ инструментом, каким её читает отчёт:
+        фикстура, собранная руками, доказывала бы разбор, а не стык."""
+        p = self.root / mf.detect(self.root)["file"]
+        mf.write_block(p, mf.apply_section("", "Команды", body))
+
+    def test_the_recorded_launch_command_is_the_last_section(self):
+        self._команды("| Команда | Что делает |\n|---|---|\n"
+                      "| `npm run dev` | поднимает сайт |")
+        text = rp.human(rp.gather(self.run))
+        self.assertIn("КАК ОТКРЫТЬ", text)
+        self.assertIn("npm run dev", text)
+        self.assertLess(text.index("Частей работы"), text.index("КАК ОТКРЫТЬ"),
+                        "раздел обязан быть последним — им человек уходит")
+
+    def test_an_empty_section_never_becomes_a_command(self):
+        """Живой прогон, а не фикстура: память заведена, команд в неё ещё не
+        писали. Скелет держит в таблице прочерк — и он уехал в отчёт КАК
+        команда, со стрелкой «эта строка поднимает построенное», указывающей
+        на тире. Подтверждение без содержимого: человек уходит выполнять то,
+        чего ему не дали."""
+        случаи = {
+            "скелет после init": mf.SKELETON.format(project="Живой", about=""),
+            "раздел из одних тире": mf.apply_section("", "Команды", "— | –"),
+            "раздела нет вовсе": "# Живой\n\nодна строка про проект\n",
+        }
+        p = self.root / mf.detect(self.root)["file"]
+        for имя, блок in случаи.items():
+            with self.subTest(случай=имя):
+                mf.write_block(p, блок)
+                text = rp.human(rp.gather(self.run))
+                self.assertIn("не записан", text)
+                self.assertNotIn("↑", text, "стрелка указывает на пустое место")
+
+    def test_without_commands_it_says_so_and_hands_the_work_back(self):
+        """«Не записаны» честнее выдуманной команды: выполнив не ту строку,
+        человек ничего не увидит и решит, что не работает сам продукт."""
+        text = rp.human(rp.gather(self.run))
+        self.assertIn("КАК ОТКРЫТЬ", text)
+        self.assertIn("команды запуска не записаны", text)
+        self.assertIn("→ команды запуска не записаны", text)
 
 
 class TestExitCodes(unittest.TestCase):

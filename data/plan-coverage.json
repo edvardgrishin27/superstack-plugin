@@ -383,6 +383,15 @@
    }
   },
   {
+   "id": "UX.what-reads-the-run-not-an-empty-folder",
+   "layer": "интерфейс",
+   "mechanism": "«где я» читает ход работы там, куда /go его пишет: .superstack/state.json и .superstack/spec.md идут первыми, .claude/specs/ остаётся запасным",
+   "evidence": {
+    "file": "plugins/superstack/tools/what.py",
+    "contains": "def run_phase(project: Path) -> dict | None:"
+   }
+  },
+  {
    "id": "UX.oops",
    "layer": "интерфейс",
    "mechanism": "отменить последнее одной командой",
@@ -398,6 +407,15 @@
    "evidence": {
     "file": "plugins/superstack/skills/fix/SKILL.md",
     "contains": "name: fix"
+   }
+  },
+  {
+   "id": "UX.change",
+   "layer": "интерфейс",
+   "mechanism": "малая правка готового продукта идёт маршрутом «снимок — правка исполнителем — проверка — снимок», а не руками мимо системы",
+   "evidence": {
+    "file": "plugins/superstack/skills/change/SKILL.md",
+    "contains": "python3 \"$CLAUDE_PLUGIN_ROOT/tools/checkpoint.py\" . snap \"после правки"
    }
   },
   {
@@ -587,6 +605,15 @@
    "evidence": {
     "file": "plugins/superstack/tools/manifest.py",
     "contains": "def brief_intact"
+   }
+  },
+  {
+   "id": "L3.init-does-not-erase-a-started-project",
+   "layer": "L3 проектирование",
+   "mechanism": "заведение требований поверх начатого не проходит: непустой файл не перезаписывается, инструмент называет, что в нём лежит, и отдельным кодом отказывается; явное «начать заново» сперва кладёт копию прежнего рядом",
+   "evidence": {
+    "file": "plugins/superstack/tools/manifest.py",
+    "contains": "if занято(path):"
    }
   },
   {
@@ -812,6 +839,24 @@
    "evidence": {
     "file": "tools/gauntlet.py",
     "contains": "def gate_wiring"
+   }
+  },
+  {
+   "id": "L7.wiring-ignores-prose",
+   "layer": "L7 эволюция",
+   "mechanism": "достижимость считается по исполняемому тексту: имя, упомянутое только в докстринге или комментарии, вызовом не считается",
+   "evidence": {
+    "file": "tools/gauntlet.py",
+    "contains": "text[f] = executable_text(f)"
+   }
+  },
+  {
+   "id": "L7.hooks-are-the-python-ones",
+   "layer": "L7 эволюция",
+   "mechanism": "точками входа считаются работающие хуки, а не однострочные обёртки рядом с ними, которых продукт не запускает ниоткуда",
+   "evidence": {
+    "file": "tools/gauntlet.py",
+    "contains": "\"*/hooks/*.py\""
    }
   },
   {
@@ -1129,7 +1174,7 @@
    "mechanism": "достижимость считается и по пути к файлу, и по питоновскому импорту, но не по голому упоминанию имени",
    "evidence": {
     "file": "tools/gauntlet.py",
-    "contains": "def зовёт"
+    "contains": "(?<![\\w.-])"
    }
   },
   {
@@ -1157,6 +1202,15 @@
    "evidence": {
     "file": "plugins/superstack/hooks/verify-gate.py",
     "contains": "останови суперстек"
+   }
+  },
+  {
+   "id": "L5.gate-skips-an-untouched-tree",
+   "layer": "L5 гарантии",
+   "mechanism": "проверка на закрытии хода не гоняет набор заново, пока дерево не тронули с прошлого зелёного прогона",
+   "evidence": {
+    "file": "plugins/superstack/hooks/verify-gate.py",
+    "contains": "if снимок is not None and прошлый_зелёный(след) == снимок:"
    }
   },
   {
@@ -1664,6 +1718,15 @@
    }
   },
   {
+   "id": "L3.scaffold-appends-its-own-memory-file",
+   "layer": "L3 проектирование",
+   "mechanism": "свой файл памяти генератор дописывает по метке, а не считает занятым: иначе фаза спеки отказывает на каждом прогоне и учит затирать память через --force",
+   "evidence": {
+    "file": "plugins/superstack/tools/scaffold.py",
+    "contains": "def _наш_файл"
+   }
+  },
+  {
    "id": "UX.launch-mode-routed",
    "layer": "интерфейс",
    "mechanism": "чем запускать работу считает система по форме задачи, а не вспоминает человек",
@@ -1823,6 +1886,24 @@
    "evidence": {
     "file": "tools/sync_public.py",
     "contains": "проверка[\"status\"] == \"fail\""
+   }
+  },
+  {
+   "id": "DIST.showcase-cannot-fail-silently",
+   "layer": "дистрибуция",
+   "mechanism": "витрина не обновилась — выкладка стоит: ни одна из подстановок не совпала, и это отказ с честной строкой, а не тихое «обновлено»",
+   "evidence": {
+    "file": "tools/sync_public.py",
+    "contains": "if not заменено:"
+   }
+  },
+  {
+   "id": "DIST.repo-description-is-measured",
+   "layer": "дистрибуция",
+   "mechanism": "числа в описании репозитория переписываются измерением после выкладки; сеть не удалась — сказано «не проверено», а выкладка не блокируется",
+   "evidence": {
+    "file": "tools/sync_public.py",
+    "contains": "def refresh_description"
    }
   },
   {
@@ -2057,6 +2138,15 @@
    "evidence": {
     "file": "tools/gauntlet.py",
     "contains": "ЧИТАЕТСЯ_ВСЕГДА"
+   }
+  },
+  {
+   "id": "BAR.subset-is-not-the-bar",
+   "layer": "планка",
+   "mechanism": "прогон части мутаций не даёт кода возврата ноль: «проверена выборка» отличается от «проверено всё» не только текстом отчёта",
+   "evidence": {
+    "file": "tools/gauntlet.py",
+    "contains": "\"partial\""
    }
   },
   {
@@ -2348,12 +2438,48 @@
    }
   },
   {
+   "id": "UX.phase-zero-asks-before-starting-over",
+   "layer": "интерфейс",
+   "mechanism": "фаза «завести» смотрит, не начата ли работа в этой папке раньше, и при находке спрашивает человека — продолжить или начать сначала, — вместо того чтобы молча обнулить вчерашнее",
+   "evidence": {
+    "file": "plugins/superstack/skills/go/phases/0-завести.md",
+    "contains": "ls .superstack/manifest.json 2>/dev/null && python3 \"$CLAUDE_PLUGIN_ROOT/tools/manifest.py\" show .superstack/manifest.json"
+   }
+  },
+  {
+   "id": "UX.enable-runs-before-the-first-write",
+   "layer": "интерфейс",
+   "mechanism": "заведение проекта стоит первой командой фазы 0 — раньше создания .superstack и файла памяти: отказ по коду 4 приходит ДО того, как что-то записано в домашнюю папку, и разобран для человека словами",
+   "evidence": {
+    "file": "plugins/superstack/skills/go/phases/0-завести.md",
+    "contains": "## Первая команда — отметить проект, до любой записи на диск"
+   }
+  },
+  {
    "id": "SAFE.undo-confirms-only-on-success",
    "layer": "L5 гарантии",
    "mechanism": "«откатил» печатается только после того, как код возврата подтвердил успех, — подтверждение не опережает результат",
    "evidence": {
     "file": "plugins/superstack/tools/oops.py",
     "contains": "if rc == 0:"
+   }
+  },
+  {
+   "id": "SAFE.undo-nothing-restored-is-not-zero",
+   "layer": "L5 гарантии",
+   "mechanism": "откат, не вернувший ни одного файла, отдаёт собственный код, а не ноль: слой выше читает именно код, и на нуле напечатал бы «откатил» там, где не вернулось ничего",
+   "evidence": {
+    "file": "plugins/superstack/tools/apply.py",
+    "contains": "UNDO_NOTHING_RESTORED = 5"
+   }
+  },
+  {
+   "id": "SAFE.undo-nothing-restored-said-to-the-human",
+   "layer": "L5 гарантии",
+   "mechanism": "на этом коде человеку говорится «НЕ откатил» с причиной и следующим шагом, а не технический отказ с чужим номером",
+   "evidence": {
+    "file": "plugins/superstack/tools/oops.py",
+    "contains": "elif rc == apply.UNDO_NOTHING_RESTORED:"
    }
   },
   {
@@ -2557,6 +2683,33 @@
    }
   },
   {
+   "id": "R.watchdog-sees-the-session-above",
+   "layer": "прогон",
+   "mechanism": "журналы волны ищутся по папке проекта И ЕЁ ПРЕДКАМ: сессия, открытая этажом выше, кладёт их под именем той папки, и поиск ровно по имени проекта находил ноль при полусотне журналов, лежащих через папку",
+   "evidence": {
+    "file": "plugins/superstack/tools/stall.py",
+    "contains": "def каталоги_журналов"
+   }
+  },
+  {
+   "id": "R.watchdog-does-not-touch-the-tree",
+   "layer": "прогон",
+   "mechanism": "файлы сторожа живут вне дерева проекта: он переписывает их каждые полторы минуты под идущим прогоном, и запись внутрь проекта меняла то самое дерево, за которым он следит",
+   "evidence": {
+    "file": "plugins/superstack/tools/watchdog.py",
+    "contains": "def _состояние"
+   }
+  },
+  {
+   "id": "R.watchdog-says-where-it-looked",
+   "layer": "прогон",
+   "mechanism": "остановка и проверка живости называют, сколько журналов найдено и в каких каталогах их искали: ноль без места поиска неотличим от «смотрю не туда»",
+   "evidence": {
+    "file": "plugins/superstack/tools/watchdog.py",
+    "contains": "def _поиск"
+   }
+  },
+  {
    "id": "R.watchdog-runs-during-the-wave",
    "layer": "прогон",
    "mechanism": "фоновый сторож поднимается ДО отправки волны и опрашивает журналы на таймере, пока оркестратор занят одним ходом и позвать проверку сам не может",
@@ -2581,6 +2734,123 @@
    "evidence": {
     "file": "tests/test_plain_ru.py",
     "contains": "НАЙДЕНО_РАНЕЕ = {"
+   }
+  },
+  {
+   "id": "UX.pause-hint-is-one-human-phrase",
+   "layer": "интерфейс",
+   "mechanism": "как снять паузу, сказано ОДНОЙ человеческой фразой из единственного источника — во всех инструментах одинаково и без команды терминала: /stop останавливает словом, и возврат обязан работать так же",
+   "evidence": {
+    "file": "plugins/superstack/tools/pause.py",
+    "contains": "ПОДСКАЗКА_СНЯТЬ = \"скажи «включи» или позови /stop — сама пауза не пройдёт\""
+   }
+  },
+  {
+   "id": "R.checkpoint-restores-without-erasing-history",
+   "layer": "прогон",
+   "mechanism": "возврат к снимку кладёт прежние файлы поверх, а не отматывает историю: сами снимки остаются на месте, и следующая просьба «верни как было» тоже находит адрес — отмотанная история унесла бы их с собой молча",
+   "evidence": {
+    "file": "plugins/superstack/tools/checkpoint.py",
+    "contains": "_git(root, \"checkout\", sha, \"--\", \".\")"
+   }
+  },
+  {
+   "id": "R.go-takes-a-checkpoint-before-its-first-write",
+   "layer": "прогон",
+   "mechanism": "папка продукта берётся под снимки в фазе 0 — до того, как система запишет туда первый свой файл, и снимок повторяется на границе каждого этапа: без этого «верни как было» касалось только настроек Claude Code, а вчерашний код возвращать было нечем",
+   "evidence": {
+    "file": "plugins/superstack/skills/go/phases/0-завести.md",
+    "contains": "\"$CLAUDE_PLUGIN_ROOT/tools/checkpoint.py\" . init"
+   }
+  },
+  {
+   "id": "UX.oops-offers-the-project-snapshot-first",
+   "layer": "интерфейс",
+   "mechanism": "на «верни как было» /oops сначала смотрит на снимки проекта и лишь потом на настройки: человек, сказавший эту фразу, смотрит на свой продукт, а прежний скилл отвечал ему про настройки Claude Code",
+   "evidence": {
+    "file": "plugins/superstack/skills/oops/SKILL.md",
+    "contains": "\"$CLAUDE_PLUGIN_ROOT/tools/checkpoint.py\" . list"
+   }
+  },
+  {
+   "id": "UX.run-ends-with-a-way-into-the-product",
+   "layer": "интерфейс",
+   "mechanism": "прогон кончается входом в продукт, а не текстом о нём: последний раздел отчёта — «КАК ОТКРЫТЬ», с командой запуска из раздела «Команды» памяти проекта и адресом, когда порт написан буквами; команд нет — раздел говорит это вслух, и та же строка уходит в «что ждёт тебя». До этого живьём продукт за весь прогон поднимали только помощники, а человек получал три ссылки, и ни одна не вела в построенное",
+   "evidence": {
+    "file": "plugins/superstack/tools/report.py",
+    "contains": "def как_открыть(пуск: dict) -> list:"
+   }
+  },
+  {
+   "id": "PLAT.progress-lock-works-without-posix",
+   "layer": "дистрибуция",
+   "mechanism": "замок на файл хода стройки берётся вызовом той платформы, где он взят: там, где POSIX-запирания нет, работает запирание области файла, а не падение инструмента, которым пишется каждый шаг волны; замка не досталось — сказано вслух один раз, а не молча",
+   "evidence": {
+    "file": "plugins/superstack/tools/progress.py",
+    "contains": "msvcrt.locking(fh.fileno(), msvcrt.LK_LOCK, _ОБЛАСТЬ_ЗАМКА)"
+   }
+  },
+  {
+   "id": "PLAT.liveness-never-kills-the-watchdog",
+   "layer": "дистрибуция",
+   "mechanism": "проверка «жив ли сторож» не зовёт сигнал там, где сигнала нет: на Windows та же строка не спрашивает, а завершает процесс, и охрана стоит теперь во всех трёх копиях этого кода — включая единственную, которая едет к людям",
+   "evidence": {
+    "file": "plugins/superstack/tools/watchdog.py",
+    "contains": "if os.name == \"nt\":"
+   }
+  },
+  {
+   "id": "PLAT.tool-count-is-measured",
+   "layer": "дистрибуция",
+   "mechanism": "число инструментов в паспорте платформы считается измерением папки, а не переписывается числом в текст: рядом стояли «65» и «67» при настоящих семидесяти с лишним, и обе цифры выглядели одинаково уверенно",
+   "evidence": {
+    "file": "plugins/superstack/tools/platform_check.py",
+    "contains": "len(list(Path(__file__).resolve().parent.glob(\"*.py\")))"
+   }
+  },
+  {
+   "id": "PLAT.windows-deficits-are-named-in-full",
+   "layer": "дистрибуция",
+   "mechanism": "паспорт платформы называет то, что задевает продукт: самозапуск зовёт толкователь языка одним именем и молчит, если он назван иначе; русские буквы в окне команд выходят нечитаемыми; однострочные обёртки .sh не исполняются. Прежде единственным дефицитом значились права в наборе — с припиской «сам продукт это не задевает»",
+   "evidence": {
+    "file": "plugins/superstack/tools/platform_check.py",
+    "contains": "\"самозапуск на старте и в конце сеанса\""
+   }
+  },
+  {
+   "id": "UX.four-gates-are-all-named-in-the-stem",
+   "layer": "интерфейс",
+   "mechanism": "стержень /go называет все четыре гейта, а не три: G3 у фазы плана стоял только в вынесенном файле, и читатель, которому описание обещало четыре, находил G1, G2 и G4",
+   "evidence": {
+    "file": "plugins/superstack/skills/go/SKILL.md",
+    "contains": "гейт **G3** — план трассируется к требованиям в обе стороны"
+   }
+  },
+  {
+   "id": "UX.fix-links-speak-plain-russian",
+   "layer": "интерфейс",
+   "mechanism": "звенья /fix называются человеку словами, которые он знает: имя звена и единственный совет проходят тот же словарь, что и любая другая строка человеку. Прежде разорванное звено называлось «подключение хуков», а совет начинался с «хук ссылается на файл» — термин из чужого словаря в единственной строке, ради которой /fix и зовут",
+   "evidence": {
+    "file": "plugins/superstack/tools/fix.py",
+    "contains": "\"переустанови плагин — автоматическая проверка ссылается на файл, которого нет\""
+   }
+  },
+  {
+   "id": "BAR.red-suite-names-the-tests",
+   "layer": "планка",
+   "mechanism": "красные ворота «набор» называют имена упавших тестов (до пяти, остальные числом), а не только «упало 1 из 1939»: имена берутся из вывода того же прогона, второй прогон ради них не нужен",
+   "evidence": {
+    "file": "tools/gauntlet.py",
+    "contains": "показаны = names[:_NAMES_SHOWN]"
+   }
+  },
+  {
+   "id": "UX.readme-does-not-mislead-a-newcomer",
+   "layer": "интерфейс",
+   "mechanism": "витрина не сбивает того, кто ещё ничего не поставил: текст установки обещает только Claude Code (команд `claude plugin …` больше нигде нет, и отказ читался как поломка продукта), снятие семи пакетов уехало из основного потока под спойлер с остальными подробностями, «Что сказать дальше» называет и /fix, и /oops — те два скилла, которые новичок зовёт первыми словами «не работает» и «верни как было», — а строка-сводка стоит ровно в той форме, которую переписывает выкладка",
+   "evidence": {
+    "file": "README.md",
+    "contains": "Плагин работает только в Claude Code."
    }
   }
  ],

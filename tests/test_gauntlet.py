@@ -269,7 +269,9 @@ class TestNamedMutationsAreASubsetNotTheBar(FakePlugin):
         self._build()
         gt.ONLY_MUTATIONS = {"m.a"}
         r = gt.gate_mutations()
-        self.assertEqual(r["status"], "pass", r)
+        # Не «pass»: названная поломка поймана, но остальные не проверялись, и
+        # взятой планкой это назвать нельзя.
+        self.assertEqual(r["status"], "partial", r)
         self.assertIn("1 из 2", r["detail"])
 
     def test_a_subset_says_so_in_the_report(self):
@@ -286,6 +288,38 @@ class TestNamedMutationsAreASubsetNotTheBar(FakePlugin):
         r = gt.gate_mutations()
         self.assertFalse(r.get("subset"), r)
         self.assertNotIn("ВЫБОРКА", r["detail"])
+
+    def test_a_subset_without_a_gate_does_not_exit_zero(self):
+        """Код возврата — единственное, что читает вызывающий.
+
+        Пометка «ВЫБОРКА 1 из 539» жила в тексте отчёта, а код возврата её не
+        читал: полный прогон с `--mutation X` отдавал ноль, проверив одну
+        поломку из пятисот. Ноль читается как «планка взята» и в стенограмме
+        неотличим от часового прогона — то есть планка снова проходится
+        словами, только теперь через флаг.
+        """
+        self._build()
+        self.addCleanup(setattr, gt, "GATES", gt.GATES)
+        self.addCleanup(setattr, sys, "argv", sys.argv)
+        было = os.environ.get("SUPERSTACK_IGNORE_PAUSE")
+        os.environ["SUPERSTACK_IGNORE_PAUSE"] = "1"
+        self.addCleanup(
+            lambda: os.environ.__setitem__("SUPERSTACK_IGNORE_PAUSE", было)
+            if было is not None
+            else os.environ.pop("SUPERSTACK_IGNORE_PAUSE", None))
+
+        gt.GATES = [("мутации", gt.gate_mutations)]
+        sys.argv = ["gauntlet.py", "--json", "--mutation", "m.a"]
+        поток = io.StringIO()
+        with contextlib.redirect_stdout(поток), \
+                contextlib.redirect_stderr(io.StringIO()):
+            code = gt.main()
+        v = json.loads(поток.getvalue())
+        self.assertNotEqual(code, 0, v)
+        self.assertFalse(v["done"], v)
+        ворота = v["gates"][0]
+        self.assertEqual(ворота["status"], "partial", ворота)
+        self.assertTrue(ворота.get("subset"), ворота)
 
     def test_an_unknown_id_is_refused_not_silently_empty(self):
         """Опечатка в имени иначе даёт «все пойманы», не проверив ничего —
@@ -761,6 +795,63 @@ class TestTheBarShowsItIsAlive(unittest.TestCase):
         self.assertNotIn("мутация 1/2", буфер.getvalue(),
                          "строка прогресса попала в stdout — тот, кто читает "
                          "отчёт JSON-ом, получит мусор перед ним")
+
+class TestARedSuiteNamesTheTests(unittest.TestCase):
+    """«упало 1 из 1939» — это число, а не диагноз.
+
+    Строка ворот встречалась дважды за одну ночь, и оба раза набор
+    приходилось гонять заново только затем, чтобы узнать ИМЯ упавшего теста.
+    Имена лежат в том же выводе pytest, который ворота уже прочитали: не
+    спросить о них значит выбросить готовый ответ и отправить человека за ним
+    во второй прогон.
+
+    Вывод pytest здесь подставляется: проверяется разбор строк
+    «FAILED tests/...::...», а не настоящий прогон набора, — иначе тест
+    зависел бы от того, что в этом репозитории сейчас красное.
+    """
+
+    def setUp(self):
+        настоящий = gt._sh
+        self.addCleanup(lambda: setattr(gt, "_sh", настоящий))
+
+    def _вывод(self, имена: list, прошло: int = 1938) -> str:
+        строки = "\n".join(f"FAILED {и} - AssertionError: 1 != 2"
+                            for и in имена)
+        return ("=== short test summary info ===\n"
+                f"{строки}\n{len(имена)} failed, {прошло} passed in 60.00s\n")
+
+    def _ворота(self, имена: list) -> dict:
+        gt._sh = lambda *a, **k: (1, self._вывод(имена))
+        return gt.gate_suite()
+
+    def test_the_failing_test_is_named(self):
+        v = self._ворота(["tests/test_fix.py::TestChain::test_link"])
+        self.assertEqual(v["status"], "fail")
+        self.assertIn("упало 1 из 1939", v["detail"])
+        self.assertIn("tests/test_fix.py::TestChain::test_link", v["detail"],
+                      "ворота назвали число и не назвали, ЧТО чинить")
+
+    def test_a_long_list_is_cut_and_the_rest_counted(self):
+        имена = [f"tests/test_a.py::T::test_{i}" for i in range(7)]
+        v = self._ворота(имена)
+        self.assertIn(имена[4], v["detail"])
+        self.assertNotIn(имена[5], v["detail"], "строка растёт без предела")
+        self.assertIn("и ещё 2", v["detail"], "остальные упавшие исчезли молча")
+
+    def test_a_crash_without_named_tests_still_reports_the_count(self):
+        """Обратный контроль: имён может не быть честно — набор упал на сборе,
+        а не на тесте. Выдумывать имя тогда нечем, и число остаётся числом."""
+        gt._sh = lambda *a, **k: (2, "ERROR: не собралось\n")
+        v = gt.gate_suite()
+        self.assertEqual(v["status"], "fail")
+        self.assertEqual(v["detail"], "упало 0 из 0")
+
+    def test_a_green_suite_is_still_green(self):
+        """Красная пара к трём выше: на зелёном наборе ворота имён не ищут."""
+        gt._sh = lambda *a, **k: (0, "1939 passed in 60.00s\n")
+        v = gt.gate_suite()
+        self.assertEqual(v["status"], "pass")
+        self.assertIn("1939", v["detail"])
 
 
 if __name__ == "__main__":

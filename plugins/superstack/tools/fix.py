@@ -61,7 +61,7 @@ def _link_tools() -> tuple:
 def _link_hooks() -> tuple:
     hooks_json = ROOT / "hooks" / "hooks.json"
     if not hooks_json.is_file():
-        return False, "искал hooks/hooks.json", "файла с хуками нет на месте"
+        return False, "искал hooks/hooks.json", "файла с автоматическими проверками нет на месте"
     try:
         data = json.loads(hooks_json.read_text(encoding="utf-8"))
     except (OSError, ValueError) as e:
@@ -78,7 +78,8 @@ def _link_hooks() -> tuple:
                     target = ROOT / rel.lstrip("/")
                     if not target.is_file():
                         missing.append(str(target))
-    detail = ("хук ссылается на файл, которого нет: " + ", ".join(missing)) if missing else ""
+    detail = ("автоматическая проверка ссылается на файл, которого нет: "
+              + ", ".join(missing)) if missing else ""
     return not missing, "прочитал hooks/hooks.json и проверил файлы внутри", detail
 
 
@@ -113,10 +114,10 @@ LINKS = (
      "поставь Python 3 и повтори"),
     ("tools", "файлы инструментов", _link_tools,
      "переустанови плагин — часть его файлов пропала"),
-    ("hooks", "подключение хуков", _link_hooks,
-     "переустанови плагин — хук ссылается на файл, которого нет"),
+    ("hooks", "автоматические проверки", _link_hooks,
+     "переустанови плагин — автоматическая проверка ссылается на файл, которого нет"),
     ("pause", "пауза", _link_pause,
-     "sh tools/pause.sh off"),
+     "скажи «включи» или позови /stop — сама пауза не пройдёт"),
     ("writable", "права на запись", _link_writable,
      "проверь права на каталог ~/.claude/superstack"),
 )

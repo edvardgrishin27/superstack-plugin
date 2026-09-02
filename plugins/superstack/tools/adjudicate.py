@@ -229,7 +229,7 @@ def halt_if_paused() -> None:
             since = "?"
         print(f"ОСТАНОВЛЕНО: система на паузе с {since}\n"
               f"  флаг: {flag}\n"
-              f"  снять: tools/pause.sh off", file=__import__("sys").stderr)
+              f"  снять: скажи «включи» или позови /stop — сама пауза не пройдёт", file=__import__("sys").stderr)
         raise SystemExit(10)
 
 

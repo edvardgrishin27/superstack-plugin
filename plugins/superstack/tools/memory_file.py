@@ -29,9 +29,11 @@
   python3 memory_file.py detect <корень>
   python3 memory_file.py init   <корень> --project "Название" [--about "одна строка"]
   python3 memory_file.py set    <корень> --section "Команды" --body "..."
+  python3 memory_file.py get    <корень> --section "Команды"
   python3 memory_file.py check  <корень>
 
   код 0 — чисто, 1 — нарушено, 2 — не смог проверить, 3 — ошибка вызова
+  у `get`: 0 — раздел есть, 2 — такого раздела в памяти нет
 """
 from __future__ import annotations
 
@@ -141,6 +143,54 @@ def write_block(path: Path, block: str) -> dict:
     return {"file": str(path), "outside_sha": after_sha[:12]}
 
 
+def _раздел(section: str) -> "re.Pattern":
+    return re.compile(rf"(?ms)^## {re.escape(section)}\s*$.*?(?=^## |\Z)")
+
+
+def has_section(ours: str, section: str) -> bool:
+    """Есть ли уже такой раздел в нашем блоке."""
+    return bool(_раздел(section).search(ours))
+
+
+def apply_section(ours: str, section: str, body: str) -> str:
+    """Раздел в нашем блоке: существующий заменить, отсутствующий дописать.
+
+    Отдельной функцией, а не строкой внутри разбора команды, потому что этим
+    же занят генератор папки проекта: он дописывает разделы конституции в тот
+    же файл. Два способа положить раздел разойдутся в оформлении, и файл
+    памяти окажется собранным из двух почерков — молча и не сразу.
+    """
+    block = f"## {section}\n\n{body.strip()}\n\n"
+    pat = _раздел(section)
+    return pat.sub(lambda _: block, ours) if pat.search(ours) else \
+        (ours.rstrip() + "\n\n" + block)
+
+
+def read_section(ours: str, section: str) -> str:
+    """Тело раздела из нашего блока. Пусто — раздела нет.
+
+    Пара к `apply_section`. Класть раздел инструмент умел, а отдавать — нет,
+    и первый же читатель (финальный отчёт, которому нужна команда запуска)
+    начал бы разбирать тот же файл своим выражением. Два разбора одного
+    формата расходятся молча: сменится уровень заголовка — и один перестанет
+    находить то, что второй по-прежнему пишет.
+    """
+    m = _раздел(section).search(ours)
+    if not m:
+        return ""
+    return m.group(0).partition("\n")[2].strip()
+
+
+def get_section(root: Path, section: str) -> dict:
+    """Раздел памяти проекта: из какого файла, есть ли он и что в нём."""
+    d = detect(root)
+    p = root / d["file"]
+    parts = split(p.read_text("utf-8", errors="replace")) if p.is_file() else None
+    body = read_section(parts[1], section) if parts else ""
+    return {"file": d["file"], "section": section,
+            "found": bool(body), "body": body}
+
+
 _PATH = re.compile(r"`([\w./-]+\.[\w]{1,6}|[\w./-]+/)`")
 _SECRETISH = re.compile(
     r"(sk-[A-Za-z0-9]{16,}|ghp_[A-Za-z0-9]{20,}|AKIA[0-9A-Z]{12,}"
@@ -212,8 +262,9 @@ def main() -> int:
             skip = True
         elif not a.startswith("--"):
             plain.append(a)
-    if len(plain) != 2 or plain[0] not in ("detect", "init", "set", "check"):
-        print("вызов: memory_file.py detect|init|set|check <корень> ...",
+    if len(plain) != 2 or plain[0] not in ("detect", "init", "set", "get",
+                                           "check"):
+        print("вызов: memory_file.py detect|init|set|get|check <корень> ...",
               file=sys.stderr)
         return 3
     cmd, root = plain[0], Path(plain[1])
@@ -250,12 +301,25 @@ def main() -> int:
             return 3
         p = root / d["file"]
         parts = split(p.read_text("utf-8") if p.is_file() else "")
-        ours = parts[1] if parts else ""
-        pat = re.compile(rf"(?ms)^## {re.escape(section)}\s*$.*?(?=^## |\Z)")
-        block = f"## {section}\n\n{body.strip()}\n\n"
-        ours = pat.sub(block, ours) if pat.search(ours) else (ours.rstrip() + "\n\n" + block)
+        ours = apply_section(parts[1] if parts else "", section, body)
         print(json.dumps(write_block(p, ours), ensure_ascii=False, indent=1))
         return 0
+
+    if cmd == "get":
+        section = _one(argv, "--section")
+        if not section:
+            print("НЕ УДАЛОСЬ: нужен --section", file=sys.stderr)
+            return 3
+        g = get_section(root, section)
+        if "--json" in argv:
+            print(json.dumps(g, ensure_ascii=False, indent=1))
+        else:
+            print(g["body"])
+        # «Раздела нет» — не успех и не поломка: то же «не смог», каким тут
+        # отвечает check. Ноль на пустоту заставил бы звавшего проверять
+        # длину вывода, и первый же забывший это сделать получил бы пустую
+        # строку в тексте для человека.
+        return 0 if g["found"] else 2
 
     v = check(root, d["file"])
     if "--json" not in argv:

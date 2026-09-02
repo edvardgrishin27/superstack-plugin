@@ -26,6 +26,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from paths import at  # noqa: E402
 
 TOOL = at("tools", "scaffold.py")
+ПАМЯТЬ = at("tools", "memory_file.py")
 
 СПЕКА = """# Спека
 
@@ -138,6 +139,35 @@ class ЧужоеНеТрогаем(Проект):
         код, _, _ = self._прогон("--force")
         self.assertEqual(код, 0)
         self.assertIn("Форма записи", (self.root / "CLAUDE.md").read_text("utf-8"))
+
+
+class СвойФайлНеЧужой(Проект):
+    """Файл памяти, заведённый нулевой фазой, генератор дописывает.
+
+    Прогон всегда идёт одним порядком: нулевая фаза кладёт `CLAUDE.md`, двумя
+    фазами позже приходит генератор и видит его на месте. Пока метку памяти не
+    различали, вторая фаза упиралась в отказ КАЖДЫЙ раз — на файле, который
+    система написала сама, — и единственным выходом выглядел `--force`, то
+    есть затирание собственной памяти.
+    """
+
+    def test_дописывает_разделы_не_трогая_написанного_памятью(self):
+        # Признак Claude Code — чтобы выбор файла не зависел от машины.
+        (self.root / ".claude").mkdir()
+        p = subprocess.run([sys.executable, str(ПАМЯТЬ), "init", str(self.root),
+                            "--project", "Запись на стрижку",
+                            "--about", "форма записи к мастеру"],
+                           capture_output=True, text=True, timeout=60)
+        self.assertEqual(p.returncode, 0, p.stderr)
+        self._спека()
+
+        код, v, _ = self._прогон()
+        self.assertEqual(код, 0, v)
+        текст = (self.root / "CLAUDE.md").read_text("utf-8")
+        self.assertIn("форма записи к мастеру", текст, "память затёрта")
+        self.assertIn("## Команды", текст, "память затёрта")
+        self.assertIn("Форма записи на стрижку", текст, "конституции нет")
+        self.assertIn("Онлайн-оплату в этой версии не делаем", текст)
 
 
 class Потолок(Проект):

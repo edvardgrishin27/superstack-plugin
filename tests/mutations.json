@@ -270,6 +270,20 @@
    "why": "предупреждение печатается, хотя отметить его не удалось: некому сосчитать — значит будет повторяться каждый ход вечно (тот же урок, что в first-run.sh)"
   },
   {
+   "id": "gate.fingerprint-ignored",
+   "file": "plugins/superstack/hooks/verify-gate.py",
+   "find": "    if снимок is not None and прошлый_зелёный(след) == снимок:\n        return 0",
+   "replace": "    if False:\n        return 0",
+   "why": "снято сравнение отпечатков: полный набор гоняется на каждом закрытии хода даже там, где в дереве не тронули ни файла — до двух минут ожидания на реплику «расскажи анекдот», и первое, что делает человек, это сносит проверку целиком"
+  },
+  {
+   "id": "gate.red-run-remembered-as-green",
+   "file": "plugins/superstack/hooks/verify-gate.py",
+   "find": "    if код == 0:\n        запомнить_зелёный(след, снимок, корень)",
+   "replace": "    if код in (0, 1):\n        запомнить_зелёный(след, снимок, корень)",
+   "why": "красный прогон запоминается как зелёный: непочиненный провал перестаёт проверяться до ближайшей правки в дереве, и его молчание неотличимо от пройденной проверки"
+  },
+  {
    "id": "gate.watchdog-removed",
    "file": "plugins/superstack/hooks/verify-gate.py",
    "find": "                           text=True, timeout=бюджет)",
@@ -951,7 +965,7 @@
   {
    "id": "sync.readme-lies-silently",
    "file": "tools/sync_public.py",
-   "find": "    if not fresh:\n        blocking.append(\"числа в README не обновлены — измерить не удалось\")",
+   "find": "    if not fresh:\n        blocking.append(почему_не_обновилась(nums, passed))",
    "replace": "    if not False:\n        pass",
    "why": "витрина публикуется с числами, которых никто не измерял, — ровно то, что продукт про себя запрещает"
   },
@@ -1649,6 +1663,13 @@
    "why": "выборка мутаций перестаёт помечать себя — «проверено 3 из 241» читается как «проверено всё», и три пойманные поломки выглядят взятой планкой"
   },
   {
+   "id": "gauntlet.subset-passes-as-the-whole-bar",
+   "file": "tools/gauntlet.py",
+   "find": "            v[\"status\"] = \"partial\"",
+   "replace": "            v[\"status\"] = \"pass\"",
+   "why": "выборка мутаций снова отдаёт чистый pass: `--mutation X` без --gate возвращает ноль, проверив одну поломку из пятисот, и код возврата читается как взятая планка"
+  },
+  {
    "id": "gauntlet.unknown-mutation-id-silently-empty",
    "file": "tools/gauntlet.py",
    "find": "        unknown = sorted(ONLY_MUTATIONS - known)",
@@ -1843,6 +1864,13 @@
    "find": "## Сколько говорить — прочти до первого слова человеку",
    "replace": "## Заметки о стиле",
    "why": "бюджет речи перестаёт быть правилом — прогон снова объясняет себя на каждом шаге, и новичок бросает читать ровно там, где начинаются вопросы, на которые может ответить только он"
+  },
+  {
+   "id": "skill.g3-drops-out-of-the-phase-table",
+   "file": "plugins/superstack/skills/go/SKILL.md",
+   "find": "гейт **G3** — план трассируется к требованиям в обе стороны; ",
+   "replace": "",
+   "why": "из таблицы фаз пропадает третий гейт — описание скилла обещает четыре, стержень называет три, и трассируемость плана к требованиям снова видна только тому, кто открыл вынесенный файл фазы"
   },
   {
    "id": "skill.questions-lose-the-rounds",
@@ -2405,6 +2433,20 @@
    "why": "ворота перестают видеть питоновский импорт вызовом — работающий инструмент объявляется мёртвым, и его либо удалят, либо припишут в список ручных «с причиной», которой на самом деле нет"
   },
   {
+   "id": "wiring.prose-counts-as-a-call",
+   "file": "tools/gauntlet.py",
+   "find": "            text[f] = executable_text(f)",
+   "replace": "            text[f] = f.read_text(\"utf-8\", errors=\"replace\")",
+   "why": "имя в докстринге и комментарии снова считается вызовом: инструмент, о котором лишь НАПИСАЛИ, числится достижимым. Так lint_rules.py держался на одной строке чужого докстринга и не запускался ниоткуда"
+  },
+  {
+   "id": "wiring.bare-substring-is-a-call",
+   "file": "tools/gauntlet.py",
+   "find": "        if re.search(rf\"(?<![\\w.-]){re.escape(имя)}(?![\\w-])\", где):\n            return True",
+   "replace": "        if имя in где:\n            return True",
+   "why": "вызов ищется вхождением подстроки без границ имени: doctor.py числится достижимым, потому что входит в project_doctor.py, и мёртвый инструмент прикрывается соседним именем"
+  },
+  {
    "id": "wiring.any-mention-counts-as-a-call",
    "file": "tools/gauntlet.py",
    "find": "        мод = имя[:-3]",
@@ -2568,9 +2610,9 @@
   {
    "id": "pause.hint-not-copyable",
    "file": "plugins/superstack/tools/pause.py",
-   "find": "    print(f'Снять: python3 \"{Path(__file__).resolve()}\" off')",
+   "find": "    print(f\"Снять: {ПОДСКАЗКА_СНЯТЬ}\")",
    "replace": "    print(f'Снять: python3 {Path(__file__).resolve()} off')",
-   "why": "путь в подсказке снова без кавычек: в каталоге с пробелом скопированная команда не работает — ровно когда человек торопится"
+   "why": "тормоз снова диктует человеку команду терминала вместо фразы: путь в каталоге с пробелом не копируется, а целевой человек терминал не открывает вовсе"
   },
   {
    "id": "mem.one-bad-store-erases-all",
@@ -2895,6 +2937,13 @@
    "why": "в конституцию попадают неулаженные узлы интервью — незаданный вопрос выдаётся за принятое решение"
   },
   {
+   "id": "scaffold.own-memory-file-read-as-someone-elses",
+   "file": "plugins/superstack/tools/scaffold.py",
+   "find": "    return цель if memory_file.START in текст else None",
+   "replace": "    return None",
+   "why": "метка памяти перестаёт различаться, и свой же CLAUDE.md снова считается чужим: фаза спеки упирается в отказ на КАЖДОМ прогоне, а единственным выходом выглядит --force поверх собственной памяти"
+  },
+  {
    "id": "launch.goal-without-gate",
    "file": "plugins/superstack/tools/launch_mode.py",
    "find": "    if s.get(\"has_bar\") and s.get(\"stop_gate\") is False:",
@@ -3026,6 +3075,20 @@
    "find": "            return {\"status\": \"unknown\",\n                    \"detail\": f\"склонировать выложенное не удалось: {почему}\"}",
    "replace": "            return {\"status\": \"pass\", \"detail\": \"клон не проверялся\"}",
    "why": "несостоявшийся клон засчитывается за проверенную публикацию — «не смог проверить» превращается в «проверено»"
+  },
+  {
+   "id": "sync.readme-refresh-always-succeeds",
+   "file": "tools/sync_public.py",
+   "find": "    if not заменено:\n        return False\n    p.write_text(t, encoding=\"utf-8\")\n    return True",
+   "replace": "    p.write_text(t, encoding=\"utf-8\")\n    return True",
+   "why": "витрина отчитывается «обновлено», когда не совпала ни одна из трёх подстановок: механизм «витрина не врёт» выключается молча, а числа прошлого релиза уезжают в публичное дерево как измеренные"
+  },
+  {
+   "id": "sync.description-patch-not-checked",
+   "file": "tools/sync_public.py",
+   "find": "    код, ответ = gh([\"api\", \"-X\", \"PATCH\", f\"repos/{slug}\",\n                     \"-f\", f\"description={текст}\"])\n    if код != 0:",
+   "replace": "    код, ответ = gh([\"api\", \"-X\", \"PATCH\", f\"repos/{slug}\",\n                     \"-f\", f\"description={текст}\"])\n    if False:",
+   "why": "несостоявшееся обновление описания репозитория засчитывается за сделанное: «не проверено» превращается в «проверено», и числа в витрине, которую видят раньше кода, остаются прошлогодними"
   },
   {
    "id": "toggles.unknown-name-silent",
@@ -3505,6 +3568,20 @@
    "why": "«откатил» снова печатается при провале отката — человек читает подтверждение в прошедшем времени о том, чего не произошло, и остаётся с неоткаченными настройками"
   },
   {
+   "id": "undo.zero-even-when-nothing-restored",
+   "file": "plugins/superstack/tools/apply.py",
+   "find": "    if not restored:",
+   "replace": "    if False:",
+   "why": "откат снова отдаёт ноль, не вернув ни одного файла: все файлы копии помечены вырезанным секретом и пропущены — а на нуле слой выше печатает человеку «откатил», то есть подтверждение того, чего не произошло"
+  },
+  {
+   "id": "oops.nothing-restored-loses-its-own-line",
+   "file": "plugins/superstack/tools/oops.py",
+   "find": "        elif rc == apply.UNDO_NOTHING_RESTORED:",
+   "replace": "        elif False:",
+   "why": "случай «не вернулось ничего» снова сваливается в общий отказ с чужим номером кода: человек читает «код apply.py: 5» вместо того, что именно не вернулось и что теперь делать руками"
+  },
+  {
    "id": "oops.undo-calls-into-known-failure",
    "file": "plugins/superstack/tools/oops.py",
    "find": "    if not preview[\"found\"]:",
@@ -3666,6 +3743,20 @@
    "why": "фаза перестаёт заводить канал за человека: просьба остаётся текстом, а действие для не-разработчика исчезает — и обещание «позову, если тебя нет» не работает"
   },
   {
+   "id": "phase0.mark-after-the-first-write",
+   "file": "plugins/superstack/skills/go/phases/0-завести.md",
+   "find": "```bash\npython3 \"$CLAUDE_PLUGIN_ROOT/tools/enable.py\" .\n```",
+   "replace": "```bash\nmkdir -p .superstack\npython3 \"$CLAUDE_PLUGIN_ROOT/tools/memory_file.py\" init . --project \"<название>\"\npython3 \"$CLAUDE_PLUGIN_ROOT/tools/enable.py\" .\n```",
+   "why": "заведение снова стоит ПОСЛЕ первой записи на диск: в домашней папке успевают появиться .superstack и файл памяти, и только потом enable.py отказывает"
+  },
+  {
+   "id": "phase0.refusal-code-not-explained",
+   "file": "plugins/superstack/skills/go/phases/0-завести.md",
+   "find": "Код 0 — заведено, иди дальше. **Код 4 у `enable.py` — прогон здесь\nостанавливается.** Это не поломка: система отказалась заводиться, потому что\nэто его домашняя папка (или папка, внутри которой лежат вообще все его\nпроекты), и завестись в ней значило бы включиться разом во всех его\nпроектах. Инструмент печатает причину сам —\nскажи её человеку одной фразой, простыми словами: это его домашняя папка, а не\nпапка проекта. Следующий шаг называй один — **открыть чат в папке самого проекта**;\nлибо пусть скажет словами, какую папку под проект завести, и заведу её я. Терминальных команд ему не давай, он не разработчик. Молча продолжать\nнельзя: следующие команды напишут файлы туда, куда человек их не просил.\n\n",
+   "replace": "",
+   "why": "код 4 перестаёт быть разобран: агенту нечего сказать человеку, тот не узнаёт, что это его домашняя папка и что чат надо открыть в папке проекта"
+  },
+  {
    "id": "stall.wave-aggregate-ignores-stuck",
    "file": "plugins/superstack/tools/stall.py",
    "find": "    if 1 in коды:\n        return 1",
@@ -3692,6 +3783,125 @@
    "find": "      \"артборд\": \"доска дизайна\"",
    "replace": "      \"артборд_УДАЛЕНО\": \"доска дизайна\"",
    "why": "слово тихо выпадает из словаря — «артборд» снова доедет до человека необнаруженным, и проверка жаргона промолчит, потому что не знает этого слова"
+  },
+  {
+   "id": "fix.pause-link-dictates-a-shell-command",
+   "file": "plugins/superstack/tools/fix.py",
+   "find": "     \"скажи «включи» или позови /stop — сама пауза не пройдёт\"),",
+   "replace": "     \"sh tools/pause.sh off\"),",
+   "why": "звено «пауза» снова отвечает командой оболочки с путём к .sh: не-разработчик её не наберёт, на Windows sh нет, а относительный путь работает только из папки плагина"
+  },
+  {
+   "id": "doctor.pause-hint-diverges-from-the-others",
+   "file": "plugins/superstack/tools/doctor.py",
+   "find": "  снять: скажи «включи» или позови /stop — сама пауза не пройдёт",
+   "replace": "  снять: tools/pause.sh off",
+   "why": "на одно действие снова два разных совета: один инструмент говорит про путь к .sh, остальные — про фразу, и человек не знает, чему верить"
+  },
+  {
+   "id": "what.reads-only-the-folder-nobody-writes-to",
+   "file": "plugins/superstack/tools/what.py",
+   "find": "    phase = run_phase(project)\n    if phase is not None:",
+   "replace": "    phase = run_phase(project)\n    if False and phase is not None:",
+   "why": "/what снова ищет состояние только в .claude/specs/ — папке, в которую не пишет ни один инструмент системы: после полного прогона /go человек слышит «работа ещё не начата» вместо этапа, на котором остановились"
+  },
+  {
+   "id": "manifest.init-overwrites-a-started-project",
+   "file": "plugins/superstack/tools/manifest.py",
+   "find": "            if занято(path):\n                if \"--fresh\" not in rest:",
+   "replace": "            if False:\n                if \"--fresh\" not in rest:",
+   "why": "второй «хочу сайт» в той же папке снова молча обнуляет вчерашние требования: init собирает пустой файл поверх начатого, не спросив и не отложив копию"
+  },
+  {
+   "id": "progress.init-overwrites-a-started-run",
+   "file": "plugins/superstack/tools/progress.py",
+   "find": "            if занято(path):\n                if \"--fresh\" not in rest:",
+   "replace": "            if False:\n                if \"--fresh\" not in rest:",
+   "why": "повторное заведение снова стирает ход стройки: панель показывает пустую шкалу там, где вчера была половина работы, и человеку об этом никто не говорит"
+  },
+  {
+   "id": "checkpoint.back-erases-the-snapshots-it-returns-to",
+   "file": "plugins/superstack/tools/checkpoint.py",
+   "find": "    p = _git(root, \"checkout\", sha, \"--\", \".\")",
+   "replace": "    p = _git(root, \"reset\", \"--hard\", sha)",
+   "why": "возврат к снимку отматывает историю вместо того, чтобы положить прежние файлы поверх: файлы на экране те же, а все снимки, снятые после этой точки, исчезают — следующая просьба «верни как было» снова остаётся без адреса, и сказать об этом некому"
+  },
+  {
+   "id": "report.no-way-into-what-was-built",
+   "file": "plugins/superstack/tools/report.py",
+   "find": "    out.extend(как_открыть(пуск))",
+   "replace": "    out.extend([])",
+   "why": "отчёт снова кончается текстом: раздела «КАК ОТКРЫТЬ» нет, и человек уходит с описанием продукта, который живьём за весь прогон поднимали только помощники"
+  },
+  {
+   "id": "report.unrecorded-launch-command-is-silent",
+   "file": "plugins/superstack/tools/report.py",
+   "find": "    if not пуск.get(\"command\"):",
+   "replace": "    if False:",
+   "why": "вырезана ветка «открывать нечем»: отчёт снова печатает строку команды и стрелку «эта строка поднимает построенное» над пустым местом — подтверждение без содержимого, ровно то, что нашёл живой прогон на памяти проекта сразу после её заведения"
+  },
+  {
+   "id": "portable.progress-lock-needs-fcntl-everywhere",
+   "file": "plugins/superstack/tools/progress.py",
+   "find": "    if os.name == \"nt\":\n        import msvcrt\n        fh.seek(0)\n        try:",
+   "replace": "    if False:\n        import msvcrt\n        fh.seek(0)\n        try:",
+   "why": "замок на файл хода стройки снова берётся единственным вызовом POSIX: на Windows инструмент, которым пишется КАЖДЫЙ шаг волны, падает на первом же шаге — и падает не в записи, а во всём ходе стройки сразу"
+  },
+  {
+   "id": "portable.watchdog-liveness-kills-on-windows",
+   "file": "plugins/superstack/tools/watchdog.py",
+   "find": "    if os.name == \"nt\":\n        # На Windows сигнала 0 нет, и `os.kill` там не спрашивает, а УБИВАЕТ:\n        # проверка «жив ли сторож» убила бы сторожа. Спросить нечем, поэтому\n        # «не знаю» читается как «жив» — как и в двух соседних копиях.\n        return True\n    try:\n        os.kill(pid, 0)",
+   "replace": "    try:\n        os.kill(pid, 0)",
+   "why": "вопрос «жив ли сторож» снова задаётся сигналом, которого на Windows нет: там та же строка не спрашивает, а завершает процесс — проверка живости убивает того, о ком спрашивает"
+  },
+  {
+   "id": "fix.link-names-a-hook-to-the-human",
+   "file": "plugins/superstack/tools/fix.py",
+   "find": "    (\"hooks\", \"автоматические проверки\", _link_hooks,\n     \"переустанови плагин — автоматическая проверка ссылается на файл, которого нет\"),",
+   "replace": "    (\"hooks\", \"подключение хуков\", _link_hooks,\n     \"переустанови плагин — хук ссылается на файл, которого нет\"),",
+   "why": "разорванное звено снова называется человеку словом из чужого словаря: /fix зовут словами «что-то сломалось», и единственный совет, который получает не-разработчик, начинается с термина, которого он не знает — сам скилл /fix ровно это про него и пишет"
+  },
+  {
+   "id": "bar.red-suite-does-not-name-the-tests",
+   "file": "tools/gauntlet.py",
+   "find": "    показаны = names[:_NAMES_SHOWN]",
+   "replace": "    показаны = []",
+   "why": "ворота «набор» снова печатают «упало 1 из 1939» без единого имени: чтобы узнать, ЧТО чинить, набор приходится гонять второй раз — хотя ответ был в выводе первого прогона и выброшен"
+  },
+  {
+   "id": "stall.wave-blind-to-the-session-above",
+   "file": "plugins/superstack/tools/stall.py",
+   "find": "    p = проект.resolve()\n    дом = Path.home().resolve()",
+   "replace": "    return [каталог_журналов(проект)]\n    p = проект.resolve()\n    дом = Path.home().resolve()",
+   "why": "журналы волны снова ищутся только по имени самой папки проекта: сессия, открытая этажом выше, невидима, и сторож всю ночь показывает «агентов волны: 0» при полусотне журналов через папку"
+  },
+  {
+   "id": "watchdog.state-goes-back-into-the-project",
+   "file": "plugins/superstack/tools/watchdog.py",
+   "find": "    корень = os.environ.get(STATE_ENV) or str(Path.home() / \".claude\" / \"superstack\")\n    return Path(корень) / WATCH_DIR / stall.слаг(проект)",
+   "replace": "    return проект / \".superstack\"",
+   "why": "сторож снова пишет снимок и pid внутрь проекта каждые полторы минуты — под идущим прогоном планки дерево меняется само собой, и набор краснеет там, где прямой прогон сразу следом зелёный"
+  },
+  {
+   "id": "change.second-snapshot-dropped",
+   "file": "plugins/superstack/skills/change/SKILL.md",
+   "find": "python3 \"$CLAUDE_PLUGIN_ROOT/tools/checkpoint.py\" . snap \"после правки: <что изменилось>\"",
+   "replace": "# снимок после правки не снимается",
+   "why": "из маршрута малой правки пропадает второй снимок: правка остаётся незафиксированной, и «верни как было» откатывает человека к состоянию ДО неё, а не к правке — потеря молчаливая, в чате всё выглядит сделанным"
+  },
+  {
+   "id": "readme.install-text-promises-any-agent",
+   "file": "README.md",
+   "find": "Плагин работает только в Claude Code. Вставьте этот текст своему Claude Code,\nон всё сделает сам:",
+   "replace": "Вставьте этот текст своему агенту — Claude Code, Cursor, Codex. Он всё сделает сам:",
+   "why": "витрина снова обещает, что текст установки годится любому агенту. Команд `claude plugin …` нет нигде, кроме Claude Code: человек получает отказ на первом же шаге и читает его как поломку продукта, а не как чужой инструмент"
+  },
+  {
+   "id": "readme.summary-line-loses-the-shape-the-sync-rewrites",
+   "file": "README.md",
+   "find": ", все ловятся · ",
+   "replace": ", все ловятся, ",
+   "why": "строка-сводка расходится с подстановкой в tools/sync_public.py — замена перестаёт совпадать, и витрина навсегда показывает числа прошлого релиза. Поломка молчаливая: скрипт отчитывается об успехе по другим заменам"
   }
  ]
 }

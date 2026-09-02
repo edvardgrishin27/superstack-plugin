@@ -11,7 +11,9 @@
 """
 from __future__ import annotations
 
+import contextlib
 import importlib.util
+import io
 import json
 import os
 import subprocess
@@ -196,6 +198,34 @@ class TestSecretNeverMultiplies(ApplyFixture):
         live = self.read_settings()
         self.assertIn(self.SECRET, live["permissions"]["allow"],
                       "откат затёр живой секрет меткой из бэкапа")
+
+    def test_undo_that_restored_nothing_is_not_reported_as_success(self):
+        """Тот же откат, но взгляд на КОД, а не на файл.
+
+        Пропуск файла с вырезанным секретом — правильное поведение (тест
+        выше), но раньше оно заканчивалось `return 0`. Ноль читает слой выше
+        и печатает человеку «откатил», хотя не вернулся НИ ОДИН файл: успех
+        объявлен раньше, чем получен. Код обязан отличаться и от нуля, и от
+        «нет такого отката» — на одном коде верхний слой сказал бы одно и то
+        же про два разных случая.
+        """
+        self.settings({"permissions": {"allow": [self.SECRET]}})
+        self.assertEqual(apply_mod.cmd_run([self._findings_with_secret()]), 0)
+        bdir = next(apply_mod.BACKUPS.iterdir())
+        self.assertIn("ВЫРЕЗАНО-SUPERSTACK",
+                      (bdir / "settings.json").read_text(encoding="utf-8"),
+                      "секрет не вырезан — проверять нечего")
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            rc = apply_mod.cmd_undo([bdir.name])
+        said = err.getvalue()
+        self.assertEqual(rc, apply_mod.UNDO_NOTHING_RESTORED)
+        self.assertNotEqual(rc, 0, "ноль здесь становится «откатил» этажом выше")
+        self.assertNotEqual(rc, 1, "это не «нет такого отката» — откат есть")
+        self.assertNotIn("откатил", said, "отказ не говорит об откате в прошедшем")
+        self.assertIn("секрет", said.lower(), "причина не названа")
+        self.assertIn(str(bdir), said, "не сказано, где лежит копия")
+        self.assertIn("руками", said, "не назван следующий шаг человека")
 
 
 class TestConsentAndRefusal(ApplyFixture):

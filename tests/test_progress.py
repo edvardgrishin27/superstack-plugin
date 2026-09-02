@@ -14,6 +14,7 @@ import os
 import subprocess
 import sys
 import tempfile
+import types
 import unittest
 from pathlib import Path
 
@@ -352,3 +353,97 @@ class TestParallelWritersDoNotEraseEachOther(unittest.TestCase):
                             "часть 01", "--status", "claimed"],
                            capture_output=True, env=ENV, timeout=30)
         self.assertEqual(r.returncode, 0, "после отказа замок остался взятым")
+
+
+class TestInitDoesNotEraseAStartedRun(unittest.TestCase):
+    """Повторное заведение в той же папке обнуляло ход стройки молча.
+
+    `init` собирал пустое состояние, не глядя, лежит ли уже файл: панель
+    показывала пустую шкалу там, где вчера была половина работы, и человеку об
+    этом никто не говорил.
+    """
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.dir = Path(self.tmp.name)
+        self.f = self.dir / "state.json"
+        self._run("init", str(self.f), "вчерашний проект")
+        self._run("task", str(self.f), "01", "часть 01",
+                  "--wave", "1", "--status", "running")
+        self.было = self.f.read_bytes()
+
+    def _run(self, *args):
+        return subprocess.run([sys.executable, str(TOOL), *args],
+                              capture_output=True, text=True, env=ENV,
+                              timeout=60)
+
+    def test_a_second_init_refuses_and_leaves_the_file_untouched(self):
+        r = self._run("init", str(self.f), "сегодняшний проект")
+        self.assertNotEqual(r.returncode, 0,
+                            "заведение поверх начатого прошло как обычное")
+        self.assertEqual(r.returncode, pr.ЗАНЯТО, r.stderr[-300:])
+        self.assertEqual(self.f.read_bytes(), self.было,
+                         "вчерашний ход работ переписан")
+
+    def test_fresh_puts_a_copy_aside_before_it_overwrites(self):
+        r = self._run("init", str(self.f), "сегодняшний проект", "--fresh")
+        self.assertEqual(r.returncode, 0, r.stderr[-300:])
+        копии = list(self.dir.glob("state.json.*.bak"))
+        self.assertEqual(len(копии), 1, "копия прежнего рядом не появилась")
+        self.assertEqual(копии[0].read_bytes(), self.было,
+                         "отложено не то, что лежало")
+        self.assertIn(копии[0].name, r.stderr,
+                      "куда положена копия — не сказано")
+        снова = json.loads(self.f.read_text("utf-8"))
+        self.assertEqual(снова["project"], "сегодняшний проект")
+        self.assertEqual(снова["waves"], {}, "--fresh не завёл заново")
+
+
+class ЗамокБезPOSIX(unittest.TestCase):
+    """Замок берётся и там, где нет `fcntl`.
+
+    `progress.py` пишет каждый шаг волны. Пока замок брался единственным
+    вызовом POSIX, на Windows этот инструмент падал на первом же шаге — и
+    падал не «где-то в записи», а во всём ходе стройки сразу.
+
+    Проверяется подстановкой: настоящая Windows тут не нужна и её тут не было.
+    `fcntl` на время проверки делается недоступным — ровно то, чем он и
+    является на Windows, — а вызов запирания подменяется на считающий.
+    """
+
+    class _ОС:
+        """Отвечает «Windows» на имя и настоящим `os` на всё остальное."""
+
+        name = "nt"
+
+        def __getattr__(self, имя):
+            return getattr(os, имя)
+
+    def test_на_windows_запирается_без_fcntl(self):
+        зовы = []
+        подделка = types.SimpleNamespace(
+            LK_LOCK=1, LK_UNLCK=0,
+            locking=lambda fd, режим, длина: зовы.append(режим))
+        было_os, было_msvcrt = pr.os, sys.modules.get("msvcrt")
+        было_fcntl, было_ли_fcntl = sys.modules.get("fcntl"), "fcntl" in sys.modules
+        pr.os = self._ОС()
+        sys.modules["msvcrt"] = подделка
+        # None в этом месте — то же, что отсутствие модуля: импорт падает.
+        sys.modules["fcntl"] = None
+        try:
+            with tempfile.TemporaryDirectory() as d:
+                with pr._Lock(Path(d) / "состояние.json"):
+                    pass
+        finally:
+            pr.os = было_os
+            if было_msvcrt is None:
+                sys.modules.pop("msvcrt", None)
+            else:
+                sys.modules["msvcrt"] = было_msvcrt
+            if было_ли_fcntl:
+                sys.modules["fcntl"] = было_fcntl
+            else:
+                sys.modules.pop("fcntl", None)
+        self.assertEqual(зовы, [подделка.LK_LOCK, подделка.LK_UNLCK],
+                         "замок не взят и не снят вызовом Windows")

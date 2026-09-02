@@ -26,7 +26,7 @@
      требования не записывается; добавок не может быть больше, чем требований
      человека. Свободно висящая добавка — это другой проект.
 
-  python3 manifest.py init <файл> <бриф.md>
+  python3 manifest.py init <файл> <бриф.md>   [--fresh]
   python3 manifest.py add  <файл> <id> --quote "..."   [--where X]
   python3 manifest.py add  <файл> <id> --implied "почему подразумевается"
   python3 manifest.py add  <файл> <id> --answer "..."             (G## из брифинга)
@@ -40,7 +40,8 @@
   python3 manifest.py show <файл>
   python3 manifest.py md   <файл>
 
-  код 0 — всё в порядке, 1 — манифест нарушен, 2 — не смог проверить, 3 — вызов
+  код 0 — всё в порядке, 1 — манифест нарушен, 2 — не смог проверить,
+  3 — вызов, 4 — файл уже есть и не пуст: ничего не тронуто (см. --fresh)
 """
 from __future__ import annotations
 
@@ -119,6 +120,54 @@ def save(path: Path, data: dict, now: "str | None" = None) -> None:
     tmp = path.with_suffix(path.suffix + ".tmp")
     tmp.write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
     os.replace(tmp, path)
+
+
+#: Код отказа «здесь уже начата работа». Ноль здесь означал бы «завёл», а
+#: завести поверх начатого — это стереть чужой день молча. Число то же, что у
+#: progress.py: для человека это одно событие, и разными кодами оно быть не
+#: может.
+ЗАНЯТО = 4
+
+
+def занято(path: Path) -> bool:
+    """Лежит ли по этому пути уже чья-то работа."""
+    try:
+        return path.is_file() and path.stat().st_size > 0
+    except OSError:
+        return False
+
+
+def отложить(path: Path) -> Path:
+    """Копия рядом, со временем в имени, ДО перезаписи.
+
+    Перезапись по явной просьбе остаётся возможной, а вот безвозвратной быть
+    не должна: человек, сказавший «начнём заново», отвечает за сегодняшний
+    выбор, а не за то, что вчерашние слова стёрлись без следа.
+    """
+    from datetime import datetime, timezone
+    метка = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    копия = path.with_name(f"{path.name}.{метка}.bak")
+    n = 0
+    while копия.exists():
+        n += 1
+        копия = path.with_name(f"{path.name}.{метка}-{n}.bak")
+    копия.write_bytes(path.read_bytes())
+    return копия
+
+
+def уже_начато(path: Path, data: dict) -> str:
+    """Что сказать вместо заведения: что здесь лежит и какие есть два выхода."""
+    бриф = data.get("brief") or "не назван"
+    когда = (data.get("updated") or "").split("T")[0] or "неизвестно когда"
+    сколько = len(data.get("requirements") or [])
+    return ("НЕ ЗАВЁЛ: здесь уже начата работа, ничего не тронуто.\n"
+            f"  файл: {path}\n"
+            f"  просьба человека записана в: {бриф}\n"
+            f"  требований в нём: {сколько}, последняя запись: {когда}\n"
+            "  продолжить начатое — заводить заново не нужно, работай с этим "
+            "файлом;\n"
+            "  начать всё сначала — повтори с --fresh: прежнее сперва ляжет "
+            "копией рядом.")
 
 
 def find(data: dict, rid: str) -> "dict | None":
@@ -387,6 +436,17 @@ def main() -> int:
             b = Path(rest[0])
             if not b.is_file():
                 return _fail(f"брифа нет: {b}")
+            # Заведение поверх начатого — не заведение, а стирание. Второй
+            # «хочу сайт» в той же папке уносил вчерашние требования целиком
+            # и молча: человек видел ноль требований там, где вчера был
+            # десяток, и считал это нормальным началом.
+            if занято(path):
+                if "--fresh" not in rest:
+                    print(уже_начато(path, data), file=sys.stderr)
+                    return ЗАНЯТО
+                копия = отложить(path)
+                print(f"прежние требования отложены сюда: {копия}",
+                      file=sys.stderr)
             data = json.loads(json.dumps(EMPTY))
             data["brief"] = os.path.relpath(b.resolve(), path.resolve().parent)
             data["brief_sha"] = sha(b)

@@ -12,8 +12,14 @@
 Источники состояния — уже существующие гейты системы, не новые эвристики:
 
   · флаг паузы (tools/pause.sh) — если он есть, всё остальное неважно;
-  · спека в .claude/specs/ — есть ли она вообще, и держит ли форму
-    (форму держит tools/spec_lint.py, это НЕ переизобретено здесь);
+  · ход прогона /go в .superstack/ — состояние панели (state.json, его пишет
+    tools/progress.py) и спека (spec.md, её пишет фаза 2). Это ПЕРВЫЙ источник
+    после паузы: раньше здесь смотрели только в .claude/specs/ — папку, в
+    которую не пишет ни один инструмент системы, — и на второй день после
+    полного прогона человек слышал «работа ещё не начата»;
+  · спека в .claude/specs/ — запасной источник, оставлен ради проектов,
+    заведённых до того, как /go начал писать в .superstack/. Форму держит
+    tools/spec_lint.py, это НЕ переизобретено здесь;
   · гейт верификации (tools/verify.py) — то самое место, которое решает,
     можно ли закрыть ход в /go.
 
@@ -39,12 +45,18 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 
+import plain_ru  # noqa: E402
 from spec_lint import lint_text  # noqa: E402
 import verify  # noqa: E402
 
 HOME = Path.home()
 CLAUDE = HOME / ".claude"
 STATE = CLAUDE / "superstack"
+
+#: Папка прогона /go внутри проекта. Всё, что /go знает о работе, лежит здесь:
+#: state.json (этап и на ком ход), spec.md, бриф. Имя совпадает с тем, которое
+#: называет фаза 0 скилла go, и меняться в одиночку не может.
+RUN = ".superstack"
 
 
 # --------------------------------------------------------------------------
@@ -66,8 +78,37 @@ def pause_since() -> str | None:
         return "?"
 
 
+def run_phase(project: Path) -> dict | None:
+    """Этап прогона /go и тот, на ком ход — из `.superstack/state.json`.
+
+    Читается ровно то, что пишет progress.py set_phase: name, owner, detail.
+    Ни файла, ни разбора, ни имени этапа — None, и вопрос уходит следующему
+    источнику. Молчание здесь дешевле догадки: выдуманный этап человек примет
+    за факт и пойдёт продолжать не оттуда.
+    """
+    try:
+        data = json.loads((project / RUN / "state.json").read_text("utf-8"))
+    except (OSError, ValueError):
+        return None
+    phase = data.get("phase") if isinstance(data, dict) else None
+    if not isinstance(phase, dict) or not phase.get("name"):
+        return None
+    return phase
+
+
+def run_spec(project: Path) -> Path | None:
+    """Спека прогона /go — `.superstack/spec.md`. Нет файла — None."""
+    spec = project / RUN / "spec.md"
+    return spec if spec.is_file() else None
+
+
 def find_specs(project: Path) -> list[Path]:
-    """Спеки проекта, самая свежая первой. Каталога нет — список пуст."""
+    """Спеки в `.claude/specs/` — ЗАПАСНОЙ источник, не основной.
+
+    Сюда не пишет ни один инструмент системы: /go кладёт спеку в
+    `.superstack/spec.md`. Папка оставлена ради проектов, заведённых руками до
+    того, как это стало правилом; самая свежая первой, каталога нет — пусто.
+    """
     specs_dir = project / ".claude" / "specs"
     if not specs_dir.is_dir():
         return []
@@ -100,13 +141,45 @@ def evaluate(project: Path) -> dict:
             "evidence": {"pause_flag": str(STATE / "PAUSE")},
         }
 
+    phase = run_phase(project)
+    if phase is not None:
+        name = " ".join(str(phase["name"]).split())
+        owner = str(phase.get("owner") or "")
+        # Держателя называем теми же словами, что и панель: plain_ru берёт их
+        # из data/plain-ru.json, откуда их читает и live_panel.py. Вторая
+        # формулировка того же факта означала бы, что экран и ответ на
+        # «где я» расходятся, — и человек не знает, чему верить.
+        who = plain_ru.role_word(owner) if owner else "чей сейчас ход — не записано"
+        detail = " ".join(str(phase.get("detail") or "").split())
+        if owner == "человек":
+            step = f"дело за тобой: {detail}" if detail else "дело за тобой — скажи, что решил"
+        else:
+            step = "скажи «продолжи» — подхвачу с этого места"
+        return {
+            "reason": "go-phase",
+            "line": f"Остановились на этапе «{name}»: {who}.",
+            "next": step,
+            "evidence": {"state": str(project / RUN / "state.json"),
+                         "phase": phase},
+        }
+
+    spec = run_spec(project)
+    if spec is not None:
+        return {
+            "reason": "go-spec",
+            "line": "Спека написана, стройка не начиналась.",
+            "next": "скажи «продолжи» — разобью работу на части и начну строить",
+            "evidence": {"spec": str(spec)},
+        }
+
     specs = find_specs(project)
     if not specs:
         return {
             "reason": "no-spec",
             "line": "Работа ещё не начата: ни одной спеки нет.",
             "next": "скажи, что хочешь построить — это начнёт /go",
-            "evidence": {"specs_dir": str(project / ".claude" / "specs")},
+            "evidence": {"run_dir": str(project / RUN),
+                         "specs_dir": str(project / ".claude" / "specs")},
         }
 
     newest = specs[0]

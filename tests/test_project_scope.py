@@ -25,7 +25,7 @@ import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from paths import PKG, REPO, skill_text  # noqa: E402
+from paths import PKG, REPO, at, skill_text  # noqa: E402
 
 ENABLE = PKG / "tools" / "enable.py"
 _s = importlib.util.spec_from_file_location("ss_enable", ENABLE)
@@ -279,6 +279,47 @@ class TestPhaseOneReactsWhenEnablingFails(unittest.TestCase):
                       "фаза 1 не велит спросить человека, где его проект")
         self.assertIn("молча продолжать", текст,
                       "фаза 1 не запрещает молча продолжать после отказа")
+
+
+class TestPhaseZeroMarksTheProjectBeforeWritingAnything(unittest.TestCase):
+    """Защита от домашнего каталога стояла ПОСЛЕ первой записи на диск.
+
+    `enable.py` умеет отказать (см. `TestEnableRefusesTooBroadDirectories`), но
+    в фазе 0 его вызов стоял последним: до него успевали отработать
+    `mkdir -p .superstack` и `memory_file.py init`. Свежий чат десктопного
+    приложения живёт в $HOME — и новичок получал `.superstack/` и `CLAUDE.md`
+    прямо в домашней папке, а отказ приходил уже после. Сам отказ фаза при
+    этом никак не разбирала: код 4 не был назван, и агенту было нечего сказать
+    человеку.
+    """
+
+    ФАЗА = "0-завести.md"
+
+    def setUp(self):
+        self.текст = at("skills", "go", "phases", self.ФАЗА).read_text("utf-8")
+
+    def test_the_mark_comes_before_the_first_write_to_disk(self):
+        отметка = self.текст.find('tools/enable.py')
+        папка = self.текст.find("mkdir -p .superstack")
+        память = self.текст.find('memory_file.py" init')
+        self.assertNotEqual(отметка, -1, "фаза 0 вообще не зовёт enable.py")
+        self.assertNotEqual(папка, -1, "в фазе 0 нет создания .superstack")
+        self.assertNotEqual(память, -1, "в фазе 0 нет заведения файла памяти")
+        self.assertLess(отметка, папка,
+                        "заведение стоит после создания .superstack — отказ "
+                        "придёт, когда папка уже создана в домашнем каталоге")
+        self.assertLess(отметка, память,
+                        "заведение стоит после файла памяти — отказ придёт, "
+                        "когда CLAUDE.md уже написан в домашнем каталоге")
+
+    def test_the_phase_tells_the_human_what_a_refusal_means(self):
+        self.assertIn("Код 4", self.текст,
+                      "фаза 0 не разбирает код отказа — агент пойдёт дальше")
+        self.assertIn("домашняя папка", self.текст,
+                      "человеку не сказано простыми словами, что это его "
+                      "домашняя папка, а не папка проекта")
+        self.assertIn("открыть чат в папке самого проекта", self.текст,
+                      "не назван следующий шаг для человека")
 
 
 class TestHooksAreSilentInForeignProjects(unittest.TestCase):

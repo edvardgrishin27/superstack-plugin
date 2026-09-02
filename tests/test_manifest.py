@@ -281,6 +281,51 @@ class TestExitCodesSeparateTheThreeAnswers(Base):
         self.assertEqual(self._run("нетакой", "m.json").returncode, 3)
 
 
+class TestInitDoesNotEraseAStartedProject(Base):
+    """Второй «хочу сайт» в той же папке обнулял вчерашние требования молча.
+
+    `init` собирал пустой манифест, не глядя, лежит ли уже файл. Новичок,
+    сказавший ту же фразу на второй день, получал ноль требований там, где
+    вчера был десяток, — и принимал это за нормальное начало.
+    """
+
+    def _run(self, *args):
+        env = {**os.environ, "SUPERSTACK_IGNORE_PAUSE": "1",
+               "PYTHONDONTWRITEBYTECODE": "1", "NO_COLOR": "1"}
+        return subprocess.run([sys.executable, str(MANIFEST), *args],
+                              cwd=str(self.dir), capture_output=True,
+                              text=True, timeout=120, env=env)
+
+    def setUp(self):
+        super().setUp()
+        self.f = self.dir / "m.json"
+        self.assertEqual(self._run("init", "m.json", "brief.md").returncode, 0)
+        self._run("add", "m.json", "R01",
+                  "--quote", "принимает заявки на ремонт техники")
+        self.было = self.f.read_bytes()
+
+    def test_a_second_init_refuses_and_leaves_the_file_untouched(self):
+        p = self._run("init", "m.json", "brief.md")
+        self.assertNotEqual(p.returncode, 0,
+                            "заведение поверх начатого прошло как обычное")
+        self.assertEqual(p.returncode, mf.ЗАНЯТО, p.stderr[-300:])
+        self.assertEqual(self.f.read_bytes(), self.было,
+                         "вчерашние требования переписаны")
+
+    def test_fresh_puts_a_copy_aside_before_it_overwrites(self):
+        p = self._run("init", "m.json", "brief.md", "--fresh")
+        self.assertEqual(p.returncode, 0, p.stderr[-300:])
+        копии = [x for x in self.dir.glob("m.json.*.bak")]
+        self.assertEqual(len(копии), 1, "копия прежнего рядом не появилась")
+        self.assertEqual(копии[0].read_bytes(), self.было,
+                         "отложено не то, что лежало")
+        self.assertIn(копии[0].name, p.stderr,
+                      "куда положена копия — не сказано")
+        self.assertEqual(
+            json.loads(self.f.read_text("utf-8"))["requirements"], [],
+            "--fresh не завёл заново")
+
+
 class TestMarkdownIsForTheHuman(Base):
 
     def test_dropped_row_shows_the_humans_words(self):

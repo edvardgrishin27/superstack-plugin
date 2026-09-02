@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Тесты новичковых скиллов: /what, /oops, /fix.
+"""Тесты новичковых скиллов: /what, /oops, /fix, /stop, /change.
 
 Что держат эти тесты.
 
@@ -131,9 +131,13 @@ class TestSkillsPassTheGate(unittest.TestCase):
         v = self._review("stop")
         self.assertEqual(v["status"], "clean", msg=json.dumps(v, ensure_ascii=False))
 
+    def test_change_is_clean(self):
+        v = self._review("change")
+        self.assertEqual(v["status"], "clean", msg=json.dumps(v, ensure_ascii=False))
+
     def test_frontmatter_name_is_literal(self):
         """Карта плана ищет буквально «name: what» / «name: oops» / «name: fix»."""
-        for name in ("what", "oops", "fix", "stop"):
+        for name in ("what", "oops", "fix", "stop", "change"):
             text = (SKILLS / name / "SKILL.md").read_text(encoding="utf-8")
             with self.subTest(skill=name):
                 self.assertIn(f"name: {name}", text)
@@ -143,7 +147,7 @@ class TestSkillsPassTheGate(unittest.TestCase):
     def test_description_names_a_trigger_not_a_function(self):
         """«Когда брать», а не «что делает» — проверяется тем же check_when,
         которым живёт настоящий гейт, не отдельной эвристикой теста."""
-        for name in ("what", "oops", "fix", "stop"):
+        for name in ("what", "oops", "fix", "stop", "change"):
             s = skill_test.load(SKILLS / name, skill_test.LISTING_BUDGET_CHARS,
                                 PKG)
             c = skill_test.check_when(s)
@@ -232,7 +236,7 @@ class TestGateHasARedPair(unittest.TestCase):
         return dst_dir
 
     def test_broken_tool_path_fails_the_gate(self):
-        for name in ("what", "oops", "fix", "stop"):
+        for name in ("what", "oops", "fix", "stop", "change"):
             with self.subTest(skill=name):
                 dst = self._copy_skill_with_broken_path(name)
                 s = skill_test.load(dst, skill_test.LISTING_BUDGET_CHARS, self.root)
@@ -349,6 +353,42 @@ class TestWhatPriority(WhatFixture):
             with self.subTest(кусок=кусок):
                 self.assertNotIn(кусок, r["next"])
                 self.assertNotIn(кусок, r["line"])
+
+
+class TestWhatReadsTheRunWhereGoWritesIt(WhatFixture):
+    """`/what` смотрит туда, куда `/go` пишет, — в `.superstack/`.
+
+    Красная пара к находке: `.claude/specs/` не пишет ни один инструмент
+    системы, и пока это была единственная папка, на второй день после полного
+    прогона человек слышал «работа ещё не начата». Ожидание собрано по
+    условию задачи: этап «Проверяем», ход на системе — и обе половины ответа
+    (строка состояния и её отсутствие в прежней форме) проверяются вместе,
+    потому что «назвал этап» и «перестал врать про начало» — разные утверждения.
+    """
+
+    def test_the_recorded_phase_is_reported_instead_of_work_not_started(self):
+        run = self.project / ".superstack"
+        run.mkdir(parents=True)
+        (run / "state.json").write_text(json.dumps({
+            "schema": "superstack.progress.v1",
+            "phase": {"name": "Проверяем", "owner": "система",
+                      "detail": "запускаю проверки",
+                      "since": "2026-09-02T00:00:00+00:00"},
+        }, ensure_ascii=False), encoding="utf-8")
+
+        p = subprocess.run(
+            [sys.executable, str(TOOLS / "what.py"), str(self.project)],
+            capture_output=True, text=True, timeout=30,
+            env={**ENV, "HOME": str(self.home)})
+        self.assertEqual(p.returncode, 0, p.stderr)
+
+        строка = json.loads(p.stdout)["line"]
+        self.assertIn("Проверяем", строка)
+        self.assertNotIn("не начата", строка)
+        # То же самое человек читает глазами, а не в JSON: проверять только
+        # поле значило бы разрешить расхождение между ними.
+        self.assertIn("Проверяем", p.stderr)
+        self.assertNotIn("не начата", p.stderr)
 
 
 class TestWhatCLI(WhatFixture):
@@ -594,9 +634,10 @@ class TestOopsUndoFailsHonestly(OopsFixture):
 
     def test_undo_failure_without_a_caught_exception_does_not_say_none(self):
         """crash остаётся None, когда apply.cmd_undo() вернула 1 БЕЗ
-        исключения — у неё всего два выхода (проверено чтением: ранний
-        `return 1`, когда bdir.is_dir() ложно, и финальный `return 0`), и
-        этот путь не бросает ничего, что ловит except выше. Достижимо это
+        исключения — у неё три выхода (проверено чтением: ранний `return 1`,
+        когда bdir.is_dir() ложно, `return UNDO_NOTHING_RESTORED` (код 5,
+        разобран отдельной веткой выше) и финальный `return 0`), и ни один
+        из них не бросает того, что ловит except выше. Достижимо это
         гонкой: describe() сказала found=True, а к моменту вызова undo()
         каталог отката исчез. Гонка смоделирована без потока — describe()
         подменена на синтетический found=True для id, которого на диске
@@ -679,7 +720,9 @@ class TestFixOrderedChain(FixFixture):
         (root / "hooks" / "verify-gate.py").unlink()
         v = fix_mod.diagnose()
         self.assertEqual(v["status"], "broken")
-        self.assertEqual(v["link"], "подключение хуков")
+        # Ожидание менялось вместе с механизмом: звено называлось человеку
+        # «подключение хуков» — словом из словаря, которого он не знает.
+        self.assertEqual(v["link"], "автоматические проверки")
         self.assertEqual(v["broken_index"], 3)
 
     def test_pause_flag_is_reported_as_a_link(self):
@@ -689,7 +732,15 @@ class TestFixOrderedChain(FixFixture):
         v = fix_mod.diagnose()
         self.assertEqual(v["status"], "broken")
         self.assertEqual(v["link"], "пауза")
-        self.assertEqual(v["next"], "sh tools/pause.sh off")
+        # Ожидание менялось вместе с механизмом: раньше здесь стояла
+        # команда оболочки `sh tools/pause.sh off`. Целевой человек не
+        # разработчик — команду он не наберёт, а /stop снимает паузу с
+        # фразы. Ни «sh », ни «.sh», ни «python3 » в ответе быть не может.
+        self.assertEqual(v["next"],
+                         "скажи «включи» или позови /stop — сама пауза не пройдёт")
+        for запрет in ("sh ", ".sh", "python3 "):
+            self.assertNotIn(запрет, v["next"],
+                             "человеку снова подсовывают команду терминала")
 
     def test_unwritable_state_is_the_last_link(self):
         self.make_healthy_root()
@@ -724,6 +775,32 @@ class TestFixOrderedChain(FixFixture):
         self.assertNotIn("баг", text.lower())
 
 
+class TestFixSpeaksToANonDeveloper(unittest.TestCase):
+    """Строки звеньев читает тот, кто пришёл со словами «что-то сломалось».
+
+    Скилл /fix прямо говорит, кто это: человек, который «не знает слова
+    «хук»». Ровно это слово и стояло в двух строках, которые он видит на
+    экране, — в имени звена «подключение хуков» и в единственном совете
+    «переустанови плагин — хук ссылается на файл, которого нет».
+
+    Проверяется машиной, а не вычиткой: чтобы заметить непонятное слово,
+    нужно перестать его понимать, и автору строки это недоступно. Список
+    слов лежит данными (`data/plain-ru.json`), сверяет его `plain_ru.py` —
+    тот же прибор, которым система проверяет любую другую строку человеку.
+    """
+
+    def test_no_link_speaks_jargon_to_the_human(self):
+        ru = _load("ss_novice_plain_ru", TOOLS / "plain_ru.py")
+        for link_id, label, _fn, next_step in fix_mod.LINKS:
+            for где, текст in (("имя звена", label), ("совет", next_step)):
+                with self.subTest(звено=link_id, где=где):
+                    нашлось = ru.find_jargon(текст)
+                    self.assertEqual(
+                        нашлось, [],
+                        f"звено «{link_id}», {где}: человек прочтёт «{текст}»"
+                        f" — {[(w, b) for w, _s, b in нашлось]}")
+
+
 class TestFixCLI(FixFixture):
     def test_cli_exit_code_matches_status(self):
         self.make_healthy_root()
@@ -738,6 +815,107 @@ class TestFixCLI(FixFixture):
         out = json.loads(p.stdout)
         self.assertEqual(p.returncode, 0 if out["status"] == "ok" else 1)
 
+
+
+# ============================================================================
+# 6. МАЛАЯ ПРАВКА ГОТОВОГО ПРОДУКТА — /change
+# ============================================================================
+class TestSmallEditHasItsOwnRoute(unittest.TestCase):
+    """«Добавь кнопку отмены записи» шло мимо системы целиком.
+
+    /go — про новое и крупное, /fix — про поломки самой системы, и между ними
+    маршрута не было: правку в готовом продукте модель делала руками. Без
+    снимка до — возвращать некуда; без проверки — «готово» говорится раньше,
+    чем проверено; без снимка после — «верни как было» возвращает не к правке,
+    а к тому, что было до неё.
+
+    Здесь заперты два утверждения, и оба про поведение, а не про наличие файла.
+
+    ПЕРВОЕ — скилл выбирается на живых словах человека и не перехватывает
+    чужие. Пересечение описаний считается В ОБЕ СТОРОНЫ: односторонняя проверка
+    пропустила бы обратный захват, когда /change тянет на себя «хочу сайт».
+    Список фраз собран по условию задачи вручную, а не переписан из
+    проверяемых описаний, — иначе тест подтверждал бы сам себя.
+
+    ВТОРОЕ — ВЗАИМНЫЙ ПОРЯДОК трёх команд, а не их присутствие. Все три могут
+    стоять в файле и не образовывать маршрута: два снимка подряд, а проверка
+    после них, — и «готово» снова опережает результат.
+    """
+
+    #: Живые фразы, которыми человек зовёт каждый из трёх скиллов.
+    ФРАЗЫ = {
+        "change": ("поправь", "добавь кнопку", "измени цвет", "убери поле",
+                   "переименуй"),
+        "go": ("хочу сайт", "сделай приложение", "нужен бот"),
+        "fix": ("не работает", "сломалось", "не запускается"),
+    }
+
+    def setUp(self):
+        self.текст = (SKILLS / "change" / "SKILL.md").read_text("utf-8")
+        self.описание = {}
+        for имя in self.ФРАЗЫ:
+            поля, _ = skill_test.parse_frontmatter(
+                (SKILLS / имя / "SKILL.md").read_text("utf-8"))
+            self.описание[имя] = (поля or {}).get("description", "").lower()
+
+    def test_the_description_carries_the_words_said_about_a_finished_product(self):
+        for слово in ("поправь", "добавь"):
+            with self.subTest(слово=слово):
+                self.assertIn(
+                    слово, self.описание["change"],
+                    f"фразы «{слово}» нет в description — скилл не подцепится "
+                    "там, где человек его как раз и зовёт")
+
+    def test_it_does_not_answer_to_what_go_and_fix_answer_to(self):
+        """Три описания обязаны быть непересекающимися по смыслу.
+
+        Совпавшая фраза-триггер — это не дубль в тексте, а развилка без
+        правила: два скилла отвечают на одни слова, и какой возьмётся,
+        решает случай.
+        """
+        for чужой in ("go", "fix"):
+            for фраза in self.ФРАЗЫ[чужой]:
+                with self.subTest(чужой=чужой, фраза=фраза):
+                    self.assertNotIn(
+                        фраза, self.описание["change"],
+                        f"«{фраза}» — повод для /{чужой}, а стоит в описании "
+                        "/change: малая правка перехватит чужой заход")
+            for фраза in self.ФРАЗЫ["change"]:
+                with self.subTest(чужой=чужой, фраза=фраза, сторона="обратно"):
+                    self.assertNotIn(
+                        фраза, self.описание[чужой],
+                        f"«{фраза}» — повод для /change, а стоит в описании "
+                        f"/{чужой}: заход на малую правку уедет не туда")
+
+    def test_the_snapshots_wrap_the_edit_with_the_check_between_them(self):
+        снимки = [m.start() for m in re.finditer(
+            r'"\$CLAUDE_PLUGIN_ROOT/tools/checkpoint\.py" \. snap ', self.текст)]
+        self.assertEqual(
+            len(снимки), 2,
+            f"снимков в скилле {len(снимки)}, а нужны два — до правки и после: "
+            "с одним «верни как было» вернёт не к правке")
+        проверка = self.текст.find('"$CLAUDE_PLUGIN_ROOT/tools/verify.py" .')
+        self.assertNotEqual(проверка, -1,
+                            "скилл не зовёт проверку — «готово» окажется "
+                            "утверждением, а не кодом возврата")
+        self.assertLess(снимки[0], проверка,
+                        "первый снимок стоит ПОСЛЕ проверки — возвращаться "
+                        "будет уже некуда")
+        self.assertLess(проверка, снимки[1],
+                        "оба снимка стоят до проверки — правка не проверена "
+                        "между ними, и второй снимок фиксирует непроверенное")
+
+    def test_every_tool_is_called_by_its_literal_path(self):
+        голые = []
+        for m in re.finditer(r"tools/[\w.-]+\.py", self.текст):
+            перед = self.текст[:m.start()]
+            if not (перед.endswith("$CLAUDE_PLUGIN_ROOT/")
+                    or перед.endswith("${CLAUDE_PLUGIN_ROOT}/")):
+                голые.append(self.текст[max(0, m.start() - 30):m.end()])
+        self.assertEqual(
+            голые, [],
+            "инструмент назван без литерального пути от корня пакета — в "
+            f"установленной раскладке такой вызов не найдёт файл: {голые}")
 
 if __name__ == "__main__":
     unittest.main()

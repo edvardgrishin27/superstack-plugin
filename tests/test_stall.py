@@ -497,6 +497,8 @@ class СторожЖивойЦикл(unittest.TestCase):
         self.проект = self.дом / "проект"
         self.проект.mkdir()
         self._proc = None
+        self._старый_home = os.environ.get("HOME")
+        os.environ["HOME"] = str(self.дом)
 
     def tearDown(self):
         if self._proc is not None and self._proc.poll() is None:
@@ -505,6 +507,10 @@ class СторожЖивойЦикл(unittest.TestCase):
                 self._proc.wait(timeout=5)
             except subprocess.TimeoutExpired:
                 self._proc.kill()
+        if self._старый_home is None:
+            os.environ.pop("HOME", None)
+        else:
+            os.environ["HOME"] = self._старый_home
         self.tmp.cleanup()
 
     def _watchdog(self, *флаги: str) -> tuple:
@@ -542,7 +548,7 @@ class СторожЖивойЦикл(unittest.TestCase):
 
         self.assertIsNone(self._proc.poll(), "сторож упал во время опроса волны")
 
-        снимок = json.loads((self.проект / ".superstack" / "stall-watch.json")
+        снимок = json.loads((wd._состояние(self.проект) / "stall-watch.json")
                             .read_text("utf-8"))
         self.assertEqual(снимок["код"], 1, снимок)
         self.assertIn("agent-a", снимок["когда_либо_застревали"])
@@ -558,6 +564,133 @@ class СторожЖивойЦикл(unittest.TestCase):
         self._proc = None  # --stop уже остановил процесс — tearDown его не трогает
         self.assertEqual(код, 1, текст)  # форензика: помнит, хоть сейчас и чисто
         self.assertIn("agent-a", текст)
+
+
+class ЖивЛиСторожНаWindows(unittest.TestCase):
+    """Вопрос «жив ли» не имеет права убивать того, о ком спрашивают.
+
+    Сигнал 0 есть только у POSIX. На Windows `os.kill` не спрашивает, а
+    завершает процесс: та же строка кода там превращает проверку живости
+    чужого сторожа в его убийство. Охрана была в двух копиях этого кода и
+    отсутствовала в единственной, которая едет к людям.
+
+    Проверяется подстановкой: настоящей Windows тут нет и не было.
+    """
+
+    class _ОС:
+        """Отвечает «Windows» на имя; `kill` звать здесь запрещено."""
+
+        name = "nt"
+
+        def kill(self, *a):
+            raise AssertionError("os.kill позван на Windows — это убийство, "
+                                 "а не вопрос")
+
+        def __getattr__(self, имя):
+            return getattr(os, имя)
+
+    def test_на_windows_живость_не_зовёт_os_kill(self):
+        было = wd.os
+        wd.os = self._ОС()
+        try:
+            self.assertTrue(wd._alive(999_999),
+                            "на Windows «не знаю» обязано читаться как «жив»")
+        finally:
+            wd.os = было
+
+
+class СессияЭтажомВыше(unittest.TestCase):
+    """Журналы сессии, открытой в РОДИТЕЛЬСКОЙ папке, принадлежат проекту.
+
+    Ровно ночная находка. Сессия строила `…/Super стэк/superstack`, а открыта
+    была в `…/Super стэк`: журналы легли в каталог по имени родительской
+    папки, поиск шёл по имени самой папки проекта — и находил ноль при 68
+    лежащих рядом. Сторож всю ночь показывал «агентов волны: 0».
+    """
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.дом = Path(self.tmp.name)
+        self._старый_home = os.environ.get("HOME")
+        os.environ["HOME"] = str(self.дом)
+
+    def tearDown(self):
+        if self._старый_home is None:
+            os.environ.pop("HOME", None)
+        else:
+            os.environ["HOME"] = self._старый_home
+        self.tmp.cleanup()
+
+    def test_журналы_родительской_сессии_видны_проекту(self):
+        родитель = self.дом / "рабочее"
+        проект = родитель / "проект"
+        проект.mkdir(parents=True)
+        волна(self.дом, родитель, {"a": ([bash("pytest tests/")] * 8, 0)})
+
+        найдено = st.подагенты(проект)
+        self.assertTrue(найдено, "журналы сессии, открытой этажом выше, "
+                                 "не найдены — сторож снова слеп")
+        self.assertEqual([f.name for f in найдено], ["agent-a.jsonl"])
+        self.assertEqual(st.проверить_все(проект)["код"], 0)
+
+
+class СторожНеТрогаетДеревоПроекта(unittest.TestCase):
+    """Файлы сторожа живут вне проекта, а «ноль журналов» называет место.
+
+    Снимок и pid писались в `.superstack/` проекта каждые 90 секунд — под
+    прогоном планки это меняло проверяемое дерево. И отдельно: «агентов
+    волны: 0» ничего не говорило о том, ГДЕ искали, а искали не там.
+    """
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.дом = Path(self.tmp.name)
+        self.проект = self.дом / "проект"
+        self.проект.mkdir()
+        self._proc = None
+
+    def tearDown(self):
+        if self._proc is not None and self._proc.poll() is None:
+            self._proc.terminate()
+            try:
+                self._proc.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                self._proc.kill()
+        self.tmp.cleanup()
+
+    def _watchdog(self, *флаги: str) -> tuple:
+        окружение = dict(os.environ, HOME=str(self.дом))
+        p = subprocess.run([sys.executable, str(TOOL_WATCHDOG), str(self.проект),
+                            *флаги], capture_output=True, text=True, timeout=30,
+                           env=окружение)
+        return p.returncode, p.stdout + p.stderr
+
+    def test_состояние_вне_дерева_и_check_называет_место_поиска(self):
+        окружение = dict(os.environ, HOME=str(self.дом))
+        self._proc = subprocess.Popen(
+            [sys.executable, str(TOOL_WATCHDOG), str(self.проект),
+             "--serve", "--interval", "1"],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=окружение)
+
+        код, текст = 4, ""
+        for _ in range(20):
+            код, текст = self._watchdog("--check")
+            if код == 0:
+                break
+            time.sleep(0.25)
+        self.assertEqual(код, 0, f"сторож не поднялся: {текст}")
+
+        следы = sorted(str(f) for f in self.проект.rglob("stall-watch.*"))
+        self.assertEqual(следы, [], "сторож пишет в дерево проекта под прогоном")
+
+        self.assertIn("журналов субагентов найдено: 0", текст)
+        self.assertIn(str(self.дом / ".claude" / "projects"), текст)
+
+        код, текст = self._watchdog("--stop")
+        self._proc = None
+        self.assertEqual(код, 2, текст)
+        self.assertIn("журналов субагентов видно 0", текст)
+        self.assertEqual(sorted(self.проект.rglob("stall-watch.*")), [])
 
 
 if __name__ == "__main__":

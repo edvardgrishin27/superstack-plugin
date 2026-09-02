@@ -280,28 +280,61 @@ def _sh(cmd: list, timeout: int, env: dict = None, cwd: Path = None) -> tuple:
 
 _COUNT = re.compile(r"(\d+) passed")
 _FAILED = re.compile(r"(\d+) failed")
+_FAILED_LINE = re.compile(r"^FAILED (\S+)", re.MULTILINE)
+
+#: Сколько имён упавших тестов попадает в строку ворот. Пять — потолок ради
+#: читаемости строки; остальные не исчезают, а называются числом.
+_NAMES_SHOWN = 5
+
+
+def _failed_names(out: str) -> list:
+    """Имена упавших тестов из строк «FAILED tests/...::...» вывода pytest.
+
+    Считается по ПОЛНОМУ выводу, а не по хвосту, который уходит в `output`:
+    сводка pytest печатается последней, но пять длинных имён в срез уже не
+    влезают, и имя пропало бы ровно тогда, когда упало не одно.
+    """
+    names = []
+    for m in _FAILED_LINE.finditer(out):
+        if m.group(1) not in names:
+            names.append(m.group(1))
+    return names
 
 
 def _suite(env: dict = None) -> tuple:
-    """(код, сколько прошло, сколько упало, хвост вывода)."""
+    """(код, сколько прошло, сколько упало, хвост вывода, имена упавших)."""
     code, out = _sh([sys.executable, "-m", "pytest", "tests/", "-q"],
                     SUITE_TIMEOUT, env)
     passed = int(_COUNT.search(out).group(1)) if _COUNT.search(out) else 0
     failed = int(_FAILED.search(out).group(1)) if _FAILED.search(out) else 0
-    return code, passed, failed, out[-1500:]
+    return code, passed, failed, out[-1500:], _failed_names(out)
 
 
 # --------------------------------------------------------------------------
 # ворота
 # --------------------------------------------------------------------------
 def gate_suite() -> dict:
-    code, passed, failed, tail = _suite()
+    """Красное без имени — не диагноз.
+
+    Строка «упало 1 из 1939» за одну ночь встретилась дважды, и оба раза набор
+    приходилось гонять заново только затем, чтобы узнать, ЧТО упало. Имена
+    берутся из вывода того же прогона — второй раз спрашивать не о чем.
+    """
+    code, passed, failed, tail, names = _suite()
     if code == 0 and passed:
         return {"status": "pass", "detail": f"{passed} тестов зелёные"}
     if code in (124, 127):
         return {"status": "unknown", "detail": tail.strip()[:300]}
-    return {"status": "fail", "detail": f"упало {failed} из {passed + failed}",
-            "output": tail}
+    detail = f"упало {failed} из {passed + failed}"
+    показаны = names[:_NAMES_SHOWN]
+    if показаны:
+        # Пусто бывает честно: набор упал не на тесте (ошибка сбора, обрыв),
+        # и выдумывать имя тут нечем — тогда остаётся число и хвост вывода.
+        detail += ": " + ", ".join(показаны)
+        if len(names) > len(показаны):
+            detail += f" и ещё {len(names) - len(показаны)}"
+    return {"status": "fail", "detail": detail, "output": tail,
+            "failed_tests": names}
 
 
 def gate_hermetic() -> dict:
@@ -312,8 +345,8 @@ def gate_hermetic() -> dict:
     отчитываться им нельзя.
     """
     with tempfile.TemporaryDirectory() as a, tempfile.TemporaryDirectory() as b:
-        ca, pa, fa, _ = _suite({"HOME": a})
-        cb, pb, fb, _ = _suite({"HOME": b})
+        ca, pa, fa, _, _ = _suite({"HOME": a})
+        cb, pb, fb, _, _ = _suite({"HOME": b})
     if 124 in (ca, cb):
         return {"status": "unknown", "detail": "прогон не завершился"}
     if pa != pb or fa != fb:
@@ -378,6 +411,13 @@ def gate_mutations() -> dict:
         v["subset"] = True
         v["detail"] = (f"{v['detail']} — ВЫБОРКА {len(picked)} из {total}, "
                        "остальные не проверялись")
+        if v["status"] == "pass":
+            # Пометки в detail не хватало: код возврата её не читает. Полный
+            # прогон с `--mutation X` возвращал ноль, проверив одну поломку из
+            # пятисот, и это неотличимо от взятой планки. «partial» — не провал
+            # и не пропуск: проверенное проверено, но планка на нём не берётся.
+            # Выборка, которая УПАЛА, остаётся провалом: там доказано большее.
+            v["status"] = "partial"
     return v
 
 
@@ -753,7 +793,13 @@ def gate_plan() -> dict:
 
 #: Точки, из которых Claude Code вообще что-либо запускает. Всё остальное —
 #: библиотеки, до которых надо дотянуться отсюда.
-ENTRY_GLOBS = ("*/skills/**/*.md", "*/hooks/*.sh", "*/hooks/*.json",
+#:
+#: Хуки перечислены по `*.py`, и это не косметика. Хуки переехали на Python,
+#: `hooks.json` зовёт только `.py`, а оставшиеся рядом `.sh` — обёртки в одну
+#: строку, которые продукт не запускает ниоткуда. Считая входом обёртку,
+#: ворота мерили достижимость от мёртвой точки: то, что держалось на ней
+#: одной, числилось подключённым и не запускалось никогда.
+ENTRY_GLOBS = ("*/skills/**/*.md", "*/hooks/*.py", "*/hooks/*.json",
                "*/agents/*.md", "*/commands/*.md")
 
 
@@ -928,10 +974,16 @@ def gate_wiring() -> dict:
             return {"status": "unknown",
                     "detail": f"список точек входа не разобран: {e}"}
 
+    # Проза вырезается тем же прибором, что у ворот «план». Упоминание имени
+    # в комментарии или докстринге доказывает, что про инструмент НАПИСАЛИ, а
+    # не что его откуда-то зовут. Живой случай: `lint_rules.py` встречался в
+    # пакете ровно один раз — в докстринге соседнего инструмента — и ворота
+    # считали его достижимым. Для .md вырезать нечего: там текст и есть
+    # артефакт, и это ограничение названо, а не замаскировано.
     text = {}
     for f in entries + tools:
         try:
-            text[f] = f.read_text("utf-8", errors="replace")
+            text[f] = executable_text(f)
         except OSError:
             text[f] = ""
 
@@ -950,10 +1002,16 @@ def gate_wiring() -> dict:
         Обратная ошибка тоже возможна и хуже: искать голое имя без границ
         значило бы считать вызовом любое упоминание в комментарии. Поэтому
         импорт распознаётся формой оператора, а не подстрокой.
+
+        Ровно эта обратная ошибка тут и стояла: путь искался вхождением
+        `имя in где`, и `doctor.py` числился достижимым, потому что входит в
+        `project_doctor.py`. Граница берётся с обеих сторон. Слева `/` — это
+        разделитель пути, и `tools/learn.py` остаётся вызовом; буква, `_`,
+        `-` и точка слева означают уже другое имя.
         """
-        if имя in где:
-            return True
         мод = имя[:-3]
+        if re.search(rf"(?<![\w.-]){re.escape(имя)}(?![\w-])", где):
+            return True
         return re.search(rf"^\s*(?:import|from)\s+{re.escape(мод)}\b",
                          где, re.M) is not None
 
@@ -1231,18 +1289,26 @@ def run(only: str = None, quick: bool = False) -> dict:
     red = [g for g in gates if g["status"] == "fail"]
     grey = [g for g in gates if g["status"] == "unknown"]
     skipped = [g for g in gates if g["status"] == "skipped"]
+    # Ворота, прогнанные по выборке. Отдельно от «не запускалось»: там не
+    # запускалось ничего, здесь запустилась часть — и обе версии одинаково
+    # не дают права сказать «взято».
+    partial = [g for g in gates if g["status"] == "partial"]
 
     if red:
         nxt = _next_step(red[0])
     elif grey:
         nxt = f"не проверено: {grey[0]['gate']} — {grey[0]['detail']}"
+    elif partial:
+        nxt = ("проверена только выборка: " + ", ".join(g["gate"] for g in partial)
+               + " — прогнать без --mutation, прежде чем объявлять готово")
     elif skipped:
         nxt = ("не запускалось: " + ", ".join(g["gate"] for g in skipped)
                + " — прогнать планку целиком, прежде чем объявлять готово")
     else:
         nxt = "планка взята"
 
-    return {"bar": "superstack", "done": not red and not grey and not skipped,
+    return {"bar": "superstack",
+            "done": not red and not grey and not skipped and not partial,
             "gates": gates, "next": nxt}
 
 
@@ -1256,7 +1322,8 @@ def _next_step(g: dict) -> str:
     return f"починить: {g['gate']} — {g['detail']}"
 
 
-MARK = {"pass": "+", "fail": "x", "unknown": "?", "skipped": "-"}
+MARK = {"pass": "+", "fail": "x", "unknown": "?", "skipped": "-",
+        "partial": "/"}
 
 
 def human(v: dict) -> str:
@@ -1354,7 +1421,8 @@ def main() -> int:
     code = 0
     if any(g["status"] == "fail" for g in v["gates"]):
         code = 1
-    elif any(g["status"] in ("unknown", "skipped") for g in v["gates"]):
+    elif any(g["status"] in ("unknown", "skipped", "partial")
+             for g in v["gates"]):
         code = 2
     _log_event("gauntlet", "запуск", "планка взята" if v["done"] else "планка не взята",
                duration_ms=(time.monotonic() - _t0) * 1000, exit_code=code)
