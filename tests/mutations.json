@@ -1644,9 +1644,9 @@
   {
    "id": "sync.readme-stays-behind",
    "file": "tools/sync_public.py",
-   "find": "\".superstack\", \"README.md\")",
+   "find": "\".superstack\", \"README.md\", \"README.ru.md\")",
    "replace": "\".superstack\")",
-   "why": "README перестаёт переноситься — витрина отстаёт от кода и продолжает велеть то, что уже не работает; так публичный файл несколько заходов советовал `/plugin install`, которого на десктопе нет"
+   "why": "обе половины витрины перестают переноситься — она отстаёт от кода и продолжает велеть то, что уже не работает; так публичный файл несколько заходов советовал `/plugin install`, которого на десктопе нет"
   },
   {
    "id": "sync.file-entry-crashes-carry",
@@ -2575,8 +2575,8 @@
   {
    "id": "sync.bar-not-carried",
    "file": "tools/sync_public.py",
-   "find": "\".github\", \".superstack\", \"README.md\")",
-   "replace": "\".github\", \"README.md\")",
+   "find": "\".github\", \".superstack\", \"README.md\", \"README.ru.md\")",
+   "replace": "\".github\", \"README.md\", \"README.ru.md\")",
    "why": "каталог с уликой не переносится в публичное дерево: у себя зелёное, у людей красное — механизм есть в карте и отсутствует в выложенном"
   },
   {
@@ -3079,9 +3079,9 @@
   {
    "id": "sync.readme-refresh-always-succeeds",
    "file": "tools/sync_public.py",
-   "find": "    if not заменено:\n        return False\n    p.write_text(t, encoding=\"utf-8\")\n    return True",
-   "replace": "    p.write_text(t, encoding=\"utf-8\")\n    return True",
-   "why": "витрина отчитывается «обновлено», когда не совпала ни одна из трёх подстановок: механизм «витрина не врёт» выключается молча, а числа прошлого релиза уезжают в публичное дерево как измеренные"
+   "find": "        if not заменено:\n            return False\n        p.write_text(t, encoding=\"utf-8\")\n        обновлено += 1",
+   "replace": "        p.write_text(t, encoding=\"utf-8\")\n        обновлено += 1",
+   "why": "витрина отчитывается «обновлено», когда в ней не совпала ни одна подстановка: механизм «витрина не врёт» выключается молча, а числа прошлого релиза уезжают в публичное дерево как измеренные. С двумя витринами цена выше — молчание одной половины прикрывается успехом другой"
   },
   {
    "id": "sync.description-patch-not-checked",
@@ -3891,17 +3891,45 @@
   },
   {
    "id": "readme.install-text-promises-any-agent",
-   "file": "README.md",
+   "file": "README.ru.md",
    "find": "Плагин работает только в Claude Code. Вставьте этот текст своему Claude Code,\nон всё сделает сам:",
    "replace": "Вставьте этот текст своему агенту — Claude Code, Cursor, Codex. Он всё сделает сам:",
    "why": "витрина снова обещает, что текст установки годится любому агенту. Команд `claude plugin …` нет нигде, кроме Claude Code: человек получает отказ на первом же шаге и читает его как поломку продукта, а не как чужой инструмент"
   },
   {
    "id": "readme.summary-line-loses-the-shape-the-sync-rewrites",
-   "file": "README.md",
+   "file": "README.ru.md",
    "find": ", все ловятся · ",
    "replace": ", все ловятся, ",
    "why": "строка-сводка расходится с подстановкой в tools/sync_public.py — замена перестаёт совпадать, и витрина навсегда показывает числа прошлого релиза. Поломка молчаливая: скрипт отчитывается об успехе по другим заменам"
+  },
+  {
+   "id": "sync.english-showcase-not-refreshed",
+   "file": "tools/sync_public.py",
+   "find": "        (r\"^\\d+ tests · \\d+ mutations, all caught · \\d+ mechanisms\\.\",\n         f'{tests} tests · {nums[\"mutations\"]} mutations, all caught · '\n         f'{nums[\"mechanisms\"]} mechanisms.', re.M),\n",
+   "replace": "",
+   "why": "выкладка перестаёт переписывать числа в АНГЛИЙСКОЙ витрине, а она главная: её видят со всего мира и на неё ведёт переключатель языка. Русская при этом обновляется, скрипт печатает «обновлено», и расхождение половин заметит только тот, кто откроет обе"
+  },
+  {
+   "id": "sync.russian-showcase-not-carried",
+   "file": "tools/sync_public.py",
+   "find": "\".superstack\", \"README.md\", \"README.ru.md\")",
+   "replace": "\".superstack\", \"README.md\")",
+   "why": "русская половина витрины остаётся в приватном дереве: в публичном переключатель языка первой строкой ведёт на файл, которого там нет, и человек с рабочей на вид ссылки попадает на 404"
+  },
+  {
+   "id": "sync.description-keeps-a-dangling-separator",
+   "file": "tools/sync_public.py",
+   "find": "    основа = ВИСЯЧИЙ.sub(\"\", ХВОСТ.sub(\"\", текущее or \"\")).strip()",
+   "replace": "    основа = ХВОСТ.sub(\"\", текущее or \"\").strip()",
+   "why": "после среза хвоста в конце текста человека остаётся его собственный разделитель, и склейка ставит рядом два знака: «9 ворот · — 1967 tests…». Ровно это и вышло на выкладке 0.10.0 — описание правили руками, то есть механизм отработал, а результат чинили глазами"
+  },
+  {
+   "id": "sync.description-tail-forgets-the-old-language",
+   "file": "tools/sync_public.py",
+   "find": "    r\"\\s*(?:—\\s*)?\\d+ (?:тестов · \\d+ мутаций · \\d+ механизмов\"\n    r\"|tests · \\d+ mutations · \\d+ mechanisms)\\.?\\s*$\")",
+   "replace": "    r\"\\s*(?:—\\s*)?\\d+ tests · \\d+ mutations · \\d+ mechanisms\\.?\\s*$\")",
+   "why": "срез хвоста перестаёт узнавать прежнюю русскую форму. Старый хвост остаётся, новый приписывается следом — в описании репозитория, которое видят раньше кода, оказываются два хвоста с разными числами"
   }
  ]
 }
