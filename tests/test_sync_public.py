@@ -200,6 +200,11 @@ class TestTheShowcaseIsBilingualAndBothHalvesShip(unittest.TestCase):
                         "# SUPERSTACK\n\nПро продукт, ни одного числа.\n")
         self.assertFalse(sp.refresh_readme(pub, self.ЧИСЛА, 1621))
 
+    def test_the_hero_image_is_carried_to_the_public_tree(self):
+        self.assertIn("assets", sp.CARRY,
+                      "картинки витрины не переносятся — README в публичном дереве "
+                      "ссылается на assets/superstack-hero.jpg, и обложка битая")
+
     def test_the_russian_half_is_carried_to_the_public_tree(self):
         self.assertIn("README.ru.md", sp.CARRY,
                       "русская витрина не переносится — переключатель языка на "

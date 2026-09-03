@@ -982,7 +982,7 @@
    "mechanism": "витрина выкладывается вместе с кодом и не отстаёт от него — обе её половины, английская и русская",
    "evidence": {
     "file": "tools/sync_public.py",
-    "contains": "\".superstack\", \"README.md\", \"README.ru.md\")"
+    "contains": "\"README.md\", \"README.ru.md\", \"assets\")"
    }
   },
   {
@@ -2878,6 +2878,15 @@
    "evidence": {
     "file": "tools/sync_public.py",
     "contains": "ВИСЯЧИЙ = re.compile(r\"[·—\\-:\\s]+$\")"
+   }
+  },
+  {
+   "id": "DIST.hero-ships",
+   "layer": "L0 рантайм",
+   "mechanism": "картинки витрины (assets/) выкладываются вместе с README — обложка в публичном дереве не битая",
+   "evidence": {
+    "file": "tools/sync_public.py",
+    "contains": "\"README.ru.md\", \"assets\")"
    }
   }
  ],

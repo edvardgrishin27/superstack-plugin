@@ -52,7 +52,7 @@ REPO = Path(__file__).resolve().parent.parent
 #: `/go`, падающий на первом гейте. Правки входа жили в приватном и не доезжали
 #: до тех, кто по ним ставит.
 CARRY = ("plugins", "tests", "tools", "data", ".claude-plugin",
-         ".github", ".superstack", "README.md", "README.ru.md")
+         ".github", ".superstack", "README.md", "README.ru.md", "assets")
 
 #: Длина, с которой строка начинает выглядеть как ключ для чужого сканера.
 LITERAL_LIMIT = 24

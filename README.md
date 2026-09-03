@@ -4,15 +4,17 @@
 
 **Say what you want built. Get a version whose "done" was closed by an exit code, not by a sentence in the chat.**
 
+<p align="center"><img src="assets/superstack-hero.jpg" alt="SUPERSTACK — the build is checked before it is called done" width="100%"></p>
+
 [![version](https://img.shields.io/badge/version-0.10.0-1f6feb)](.claude-plugin/marketplace.json)
-[![tests](https://img.shields.io/badge/tests-1969-2ea043)](tests)
-[![mutations](https://img.shields.io/badge/mutations-561-8957e5)](tests/mutations.json)
+[![tests](https://img.shields.io/badge/tests-1970-2ea043)](tests)
+[![mutations](https://img.shields.io/badge/mutations-562-8957e5)](tests/mutations.json)
 [![python](https://img.shields.io/badge/python-3.8%2B-3776ab)](#requirements-and-platforms)
 [![dependencies](https://img.shields.io/badge/dependencies-none-555555)](#under-the-hood)
 [![license](https://img.shields.io/badge/license-MIT-97ca00)](LICENSE)
 [![Claude Code plugin](https://img.shields.io/badge/Claude%20Code-plugin-d97757)](#quick-start)
 
-1969 tests · 561 mutations, all caught · 319 mechanisms.
+1970 tests · 562 mutations, all caught · 320 mechanisms.
 
 ## What this is
 
@@ -68,7 +70,7 @@ and answers with an exit code.
 downstream.
 
 **The plugin holds itself to the bar it sells.** Nine gates, and the harshest is
-mutation: **561 registered mutations** break the code on purpose, and every one
+mutation: **562 registered mutations** break the code on purpose, and every one
 of them must turn the suite red. A check that cannot fail is not a check.
 
 ## Quick start
