@@ -233,8 +233,6 @@ Version 0.10.0. All nine gates green on the tree this text ships from.
 
 Known **not** done, and said here rather than discovered later:
 
-- No live run with a newcomer who has never installed it. Everything about the
-  first-time experience is reasoning, not observation.
 - Windows has never been run live. See above.
 
 ## Contributing
