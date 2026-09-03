@@ -38,6 +38,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 
+import lang as языки  # noqa: E402
 import apply  # noqa: E402  — бэкапы/undo уже реализованы там, здесь не дублируются
 
 
@@ -239,10 +240,11 @@ def main() -> int:
             # руками. Настройки при этом не тронуты — этот код означает ровно
             # «ни одного файла не вернули», и обещать «проверь, что уже
             # обновилось» тут не нужно.
-            print(f"НЕ откатил «{backup_id}»: ни один файл не вернулся — в "
-                  f"копии вырезаны секреты, и возврат затёр бы живое значение "
-                  f"меткой. Копия: {apply.BACKUPS / backup_id} — нужные поля "
-                  f"верни руками. {_UNDO_FAILED_HINT}", file=sys.stderr)
+            # Язык берётся у прогона в текущей папке: /oops зовут из
+            # проекта, и отказ обязан читаться теми же словами, что отчёт.
+            print(языки.t("oops_not_undone", языки.read(Path.cwd()),
+                          id=backup_id, backup=apply.BACKUPS / backup_id)
+                  + f" {_UNDO_FAILED_HINT}", file=sys.stderr)
         else:
             # crash бывает None: у apply.cmd_undo() три выхода без исключения —
             # ранний return 1 (bdir.is_dir() ложно), UNDO_NOTHING_RESTORED

@@ -39,6 +39,9 @@
                             [--holdout "a;b"]  проверки, скрытые от исполнителя
                             [--criterion "что|где|высоко|низко[|мимо]"] — можно
                                               несколько раз; критерий с адресом
+  python3 progress.py lang  <файл> ru|en                на каком языке говорить
+                            с человеком: пишется один раз в фазе 0 по его
+                            первой фразе, читают все инструменты
   python3 progress.py debt  <файл> <вид> <текст>        вид: stub|assumption|env
   python3 progress.py debt  <файл> <вид> --none         смотрели, закрывать нечего
   python3 progress.py criteria <файл> строгие|свободные
@@ -105,6 +108,11 @@ EMPTY = {
     "debt_reviewed": {},
     "updated": None,
     "source": None,
+    # Язык, на котором с человеком разговаривают инструменты. Лежит рядом с
+    # этапом нарочно: это такой же факт прогона, и читается он оттуда же,
+    # откуда панель берёт, на чём мы остановились. None — язык не называли,
+    # и инструменты остаются на русском (tools/lang.py).
+    "lang": None,
 }
 
 
@@ -232,6 +240,41 @@ def save(path: Path, data: dict, now: "str | None" = None) -> None:
     tmp = path.with_suffix(path.suffix + ".tmp")
     tmp.write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
     os.replace(tmp, path)
+
+
+def снимок_на_панель(path: Path, data: dict) -> bool:
+    """Вписать снимок состояния в страницу панели рядом с файлом состояния.
+
+    Зачем это делает запись состояния, а не панель.
+
+    Страницу нельзя научить читать соседний файл с диска — браузер запрещает.
+    Значит панель без живого сервера показывала бы пустые полосы: «ничего не
+    происходит» вместо «нечего показывать». Она умирала вместе с процессом,
+    и назавтра по той же ссылке было пусто.
+
+    Поэтому состояние едет ВНУТРИ страницы, и вписывается ровно тогда, когда
+    меняется, — здесь. Открытый двойным кликом файл показывает последнюю
+    запись сразу, через месяц и на машине, где сервера не было вовсе; живой
+    сервер кладёт свежее поверх.
+
+    Отказ не молчит и не останавливает работу: ход работ записан — это
+    главное, а не вписанный снимок значит только, что страница отстала, и об
+    этом говорится вслух.
+    """
+    import importlib.util
+    tool = Path(__file__).resolve().parent / "live_panel.py"
+    try:
+        spec = importlib.util.spec_from_file_location("ss_live_panel_snap", tool)
+        if spec is None or spec.loader is None:
+            raise ImportError(f"не загружается: {tool}")
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        mod.embed_state(path.parent, data)
+        return True
+    except (OSError, ValueError, ImportError, AttributeError, KeyError) as e:
+        print(f"НЕ ВПИСАЛ снимок в панель ({tool.name}: {e}) — ход работ "
+              "записан, но страница на диске осталась прежней", file=sys.stderr)
+        return False
 
 
 #: Код отказа «здесь уже начата работа». Ноль здесь означал бы «завёл», а
@@ -576,6 +619,259 @@ def summary(data: dict) -> dict:
     }
 
 
+# --------------------------------------------------------------------------
+# факты для панели: каждое число — из файла, который его записал
+# --------------------------------------------------------------------------
+#
+# Панель показывает десятки чисел, и у каждого есть ровно один способ стать
+# неправдой — быть вписанным моделью «по смыслу». Поэтому числа считаются
+# ЗДЕСЬ, из четырёх файлов на диске: ход стройки (этот файл), требования
+# человека (manifest.json), последняя проверка (verify-last.json) и снимки
+# (checkpoint.py). Чего в файлах нет — того нет и на экране: пустое место с
+# подписью честнее правдоподобной цифры.
+
+#: Наша шкала размера работы — по числу частей, а не по строкам кода и не по
+#: часам. Человеку нужен масштаб («это комната, а не дом»), и назвать его
+#: можно только тем, что уже посчитано.
+РАЗМЕРЫ = ((1, "size_shelf"), (3, "size_room"), (8, "size_flat"))
+РАЗМЕР_БОЛЬШЕ = "size_house"
+
+#: Виды требований, у которых левая колонка ведомости — ДОСЛОВНЫЕ слова
+#: человека. Остальное вывела система, и это обязано быть помечено: чужая
+#: догадка, поданная как просьба человека, — самая тихая подмена в продукте.
+СЛОВА_ЧЕЛОВЕКА = ("explicit", "answer")
+
+#: Сколько строк ведомости и событий показывать. Ограничение не косметика:
+#: страница на шестьдесят требований перестаёт читаться целиком, и человек
+#: видит не больше, а меньше. Сколько строк скрыто — говорится вслух.
+СТРОК_ВЕДОМОСТИ = 12
+СОБЫТИЙ = 6
+
+
+def _подгрузить(имя: str, псевдоним: str):
+    """Соседний инструмент по пути. Отказ — исключение, а не пустой ответ."""
+    import importlib.util
+    p = Path(__file__).resolve().parent / имя
+    spec = importlib.util.spec_from_file_location(псевдоним, p)
+    if spec is None or spec.loader is None:
+        raise ImportError(f"не загружается: {p}")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def требования(run_dir: Path) -> list:
+    """Требования человека — из файла, который их записывал.
+
+    Читается ФАЙЛ, а не поле состояния: числа покрытия раньше приезжали в
+    состояние отдельной командой `req --total N --covered N`, то есть их
+    вписывал тот же, кто отчитывался о работе. Пропущенная команда молча
+    оставляла вчерашние числа, а опечатка в ней не ловилась ничем.
+    """
+    try:
+        d = json.loads((run_dir / "manifest.json").read_text("utf-8"))
+    except (OSError, ValueError):
+        return []
+    reqs = d.get("requirements")
+    return reqs if isinstance(reqs, list) else []
+
+
+def _покрытие(reqs: list) -> dict:
+    """Сколько из просьбы закрыто. Снятое не считается ни туда, ни сюда."""
+    def сколько(*статусы):
+        return sum(1 for r in reqs if r.get("status") in статусы)
+    снято = сколько("dropped")
+    return {"total": len(reqs), "done": сколько("done"),
+            "live": len(reqs) - снято, "dropped": снято,
+            "deferred": сколько("deferred")}
+
+
+def _размер(частей: int) -> "str | None":
+    if частей <= 0:
+        return None
+    for предел, ключ in РАЗМЕРЫ:
+        if частей <= предел:
+            return ключ
+    return РАЗМЕР_БОЛЬШЕ
+
+
+def проверка(run_dir: Path) -> "dict | None":
+    """Последняя проверка: код возврата и, если его считали, число тестов.
+
+    Число тестов показывается ТОЛЬКО когда оно записано. Посчитать его «по
+    смыслу» здесь ничего не стоит, и именно поэтому нельзя: цифра рядом с
+    кодом возврата читается как измеренная.
+    """
+    try:
+        d = json.loads((run_dir / "verify-last.json").read_text("utf-8"))
+    except (OSError, ValueError):
+        return None
+    code = d.get("exit_code") if isinstance(d, dict) else None
+    if not isinstance(code, int):
+        return None
+    tests = d.get("tests")
+    return {"exit_code": code,
+            "tests": tests if isinstance(tests, int) else None,
+            "at": d.get("updated") or d.get("at") or None}
+
+
+def снимки(root: Path) -> list:
+    """Снимки прогона — у того, кто их делает, а не по своей памяти о них.
+
+    Отказ не молчит: панель без снимков и панель, которой их не отдали, — два
+    разных утверждения, и второе обязано быть слышно тому, кто её собирает.
+    """
+    try:
+        mod = _подгрузить("checkpoint.py", "ss_checkpoint_facts")
+    except (OSError, ValueError, ImportError) as e:
+        print(f"НЕ СМОГ прочитать снимки (checkpoint.py: {e}) — на панели их "
+              "не будет", file=sys.stderr)
+        return []
+    try:
+        return mod.список(root).get("снимки") or []
+    except (OSError, ValueError, AttributeError, mod.НетGit) as e:
+        print(f"НЕ СМОГ прочитать снимки ({e}) — на панели их не будет",
+              file=sys.stderr)
+        return []
+
+
+def _снимок_части(снимки_: list, имя: str) -> str:
+    """Снимок, подписанный этой частью работы. Нет — пусто, а не «наверное»."""
+    for с in снимки_:
+        if имя and имя in (с.get("этап") or ""):
+            return с.get("sha") or ""
+    return ""
+
+
+def _подтверждение(rid: str, tasks: list, статус: str, снимки_: list) -> dict:
+    """Правая колонка ведомости: чем машина подтвердила это требование.
+
+    Подтверждает только код возврата на части работы. Статус `done` в
+    требованиях ставит агент — это его слово, и оно попадает в «со слов», а не
+    в «доказано»: иначе ведомость двойной записи схлопывается в одну колонку,
+    где обещание подтверждает само себя.
+    """
+    свои = [t for t in tasks if rid in (t.get("requirements") or [])]
+    доказанные = [t for t in свои if t.get("status") == PROVEN]
+    if доказанные:
+        п = max(доказанные, key=lambda t: t.get("finished") or "")
+        return {"state": PROVEN, "code": п.get("exit_code"),
+                "at": п.get("finished"),
+                "sha": _снимок_части(снимки_, п.get("name") or "")}
+    if статус in ("dropped", "deferred"):
+        return {"state": статус}
+    if any(t.get("status") == RUNNING for t in свои):
+        return {"state": RUNNING}
+    if any(t.get("status") == CLAIMED for t in свои) or статус == "done":
+        return {"state": CLAIMED}
+    return {"state": WAITING}
+
+
+def ведомость(reqs: list, tasks: list, снимки_: list) -> list:
+    """Строки двойной записи: слева обещание, справа подтверждение."""
+    строки = []
+    for r in reqs:
+        вывод = r.get("kind") not in СЛОВА_ЧЕЛОВЕКА
+        строки.append({
+            "id": r.get("id") or "",
+            "quote": r.get("quote") or "",
+            "basis": r.get("basis") or "",
+            "inferred": вывод,
+            "parent": r.get("parent") or "",
+            **_подтверждение(r.get("id") or "", tasks, r.get("status") or "",
+                             снимки_),
+        })
+    return строки
+
+
+def _события(tasks: list, снимки_: list) -> list:
+    """Лента «что произошло» — только из того, что уже записано с временем."""
+    лента = []
+    for t in tasks:
+        имя = t.get("name") or t.get("id") or ""
+        статус = t.get("status")
+        if статус == PROVEN and t.get("finished"):
+            лента.append({"at": t["finished"], "key": "proven", "name": имя,
+                          "code": t.get("exit_code")})
+        elif статус == CLAIMED and t.get("finished"):
+            лента.append({"at": t["finished"], "key": "claimed", "name": имя})
+        elif статус == RUNNING and t.get("started"):
+            лента.append({"at": t["started"], "key": "started", "name": имя})
+    for с in снимки_:
+        лента.append({"at": с.get("когда"), "key": "snapshot",
+                      "name": с.get("этап") or "", "sha": с.get("sha") or ""})
+    лента = [e for e in лента if e.get("at")]
+    лента.sort(key=lambda e: e["at"], reverse=True)
+    return лента[:СОБЫТИЙ]
+
+
+def панель_факты(data: dict, run_dir: Path, phases: tuple) -> dict:
+    """Всё, что панель показывает числами, — посчитанное здесь и из файлов.
+
+    Порядок этапов приходит аргументом, а не заводится вторым списком рядом:
+    рисует их панель, и два списка разошлись бы молча — на экране осталось бы
+    «этап 7 из 10» при девяти этапах.
+    """
+    tasks = [t for w in (data.get("waves") or {}).values() for t in w]
+    сколько = {s: sum(1 for t in tasks if t.get("status") == s)
+               for s in TASK_STATES}
+    всего = len(tasks)
+    # Доля — ТОЛЬКО от доказанного. Заявленное идёт своей линейкой и своим
+    # числом; складывать их нельзя, и поэтому они здесь даже не рядом.
+    доказано = сколько[PROVEN]
+    названо = доказано + сколько[CLAIMED]
+    reqs = требования(run_dir)
+    снимки_ = снимки(run_dir.parent)
+    строки = ведомость(reqs, tasks, снимки_)
+    итого = {"proven": 0, "claimed": 0, "running": 0, "waiting": 0,
+             "dropped": 0, "deferred": 0}
+    for с in строки:
+        итого[с["state"]] = итого.get(с["state"], 0) + 1
+    имя_этапа = ((data.get("phase") or {}).get("name")) or ""
+    пройдено = phases.index(имя_этапа) if имя_этапа in phases else None
+    начали = sorted(t["started"] for t in tasks if t.get("started"))
+    долг = data.get("debt") or {}
+    return {
+        "parts": {
+            "proven": доказано, "claimed": сколько[CLAIMED],
+            "running": сколько[RUNNING], "waiting": сколько[WAITING],
+            "total": всего,
+            "percent_proven": round(100 * доказано / всего) if всего else None,
+            "percent_said": round(100 * названо / всего) if всего else None,
+            "said": названо, "gap": сколько[CLAIMED],
+            "size": _размер(всего),
+        },
+        "stages": {"done": пройдено, "now": None if пройдено is None
+                   else пройдено + 1, "total": len(phases)},
+        "requirements": _покрытие(reqs),
+        "ledger": строки[:СТРОК_ВЕДОМОСТИ],
+        "ledger_shown": min(len(строки), СТРОК_ВЕДОМОСТИ),
+        "ledger_total": len(строки),
+        "totals": итого,
+        "verify": проверка(run_dir),
+        "checkpoints": {"count": len(снимки_),
+                        "last": снимки_[0] if снимки_ else None},
+        "events": _события(tasks, снимки_),
+        "started": начали[0] if начали else None,
+        "caveats": sum(len(v) for v in долг.values()),
+    }
+
+
+def _языки() -> tuple:
+    """Языки, на которых продукт говорит с человеком — из lang.py.
+
+    Импорт по пути, как и у соседей: при импорте из теста каталог скрипта в
+    sys.path не попадает. Промолчать нельзя — молча принятый неизвестный язык
+    записался бы в состояние и показал человеку пустые надписи.
+    """
+    import importlib.util
+    p = Path(__file__).resolve().parent / "lang.py"
+    spec = importlib.util.spec_from_file_location("ss_lang_progress", p)
+    m = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(m)
+    return m.LANGS
+
+
 def _fail(msg: str) -> int:
     print(f"НЕ УДАЛОСЬ: {msg}", file=sys.stderr)
     return 3
@@ -668,6 +964,14 @@ def main() -> int:
                       file=sys.stderr)
             data = json.loads(json.dumps(EMPTY))
             data["project"] = rest[0]
+        elif cmd == "lang":
+            # Список языков берётся у lang.py, а не переписывается здесь:
+            # два своих списка разошлись бы молча, и записанный язык оказался
+            # бы тем, надписей для которого нет.
+            if not rest or rest[0] not in _языки():
+                return _fail("вызов: progress.py lang <файл> "
+                             + "|".join(_языки()))
+            data["lang"] = rest[0]
         elif cmd == "phase":
             if len(rest) < 2:
                 return _fail("нужны имя фазы и держатель хода: "
@@ -754,6 +1058,10 @@ def main() -> int:
         return _fail(str(e))
 
     save(path, data)
+    # Снимок вписывается ПОД ТЕМ ЖЕ замком, что и запись состояния: иначе два
+    # помощника, пишущие рядом, кладут в страницу разные снимки в обратном
+    # порядке, и на панели остаётся более старый.
+    снимок_на_панель(path, data)
     lock.__exit__()
     s = summary(data)
     print(json.dumps({**data, "summary": s}, ensure_ascii=False, indent=1))

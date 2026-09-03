@@ -287,3 +287,29 @@ class TestStrictCriteriaStopTheHandoff(unittest.TestCase):
             st = dict(state(t), criteria="строгие")
             b = self._b(st, t, Path(tmp))
             self.assertTrue(any("не существует" in x for x in b), b)
+
+
+class TestSingleEditPromptIsBuiltByCode(unittest.TestCase):
+    """`/change` собирает промпт кодом, а не заготовкой в тексте скилла.
+
+    Заготовка держится вниманием модели, и первыми из неё выпадают строки,
+    выглядящие необязательными, — зона и команда тестов. Без зоны правка
+    растекается по соседним файлам, без команды тестов «зелёный прогон»
+    означает «я не запускал». Ожидание собрано по условию задачи: обе строки
+    обязаны стоять в тексте, который уедет исполнителю.
+    """
+
+    def test_zone_and_test_command_reach_the_prompt(self):
+        env = {**os.environ, "SUPERSTACK_IGNORE_PAUSE": "1",
+               "PYTHONDONTWRITEBYTECODE": "1", "NO_COLOR": "1"}
+        p = subprocess.run(
+            [sys.executable, str(HANDOFF),
+             "--single", "убери поле телефона из формы заказа",
+             "--zone", "src/order/checkout.tsx",
+             "--done", "поля телефона нет, заказ отправляется",
+             "--tests", "npm test"],
+            capture_output=True, text=True, timeout=120, env=env)
+        self.assertEqual(p.returncode, 0, p.stderr[-400:])
+        self.assertIn("src/order/checkout.tsx", p.stdout)
+        self.assertIn("npm test", p.stdout)
+        self.assertIn("убери поле телефона из формы заказа", p.stdout)

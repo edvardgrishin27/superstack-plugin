@@ -988,10 +988,46 @@
   {
    "id": "UX.confirmation-ladder",
    "layer": "интерфейс",
-   "mechanism": "ступень подтверждений: сколько раз система останавливается — выбор человека, но гейты, слепая приёмка и G4 не отключаются ни на одной",
+   "mechanism": "режим участия словами человека («полный автомат» · «обычно» · «ручной») поверх той же ступени автономии: слово — просьба, ступень по-прежнему даёт условие, а слепая приёмка и G4 не отключаются ни одним режимом",
    "evidence": {
     "file": "plugins/superstack/skills/go/phases/1-понять.md",
-    "contains": "Ступень подтверждений"
+    "contains": "### Режим участия"
+   }
+  },
+  {
+   "id": "UX.mode-heard-in-plain-words",
+   "layer": "интерфейс",
+   "mechanism": "режим и глубина узнаются в живой фразе человека и пишутся в ТУ ЖЕ запись автономии; верхний режим узнаётся только по прямым оборотам, нижний — по любому упоминанию, потому что цена ошибки в две стороны разная",
+   "evidence": {
+    "file": "plugins/superstack/tools/autonomy.py",
+    "contains": "MODE_WORDS = {"
+   }
+  },
+  {
+   "id": "UX.mode-is-a-request-not-a-switch",
+   "layer": "интерфейс",
+   "mechanism": "«полный автомат» словами — просьба: берётся ближайшая снизу заслуженная ступень, а чего не хватает до просимой — называется вслух, а не проглатывается",
+   "evidence": {
+    "file": "plugins/superstack/tools/autonomy.py",
+    "contains": "while дают > 0 and not can(root, дают)[\"ok\"]:"
+   }
+  },
+  {
+   "id": "UX.depth-of-thinking-is-its-own-field",
+   "layer": "интерфейс",
+   "mechanism": "глубина (строго · обычно · глубоко) — отдельное поле рядом со ступенью: сколько система додумывает сверх сказанного, не меняя числа остановок",
+   "evidence": {
+    "file": "plugins/superstack/tools/autonomy.py",
+    "contains": "DEPTHS = (\"strict\", \"normal\", \"deep\")"
+   }
+  },
+  {
+   "id": "UX.mode-badges-on-the-panel",
+   "layer": "интерфейс",
+   "mechanism": "панель показывает режим и глубину двумя плашками словами человека, а не номером ступени; слова берутся из общего словаря, режим — из единственной записи автономии",
+   "evidence": {
+    "file": "plugins/superstack/tools/live_panel.py",
+    "contains": "\"modes\": words[\"modes\"][\"map\"],"
    }
   },
   {
@@ -1022,6 +1058,26 @@
    }
   },
   {
+   "id": "UX.panel-dollar-defined-before-first-use",
+   "layer": "интерфейс",
+   "mechanism": "хелпер $() объявлен раньше первого вызова firstLang(): та немедленно читает $('snapshot') через snapshot(), и обратный порядок ронял страницу мёртвой зоной константы на чистом профиле браузера — панель молча оставалась пустой",
+   "evidence": {
+    "file": "tests/test_live_panel.py",
+    "contains": "test_the_dollar_helper_is_defined_before_its_first_caller"
+   },
+   "note": "сама правка — порядок двух строк внутри строкового литерала live_panel.py, а ворота «план» вырезают из .py прозу и литералы вместе с ним. Улика привязана к тесту, который порядок держит; регресс ловит мутация panel.dollar-after-first-lang-call."
+  },
+  {
+   "id": "UX.you-bar-picks-one-reason-not-two",
+   "layer": "интерфейс",
+   "mechanism": "полоса «от тебя» печатает ровно одну фразу по приоритету «ход важнее долга, долг важнее честного „ничего“» — раньше ход/долг и «ничего не нужно»/«долга нет» стояли двумя строками и в частом случае повторяли одно и то же",
+   "evidence": {
+    "file": "tests/test_live_panel.py",
+    "contains": "test_the_function_picks_one_reason_by_priority"
+   },
+   "note": "сама правка живёт в JS-функции drawYou() внутри строкового литерала live_panel.py, а ворота «план» вырезают из .py прозу и литералы вместе с ним. Улика привязана к тесту, который порядок ветвей держит; регресс (долг реален, но полоса всё равно говорит «ничего не нужно») ловит мутация panel.you-bar-hides-real-debt."
+  },
+  {
    "id": "UX.live-panel",
    "layer": "интерфейс",
    "mechanism": "живая панель хода: этап и держатель хода видны постоянно, обновление стоит одной записи состояния; этап следует из работы — переход части в running двигает его сам",
@@ -1030,6 +1086,34 @@
     "contains": "data = set_phase(data, BUILD_PHASE, \"исполнитель\", detail, now=keep,"
    },
    "note": "Улика указывает на запись состояния, а не на разметку: разметка и её JS живут в строковом литерале live_panel.py, а ворота вырезают из .py прозу и литералы целиком — там любая улика невидима. Отображение держат тесты test_live_panel.py и мутации panel.*, они по литералу работают."
+  },
+  {
+   "id": "UX.panel-survives-without-a-server",
+   "layer": "интерфейс",
+   "mechanism": "панель живёт без сервера: каждая запись хода работ вписывает снимок состояния внутрь panel.html между границами, атомарно; файл, открытый двойным кликом, показывает последнюю запись, а живой сервер кладёт свежее поверх",
+   "evidence": {
+    "file": "plugins/superstack/tools/live_panel.py",
+    "contains": "def embed_state(run_dir: Path, state: dict) -> Path:"
+   },
+   "note": "Улика указывает на вписывание снимка в код, а не на разметку и её JS: они живут в строковом литерале, а ворота вырезают из .py прозу вместе с ним. Отрисовку снимка держат тесты test_live_panel.py и мутация panel.snapshot-not-written-into-the-page."
+  },
+  {
+   "id": "UX.panel-opens-itself",
+   "layer": "интерфейс",
+   "mechanism": "панель открывается сама на входе в первую фазу — одним инструментом, средствами системы; не открылась — честный код возврата и ссылка словами, прогон не блокируется",
+   "evidence": {
+    "file": "plugins/superstack/tools/live_panel.py",
+    "contains": "def open_in_browser(path: Path) -> tuple[bool, str]:"
+   }
+  },
+  {
+   "id": "UX.panel-speaks-two-languages",
+   "layer": "интерфейс",
+   "mechanism": "переключатель RU/EN на самой панели: подписи этапов, роли, плашки и пояснения переключаются целиком; обе пары вшиты в файл и лежат в одном словаре по одним ключам",
+   "evidence": {
+    "file": "plugins/superstack/tools/live_panel.py",
+    "contains": "\"names\": en.get(\"names\", {}),"
+   }
   },
   {
    "id": "UX.plain-ru",
@@ -1119,7 +1203,7 @@
    "mechanism": "движение на странице обязательно, но не является условием видимости: запрет на движение сужен до нажатия, prefers-reduced-motion выключает всё, страховка показывает содержимое, если наблюдатель молчит",
    "evidence": {
     "file": "plugins/superstack/tools/plain_ru.py",
-    "contains": "def find_jargon(text: str, data: dict = None) -> list:"
+    "contains": "def find_jargon(text: str, data: dict = None"
    },
    "note": "механизм живёт в проекте-образце (керамика), здесь закреплена только его языковая часть; поведение проверяется тестами проекта"
   },
@@ -2769,7 +2853,7 @@
    "mechanism": "прогон кончается входом в продукт, а не текстом о нём: последний раздел отчёта — «КАК ОТКРЫТЬ», с командой запуска из раздела «Команды» памяти проекта и адресом, когда порт написан буквами; команд нет — раздел говорит это вслух, и та же строка уходит в «что ждёт тебя». До этого живьём продукт за весь прогон поднимали только помощники, а человек получал три ссылки, и ни одна не вела в построенное",
    "evidence": {
     "file": "plugins/superstack/tools/report.py",
-    "contains": "def как_открыть(пуск: dict) -> list:"
+    "contains": "def как_открыть(пуск: dict"
    }
   },
   {
@@ -2869,6 +2953,231 @@
    "evidence": {
     "file": "tools/sync_public.py",
     "contains": "\"README.en.md\", \"assets\")"
+   }
+  },
+  {
+   "id": "UX.what-derives-the-phase-from-traces",
+   "layer": "интерфейс",
+   "mechanism": "«где я» при незаписанном этапе берёт его по следам на диске тем же прибором, что и панель, а не уходит к спеке и не отвечает «стройка не начиналась» посреди идущих проверок",
+   "evidence": {
+    "file": "plugins/superstack/tools/what.py",
+    "contains": "phase = derived_phase(project)"
+   }
+  },
+  {
+   "id": "L4.single-edit-prompt",
+   "layer": "L4 исполнение",
+   "mechanism": "промпт на ОДНУ правку готового продукта собирает код без манифеста и спеки: просьба дословно, зона, признак готовности, команда тестов, границы и контракт возврата; неполный не собирается",
+   "evidence": {
+    "file": "plugins/superstack/tools/handoff.py",
+    "contains": "def build_single("
+   }
+  },
+  {
+   "id": "UX.change-calls-the-builder-prompt",
+   "layer": "интерфейс",
+   "mechanism": "/change зовёт сборщик промпта литеральным путём, а не держит заготовку в тексте скилла: из заготовки первыми выпадают зона и команда тестов",
+   "evidence": {
+    "file": "plugins/superstack/skills/change/SKILL.md",
+    "contains": "tools/handoff.py\" --single"
+   }
+  },
+  {
+   "id": "R.a-neighbours-journal-is-not-ours",
+   "layer": "прогон",
+   "mechanism": "журнал сессии соседнего проекта в той же родительской папке отсеивается по объявленному в нём cwd: без этого сторож судил чужую работу как свою",
+   "evidence": {
+    "file": "plugins/superstack/tools/stall.py",
+    "contains": "def наш_журнал"
+   }
+  },
+  {
+   "id": "DIST.stale-files-leave-the-public-tree",
+   "layer": "дистрибуция",
+   "mechanism": "выкладка называет файлы публичного дерева, которых больше нет в списке переноса, и убирает их при --push: переименованная витрина иначе остаётся лежать прошлой редакцией рядом с новой",
+   "evidence": {
+    "file": "tools/sync_public.py",
+    "contains": "def подмести("
+   }
+  },
+  {
+   "id": "L5.polish-refuses-without-a-sample",
+   "layer": "L5 гарантии",
+   "mechanism": "цикл доводки не запускается без образца: нет ссылки, снимка, тона или числа — код 1, а не сверка работы со вкусом модели",
+   "evidence": {
+    "file": "plugins/superstack/tools/reference.py",
+    "contains": "\"статус\": \"нет-образца\""
+   }
+  },
+  {
+   "id": "L5.polish-rounds-have-a-ceiling",
+   "layer": "L5 гарантии",
+   "mechanism": "круги доводки считает код и останавливает потолком: «ещё один круг, и точно всё» — намерение, а не измерение",
+   "evidence": {
+    "file": "plugins/superstack/tools/reference.py",
+    "contains": "ПОТОЛОК_КРУГОВ = 3"
+   }
+  },
+  {
+   "id": "UX.polish-phase",
+   "layer": "интерфейс",
+   "mechanism": "фаза доводки после приёмки: продукт против образца, конкретные различия обычными тасками, круг с verify ≠ 0 откатывается снимком целиком, а не чинится",
+   "evidence": {
+    "file": "plugins/superstack/skills/go/phases/polish.md",
+    "contains": "ОТКАТЫВАЕТСЯ ЦЕЛИКОМ"
+   }
+  },
+  {
+   "id": "UX.go-names-the-polish-phase",
+   "layer": "интерфейс",
+   "mechanism": "стержень /go называет фазу доводки в таблице и её файл литеральным путём: вынесенный текст, который никто не велит прочесть, не исполняется никогда",
+   "evidence": {
+    "file": "plugins/superstack/skills/go/SKILL.md",
+    "contains": "phases/polish.md"
+   }
+  },
+  {
+   "id": "UX.sample-is-asked-for-once",
+   "layer": "интерфейс",
+   "mechanism": "образец для доводки собирается одним вопросом в фазе 1 и пишется дословно, а не остаётся воспоминанием ведущего о начале разговора",
+   "evidence": {
+    "file": "plugins/superstack/skills/go/phases/1-понять.md",
+    "contains": "tools/reference.py\" . add --kind ссылка"
+   }
+  },
+  {
+   "id": "UX.human-language-is-a-record-not-a-habit",
+   "layer": "интерфейс",
+   "mechanism": "язык человека определяется по первой фразе и лежит записью в состоянии прогона; инструменты читают её оттуда, а не догадываются по тексту и не полагаются на послушание модели",
+   "evidence": {
+    "file": "plugins/superstack/tools/lang.py",
+    "contains": "def read(where: \"Path | str\") -> str:"
+   }
+  },
+  {
+   "id": "UX.unknown-language-falls-back-loudly",
+   "layer": "интерфейс",
+   "mechanism": "язык вне списка не принимается: записанное «de» — опечатка, а не немецкий, и разговор остаётся на русском вместо пустых надписей",
+   "evidence": {
+    "file": "plugins/superstack/tools/lang.py",
+    "contains": "return got if got in LANGS else DEFAULT"
+   }
+  },
+  {
+   "id": "UX.report-speaks-the-recorded-language",
+   "layer": "интерфейс",
+   "mechanism": "итоговый отчёт собирается по ключам словаря на языке прогона: заголовки, «как открыть» и строки запуска приходят на языке человека, а не на языке автора кода",
+   "evidence": {
+    "file": "plugins/superstack/tools/report.py",
+    "contains": "out.append(языки.t(\"report_done_head\", я))"
+   }
+  },
+  {
+   "id": "UX.where-am-i-speaks-the-recorded-language",
+   "layer": "интерфейс",
+   "mechanism": "ответ на «где я» и название этапа берутся из того же словаря, что подписи панели: экран и ответ называют одно место одним именем на одном языке",
+   "evidence": {
+    "file": "plugins/superstack/tools/what.py",
+    "contains": "name=языки.phase_name(name, я), who=who)"
+   }
+  },
+  {
+   "id": "UX.jargon-gate-speaks-english",
+   "layer": "интерфейс",
+   "mechanism": "проверка человеческого языка знает английский список жаргона и отвечает тем же кодом возврата; хвост слова там перечислен, а не свободный — иначе «repo» находится внутри «report»",
+   "evidence": {
+    "file": "plugins/superstack/tools/plain_ru.py",
+    "contains": "шаблон = rf\"\\b{re.escape(stem)}{хвост}\\b\""
+   }
+  },
+  {
+   "id": "UX.language-is-written-in-phase-zero",
+   "layer": "интерфейс",
+   "mechanism": "фаза 0 записывает язык человека одной командой до панели и меняет его по словам человека, а не по языку очередной фразы",
+   "evidence": {
+    "file": "plugins/superstack/skills/go/phases/0-завести.md",
+    "contains": "tools/progress.py\" lang .superstack/state.json ru"
+   }
+  },
+  {
+   "id": "UX.skills-answer-english-triggers",
+   "layer": "интерфейс",
+   "mechanism": "описания скиллов несут английские фразы-поводы рядом с русскими: английский человек попадает в те же скиллы, а не мимо них",
+   "evidence": {
+    "file": "plugins/superstack/skills/what/SKILL.md",
+    "contains": "«where am I», «what's next»"
+   }
+  },
+  {
+   "id": "UX.panel-numbers-are-counted-from-files",
+   "layer": "интерфейс",
+   "mechanism": "все числа панели считает ход стройки по четырём файлам на диске — части работы, требования человека, последняя проверка и снимки; разметке остаётся только показать готовое, вписать число «по смыслу» ей нечем",
+   "evidence": {
+    "file": "plugins/superstack/tools/progress.py",
+    "contains": "def панель_факты(data: dict, run_dir: Path, phases: tuple) -> dict:"
+   }
+  },
+  {
+   "id": "UX.panel-coverage-comes-from-the-requirements-file",
+   "layer": "интерфейс",
+   "mechanism": "покрытие просьбы и левая колонка ведомости читаются из файла требований, а не из поля, которое заполняют отдельной командой: пропущенная команда молча оставляла вчерашние числа",
+   "evidence": {
+    "file": "plugins/superstack/tools/progress.py",
+    "contains": "def требования(run_dir: Path) -> list:"
+   }
+  },
+  {
+   "id": "UX.panel-recomputes-its-facts-instead-of-storing-them",
+   "layer": "интерфейс",
+   "mechanism": "числа панели выводятся на каждом показе и не ложатся в состояние: записанное число переживает данные, из которых его получили, и живёт своей жизнью",
+   "evidence": {
+    "file": "plugins/superstack/tools/live_panel.py",
+    "contains": "return {**state, \"facts\": progress.панель_факты(state, run_dir, PHASES)}"
+   }
+  },
+  {
+   "id": "UX.panel-rebuild-replaces-the-old-markup",
+   "layer": "интерфейс",
+   "mechanism": "сборка панели перекрывает саму страницу, а не только снимок в ней: иначе панель, начатая прежней версией, остаётся на прежней версии навсегда и выглядит свежей",
+   "evidence": {
+    "file": "plugins/superstack/tools/live_panel.py",
+    "contains": "_write_atomically(p, _with_snapshot(\n        _page(), with_facts(read_state(run_dir), run_dir)))"
+   }
+  },
+  {
+   "id": "UX.showcase-compares-itself-by-name",
+   "layer": "интерфейс",
+   "mechanism": "витрина сравнивает себя с соседними наборами поимённо и в четыре колонки: ячейки про нас названы файлом, который можно открыть, ячейки про чужое — только проверенным чтением их кода, а непроверенное так и написано «не проверяли», а не «нет»",
+   "evidence": {
+    "file": "README.md",
+    "contains": "| Что сравниваем | SUPERSTACK | Superpowers | Skills Matt Pocock |"
+   }
+  },
+  {
+   "id": "UX.showcase-compares-itself-in-english-too",
+   "layer": "интерфейс",
+   "mechanism": "та же таблица сравнения стоит в английской половине витрины: человек, пришедший извне по переключателю языка, читает её как единственную, и уехавшая отсюда таблица оставляет его без ответа на главный вопрос до установки",
+   "evidence": {
+    "file": "README.en.md",
+    "contains": "| What is compared | SUPERSTACK | Superpowers | Skills Matt Pocock |"
+   }
+  },
+  {
+   "id": "UX.showcase-names-what-it-never-does",
+   "layer": "интерфейс",
+   "mechanism": "у витрины есть раздел про границы: восемь вещей, которых система не делает никогда, и каждая названа файлом, где это заперто, — обещание без адреса в коде сюда не попадает",
+   "evidence": {
+    "file": "README.md",
+    "contains": "## Чего SUPERSTACK не делает никогда"
+   }
+  },
+  {
+   "id": "UX.showcase-shows-the-real-panel",
+   "layer": "интерфейс",
+   "mechanism": "в разделе «как это устроено» стоит снимок настоящей страницы хода с честной подписью: главное число — только проверенное машиной, «со слов помощника» показано отдельно и никогда не складывается с ним",
+   "evidence": {
+    "file": "README.md",
+    "contains": "<img src=\"assets/panel-ru.jpg\""
    }
   }
  ],

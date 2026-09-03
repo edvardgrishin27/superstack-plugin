@@ -43,6 +43,7 @@ from pathlib import Path
 # Импорт НЕ оборачивается в `except`: молча выключенное чтение памяти сказало
 # бы «команды запуска не записаны» над файлом, в котором они записаны.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import lang as языки  # noqa: E402
 import memory_file  # noqa: E402
 
 PROVEN, CLAIMED = "proven", "claimed"
@@ -101,8 +102,13 @@ def gather(run: Path) -> dict:
         "приёмка": blind,
         "находки": findings,
         "долг": state.get("debt") or {},
+        # Язык человека читается ОТТУДА ЖЕ, откуда этап: одна запись прогона,
+        # сделанная в фазе 0. Своя догадка по тексту требований разошлась бы
+        # с панелью, и человек получил бы экран на одном языке и отчёт на
+        # другом.
+        "язык": языки.from_state(state),
         # Папка прогона лежит В КОРНЕ проекта, память проекта — рядом с ней.
-        "запуск": launch(run.resolve().parent),
+        "запуск": launch(run.resolve().parent, языки.from_state(state)),
         "этап": (state.get("phase") or {}).get("name", ""),
     }
 
@@ -126,7 +132,7 @@ def _команды(body: str) -> list:
     return [c for c in out if not _пусто(c)]
 
 
-def launch(root: Path) -> dict:
+def launch(root: Path, язык: str = языки.RU) -> dict:
     """Чем человек откроет построенное и по какому адресу.
 
     Раздел команд читается ТЕМ ЖЕ инструментом, который его туда пишет.
@@ -140,8 +146,9 @@ def launch(root: Path) -> dict:
         # «команд нет», и последний шаг прогона не имеет права падать из-за
         # чужого файла, до которого не дотянулись.
         return {"command": None, "address": None,
-                "missing": f"память проекта не прочиталась ({e.strerror or e})",
-                "next": "назови команду запуска сам"}
+                "missing": языки.t("launch_memory_unreadable", язык,
+                                   error=e.strerror or e),
+                "next": языки.t("launch_next_name_it", язык)}
     команды = _команды(body)
     выбор = next((c for c in команды if any(h in c.lower() for h in ПУСК)), None)
     if выбор is None and len(команды) == 1:
@@ -152,55 +159,61 @@ def launch(root: Path) -> dict:
         # устройство нашего файла вместо ответа на его вопрос.
         нет = not команды
         return {"command": None, "address": None,
-                "missing": "команды запуска не записаны" if нет else
-                "среди записанных команд не видно, какая запускает",
-                "next": "спроси, как запустить, и запиши" if нет else
-                "спроси, какой из них он открывается, и запиши"}
+                "missing": языки.t("launch_missing_none" if нет
+                                   else "launch_missing_unclear", язык),
+                "next": языки.t("launch_next_ask" if нет
+                                else "launch_next_ask_which", язык)}
     порт = _ПОРТ.search(выбор)
     if порт:
         адрес = f"http://localhost:{порт.group(1)}"
     elif any(w in выбор.lower() for w in ВЕБ):
-        адрес = "после запуска — адрес напишет сама программа"
+        адрес = языки.t("launch_address_self", язык)
     else:
         адрес = None
     return {"command": выбор, "address": адрес, "missing": None, "next": None}
 
 
-def как_открыть(пуск: dict) -> list:
+def как_открыть(пуск: dict, язык: str = языки.RU) -> list:
     """Последние строки отчёта: вход в продукт, а не его описание.
 
     Единственное место, где человеку дают команду. Она уместна ровно потому,
     что это команда ЕГО продукта, — и рядом сказано словами, что она делает:
     строка без объяснения читается как заклинание и не выполняется.
     """
-    out = ["КАК ОТКРЫТЬ"]
+    out = [языки.t("report_how_head", язык)]
     if not пуск.get("command"):
         # Ни стрелки, ни прочерка: строка «эта строка поднимает построенное»
         # над пустым местом — это подтверждение без содержимого, и человек
         # уходит выполнять то, чего ему не дали.
-        строка = пуск.get("missing") or "команда запуска не названа"
+        строка = пуск.get("missing") or языки.t("report_command_unnamed", язык)
         след = пуск.get("next")
         return out + [f"  {строка} — {след}" if след else f"  {строка}"]
     out.append(f"  {пуск['command']}")
-    out.append("  ↑ эта строка поднимает построенное у тебя на компьютере")
+    out.append("  " + языки.t("report_arrow", язык))
     if пуск.get("address"):
-        out.append(f"  адрес: {пуск['address']}")
+        out.append("  " + языки.t("report_address", язык,
+                                  address=пуск["address"]))
     return out
 
 
 def human(d: dict) -> str:
     """Отчёт словами, которые понимает человек без опыта в коде."""
     out = []
+    # Язык прогона, а не язык этого файла: надписи собираются по ключам, и
+    # ключ, которого нет, роняет отчёт здесь — а не показывает человеку
+    # пустой заголовок, который никто не заметит.
+    я = d.get("язык") or языки.RU
     total = len(d["проверено"]) + len(d["со_слов"]) + len(d["не_закрыто"])
-    out.append("ЧТО ГОТОВО")
+    out.append(языки.t("report_done_head", я))
     if d["проверено"]:
         for t in d["проверено"]:
-            out.append(f"  ✓ {t['name']} — проверено машиной")
+            out.append(f"  ✓ {t['name']} — "
+                       + языки.t("report_proven_by_machine", я))
     else:
-        out.append("  ничего не доказано проверкой")
+        out.append("  " + языки.t("report_nothing_proven", я))
     if d["со_слов"]:
         out.append("")
-        out.append("СДЕЛАНО СО СЛОВ ПОМОЩНИКА — проверка не подтверждала")
+        out.append(языки.t("report_claimed_head", я))
         for t in d["со_слов"]:
             out.append(f"  · {t['name']}")
 
@@ -214,17 +227,17 @@ def human(d: dict) -> str:
         ask.append(q)
     пуск = d.get("запуск") or {}
     if пуск.get("missing"):
-        ask.append(f"{пуск['missing']} — открыть построенное нечем")
+        ask.append(f"{пуск['missing']} — " + языки.t("report_no_way_in", я))
     if ask:
         out.append("")
-        out.append("ЧТО ЖДЁТ ТЕБЯ")
+        out.append(языки.t("report_ask_head", я))
         for a in ask:
             out.append(f"  → {a}")
 
     checked = d["приёмка"].get("checked") or []
     if checked:
         out.append("")
-        out.append("НЕЗАВИСИМАЯ ПРИЁМКА — сверяла с твоей первой просьбой")
+        out.append(языки.t("report_blind_head", я))
         for c in checked:
             out.append(f"  {c.get('verdict', '?')}: {c.get('where', '')}")
 
@@ -236,22 +249,24 @@ def human(d: dict) -> str:
     fixed = [f for f in d["находки"] if f.get("closed")]
     if blocking:
         out.append("")
-        out.append("НАЙДЕНО И НЕ ЗАКРЫТО")
+        out.append(языки.t("report_open_head", я))
         for f in blocking:
             out.append(f"  ! {f.get('what', '')}")
 
     if fixed:
         out.append("")
-        out.append("НАЙДЕНО И ПОЧИНЕНО")
+        out.append(языки.t("report_fixed_head", я))
         for f in fixed:
             out.append(f"  ✓ {f.get('what', '')[:90]}")
-            out.append(f"      чем: {f.get('closed', '')[:100]}")
+            out.append("      " + языки.t("report_fixed_with", я)
+                       + f" {f.get('closed', '')[:100]}")
 
     out.append("")
-    out.append(f"Частей работы: {total} · проверено машиной: {len(d['проверено'])}")
+    out.append(языки.t("report_totals", я, total=total,
+                       proven=len(d["проверено"])))
 
     out.append("")
-    out.extend(как_открыть(пуск))
+    out.extend(как_открыть(пуск, я))
     return "\n".join(out)
 
 

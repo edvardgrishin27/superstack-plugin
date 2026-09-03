@@ -47,6 +47,13 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
+# Соседний инструмент лежит в этом же каталоге; при импорте из теста каталог
+# скрипта в sys.path не попадает. Импорт НЕ прячется в `except`: молча
+# выключенный язык — это русский текст английскому человеку без единого слова
+# о том, что так вышло.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import lang as языки  # noqa: E402
+
 СПЕКА = ".superstack/notify.json"
 ТАЙМАУТ = 15
 
@@ -235,11 +242,14 @@ def main() -> int:
         v = send(root, текст)
 
     if "--json" not in argv:
-        голова = {"pass": "ОТЧЁТ УШЁЛ", "fail": "ДОСТАВИТЬ НЕ УДАЛОСЬ",
-                  "unknown": "ОТПРАВЛЯТЬ НЕКУДА"}
-        print(f"{голова[v['status']]}: {v['detail']}", file=sys.stderr)
+        я = языки.read(root)
+        голова = {"pass": "notify_sent", "fail": "notify_failed",
+                  "unknown": "notify_nowhere"}
+        print(f"{языки.t(голова[v['status']], я)}: {v['detail']}",
+              file=sys.stderr)
         if v.get("next"):
-            print(f"  дальше: {v['next']}", file=sys.stderr)
+            print("  " + языки.t("next_prefix", я) + f" {v['next']}",
+                  file=sys.stderr)
     print(json.dumps(v, ensure_ascii=False, indent=1))
     return {"pass": 0, "fail": 1, "unknown": 2}[v["status"]]
 

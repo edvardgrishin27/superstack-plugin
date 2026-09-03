@@ -447,3 +447,59 @@ class ЗамокБезPOSIX(unittest.TestCase):
                 sys.modules.pop("fcntl", None)
         self.assertEqual(зовы, [подделка.LK_LOCK, подделка.LK_UNLCK],
                          "замок не взят и не снят вызовом Windows")
+
+
+class ЧислаПанелиСчитаютсяПоФайлам(unittest.TestCase):
+    """Панель показывает десятки чисел, и у каждого есть ровно один способ
+    стать неправдой — быть вписанным моделью «по смыслу».
+
+    Заперты две вещи, каждая из которых уже случалась в дашбордах:
+
+      · доля растёт ТОЛЬКО от доказанного машиной; названное готовым идёт
+        своим числом и не прибавляет ни процента — иначе шкала растёт от
+        слов, и человек видит движение там, где его нет;
+      · покрытие просьбы читается ИЗ ФАЙЛА требований, а не из поля,
+        которое заполняли отдельной командой: пропущенная команда молча
+        оставляла вчерашние числа, и панель показывала их как сегодняшние.
+    """
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.run = Path(self.tmp.name)
+
+    def test_claimed_does_not_add_a_single_percent(self):
+        d = pr.set_task(fresh(), "01", "первая", 1, pr.PROVEN, exit_code=0)
+        d = pr.set_task(d, "02", "вторая", 1, pr.CLAIMED)
+        d = pr.set_task(d, "03", "третья", 1, pr.CLAIMED)
+        d = pr.set_task(d, "04", "четвёртая", 1, pr.WAITING)
+        f = pr.панель_факты(d, self.run, ())
+        self.assertEqual(f["parts"]["percent_proven"], 25,
+                         "доля выросла не от доказанного")
+        self.assertEqual(f["parts"]["proven"], 1)
+        self.assertEqual(f["parts"]["claimed"], 2)
+        # Названное готовым живёт своим числом и своим зазором — рядом, но
+        # никогда не в сумме с доказанным.
+        self.assertEqual(f["parts"]["said"], 3)
+        self.assertEqual(f["parts"]["gap"], 2)
+
+    def test_coverage_is_read_from_the_file_of_requirements(self):
+        (self.run / "manifest.json").write_text(json.dumps({
+            "schema": "superstack.manifest.v1",
+            "requirements": [
+                {"id": "R01", "kind": "explicit", "status": "done",
+                 "quote": "чтобы клиент выбирал мастера", "basis": ""},
+                {"id": "R02", "kind": "explicit", "status": "open",
+                 "quote": "записаться без регистрации", "basis": ""},
+                {"id": "R03", "kind": "explicit", "status": "dropped",
+                 "quote": "оплата картой", "basis": ""},
+            ]}, ensure_ascii=False), encoding="utf-8")
+        f = pr.панель_факты(fresh(), self.run, ())
+        self.assertEqual(f["requirements"]["total"], 3)
+        self.assertEqual(f["requirements"]["done"], 1)
+        self.assertEqual(f["requirements"]["live"], 2, "снятое пошло в счёт")
+        # Слова человека доезжают до ведомости ДОСЛОВНО: пересказ на этом
+        # месте и есть подмена просьбы, ради которой ведомость не нужна.
+        self.assertEqual([r["quote"] for r in f["ledger"]],
+                         ["чтобы клиент выбирал мастера",
+                          "записаться без регистрации", "оплата картой"])

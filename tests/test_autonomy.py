@@ -127,6 +127,19 @@ class TestEachStepNamesItsCondition(Project):
         self.assertTrue(au.can(self.root, 3)["ok"])
 
 
+class TestDepthIsItsOwnField(Project):
+    """«строго» и «глубоко» — про то, сколько система додумывает сверх
+    сказанного, а не про число вопросов. Смешать их значило бы продать
+    человеку одно под видом другого: попросив думать глубже, он перестал бы
+    получать вопросы."""
+
+    def test_strict_said_in_words_is_recorded(self):
+        услышано = au.recognise("делай строго по тому, что я сказал")
+        self.assertEqual(услышано["depth"], "strict")
+        au.ask(self.root, услышано["mode"], услышано["depth"])
+        self.assertEqual(au.read(self.root)["depth"], "strict")
+
+
 class TestThereIsNoFourthStep(Project):
     """Четвёртая ступень означала бы, что система сама решает, ЧТО строить.
     Это другое решение, и из желания не подтверждать план оно не следует."""

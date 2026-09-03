@@ -391,6 +391,39 @@ class TestWhatReadsTheRunWhereGoWritesIt(WhatFixture):
         self.assertNotIn("не начата", p.stderr)
 
 
+class TestWhatDerivesThePhaseWhenItIsNotRecorded(WhatFixture):
+    """Этап не записан — читаются СЛЕДЫ, а не «стройка не начиналась».
+
+    Запись этапа делает отдельная команда, и её забывают: `state.json` без
+    поля `phase` уводил ответ к спеке, и человек посреди идущих проверок
+    слышал, что работа ещё не начиналась. Здесь на диске лежат следы пятой
+    фазы — задачи, возврат помощника, недоказанная часть, — и ожидание
+    собрано по ним, а не переписано из кода: по этим следам идут проверки.
+    """
+
+    def test_the_phase_is_derived_from_traces_left_on_disk(self):
+        run = self.project / ".superstack"
+        run.mkdir(parents=True)
+        (run / "state.json").write_text(json.dumps({
+            "schema": "superstack.progress.v1",
+            "waves": {"1": [{"id": "T1", "status": "proven"},
+                            {"id": "T2", "status": "done"}]},
+        }, ensure_ascii=False), encoding="utf-8")
+        (run / "spec.md").write_text("# спека\n", encoding="utf-8")
+        (run / "return-T1.txt").write_text("STATUS: DONE\n", encoding="utf-8")
+
+        p = subprocess.run(
+            [sys.executable, str(TOOLS / "what.py"), str(self.project)],
+            capture_output=True, text=True, timeout=30,
+            env={**ENV, "HOME": str(self.home)})
+        self.assertEqual(p.returncode, 0, p.stderr)
+
+        строка = json.loads(p.stdout)["line"]
+        self.assertIn("Проверяем", строка)
+        self.assertNotIn("не начиналась", строка)
+        self.assertIn("Проверяем", p.stderr)
+
+
 class TestWhatCLI(WhatFixture):
     """Прогон реальным процессом — не только импортом функции."""
 

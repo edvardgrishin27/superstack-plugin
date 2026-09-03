@@ -307,3 +307,33 @@ class TestCommandLine(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestStaleFilesLeaveThePublicTree(unittest.TestCase):
+    """Перенос затирает приехавшее и ничего не знает об уехавшем.
+
+    Живой случай: витрину переименовали, `README.ru.md` остался лежать в
+    публичном дереве, и пришедший по ссылке открыл прошлую редакцию как
+    текущую; убрали руками. Ожидание собрано по условию: файла, которого
+    больше нет в списке переноса, после выкладки в дереве нет.
+    """
+
+    def test_a_file_no_longer_carried_is_removed(self):
+        with tempfile.TemporaryDirectory() as d:
+            pub = Path(d)
+            (pub / ".git").mkdir()
+            (pub / "LICENSE").write_text("MIT\n", encoding="utf-8")
+            (pub / "README.md").write_text("# SUPERSTACK\n", encoding="utf-8")
+            (pub / "README.ru.md").write_text("прошлая витрина\n", encoding="utf-8")
+            (pub / "старое").mkdir()
+
+            названо = sp.подмести(pub, True)
+
+            self.assertIn("README.ru.md", названо)
+            self.assertFalse((pub / "README.ru.md").exists(),
+                             "переименованная витрина осталась в публичном "
+                             "дереве — по ссылке открывается прошлая редакция")
+            self.assertFalse((pub / "старое").exists())
+            self.assertTrue((pub / "README.md").is_file(), "снесено нужное")
+            self.assertTrue((pub / ".git").is_dir(), "снесена история")
+            self.assertTrue((pub / "LICENSE").is_file(), "снесена лицензия")

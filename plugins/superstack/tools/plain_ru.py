@@ -18,8 +18,9 @@
 
   python3 plain_ru.py check <файл> [файл...]   -> найти жаргон
   python3 plain_ru.py check -                  -> прочитать из потока
+  python3 plain_ru.py check --lang en <файл>   -> тем же кодом по-английски
   python3 plain_ru.py say <роль|статус|фаза>   -> как это сказать по-русски
-  python3 plain_ru.py words                    -> весь словарь
+  python3 plain_ru.py words [--lang en]        -> весь словарь
 
   код 0 — чисто, 1 — найден жаргон, 3 — ошибка вызова
 """
@@ -38,25 +39,49 @@ def load(path: Path = DATA) -> dict:
     return json.loads(path.read_text("utf-8"))
 
 
-def _stems(data: dict) -> dict:
+#: Языки, на которых продукт разговаривает с человеком. Список тут затем, что
+#: неизвестный язык обязан быть отказом, а не тихим переходом на русский:
+#: «проверил на немецком, нашёл ноль» — это ложь о проверке, которой не было.
+ЯЗЫКИ = ("ru", "en")
+
+#: Хвосты английских слов. В английском список короткий и закрытый, и это не
+#: экономия, а необходимость: свободный хвост, как в русском, находит «repo»
+#: внутри «report» — и проверка ругается на собственный отчёт. Нашлось на
+#: первом же прогоне по английскому тексту.
+ХВОСТЫ_EN = ("", "s", "es", "ed", "ing", "'s")
+
+
+def _stems(data: dict, язык: str = "ru") -> dict:
+    if язык == "en":
+        return ((data.get("en") or {}).get("jargon") or {}).get("words") or {}
     return data["jargon"]["words"]
 
 
-def find_jargon(text: str, data: dict = None) -> list:
+def find_jargon(text: str, data: dict = None, язык: str = "ru") -> list:
     """Найденный жаргон: [(как написано, основа, чем заменить)].
 
     Ищется ОСНОВА со свободным хвостом: русский склоняет, и «таском», «таски»,
     «таска» — то же самое слово. Поиск по точной форме пропустил бы почти все
     живые вхождения, оставаясь при этом зелёным.
+
+    Английский ищется тем же кодом и с тем же кодом возврата, но хвост у него
+    перечислен списком: английский почти не меняет слово, зато свободный хвост
+    начинает находить основы внутри обычных слов.
     """
     data = data or load()
     out = []
-    for stem, better in _stems(data).items():
-        # У слов на «-й» падеж съедает саму «й»: «деплой» → «деплоя», «деплою»;
-        # «репозиторий» → «репозитория». Поиск по полной основе был зелёным и
-        # пропускал почти все живые формы — нашлось тестом, не глазами.
-        core = stem[:-1] if stem.endswith("й") else stem
-        for m in re.finditer(rf"\b{re.escape(core)}\w*", text, re.IGNORECASE):
+    for stem, better in _stems(data, язык).items():
+        if язык == "en":
+            хвост = "(?:" + "|".join(re.escape(х) for х in ХВОСТЫ_EN if х) + ")?"
+            шаблон = rf"\b{re.escape(stem)}{хвост}\b"
+        else:
+            # У слов на «-й» падеж съедает саму «й»: «деплой» → «деплоя»,
+            # «деплою»; «репозиторий» → «репозитория». Поиск по полной основе
+            # был зелёным и пропускал почти все живые формы — нашлось тестом,
+            # не глазами.
+            core = stem[:-1] if stem.endswith("й") else stem
+            шаблон = rf"\b{re.escape(core)}\w*"
+        for m in re.finditer(шаблон, text, re.IGNORECASE):
             out.append((m.group(0), stem, better))
     return out
 
@@ -81,6 +106,21 @@ def status_word(status: str, data: dict = None) -> str:
     return data["statuses"]["map"].get(status, status)
 
 
+def english(data: dict = None) -> dict:
+    """Английская пара надписей — из того же файла и по тем же ключам.
+
+    Второй файл рядом разъезжается с первым молча: в русский добавили
+    надпись, в английский забыли, и человек видит на панели пустое место
+    вместо текста. Одним файлом расхождение видно глазом и проверяется
+    сравнением ключей.
+
+    Пусто — это ответ, а не поломка: панель останется на русском и скажет об
+    этом вслух, а не покажет пустые подписи как норму.
+    """
+    data = data or load()
+    return data.get("en") or {}
+
+
 def copy(key: str, data: dict = None) -> str:
     data = data or load()
     return data["copy"]["map"].get(key, "")
@@ -102,9 +142,22 @@ def main() -> int:
         return 3
     cmd, rest = argv[0], argv[1:]
     data = load()
+    # Язык проверки называется явно и НЕ угадывается по содержимому файла:
+    # русский текст с двумя английскими словами угадался бы как русский, и
+    # английский список молча не применился бы — проверка вернула бы ноль,
+    # ничего не проверив.
+    язык = "ru"
+    if "--lang" in rest:
+        i = rest.index("--lang")
+        язык = rest[i + 1] if i + 1 < len(rest) else ""
+        if язык not in ЯЗЫКИ:
+            print(f"НЕ УДАЛОСЬ: язык «{язык}» неизвестен, есть "
+                  + ", ".join(ЯЗЫКИ), file=sys.stderr)
+            return 3
+        rest = rest[:i] + rest[i + 2:]
 
     if cmd == "words":
-        print(json.dumps({"жаргон": _stems(data),
+        print(json.dumps({"жаргон": _stems(data, язык),
                           "роли": data["roles"]["map"],
                           "статусы": data["statuses"]["map"]},
                          ensure_ascii=False, indent=1))
@@ -133,11 +186,13 @@ def main() -> int:
     found_any = False
     for name in rest:
         text = sys.stdin.read() if name == "-" else Path(name).read_text("utf-8")
-        hits = find_jargon(text, data)
+        hits = find_jargon(text, data, язык)
         if not hits:
             continue
         found_any = True
-        print(f"{name}: слова, которых человек не поймёт", file=sys.stderr)
+        заголовок = ("слова, которых человек не поймёт" if язык == "ru"
+                     else "words a person will not understand")
+        print(f"{name}: {заголовок}", file=sys.stderr)
         seen = set()
         for written, stem, better in hits:
             if written.lower() in seen:

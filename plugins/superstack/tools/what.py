@@ -12,11 +12,14 @@
 Источники состояния — уже существующие гейты системы, не новые эвристики:
 
   · флаг паузы (tools/pause.sh) — если он есть, всё остальное неважно;
-  · ход прогона /go в .superstack/ — состояние панели (state.json, его пишет
-    tools/progress.py) и спека (spec.md, её пишет фаза 2). Это ПЕРВЫЙ источник
+  · ход прогона /go в .superstack/ — записанный этап (state.json, его пишет
+    tools/progress.py), а если он не записан — этап ПО СЛЕДАМ на диске
+    (tools/derive_phase.py: бриф, спека, задачи, возвраты). Это ПЕРВЫЙ источник
     после паузы: раньше здесь смотрели только в .claude/specs/ — папку, в
     которую не пишет ни один инструмент системы, — и на второй день после
-    полного прогона человек слышал «работа ещё не начата»;
+    полного прогона человек слышал «работа ещё не начата». Запись этапа —
+    отдельная команда, и её забывают: без следов ответ снова уезжал к спеке и
+    звучал как «стройка не начиналась» посреди идущих проверок;
   · спека в .claude/specs/ — запасной источник, оставлен ради проектов,
     заведённых до того, как /go начал писать в .superstack/. Форму держит
     tools/spec_lint.py, это НЕ переизобретено здесь;
@@ -45,6 +48,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 
+import derive_phase  # noqa: E402
+import lang as языки  # noqa: E402
 import plain_ru  # noqa: E402
 from spec_lint import lint_text  # noqa: E402
 import verify  # noqa: E402
@@ -96,10 +101,30 @@ def run_phase(project: Path) -> dict | None:
     return phase
 
 
-def run_spec(project: Path) -> Path | None:
-    """Спека прогона /go — `.superstack/spec.md`. Нет файла — None."""
-    spec = project / RUN / "spec.md"
-    return spec if spec.is_file() else None
+def derived_phase(project: Path) -> dict | None:
+    """Этап ПО СЛЕДАМ на диске, когда записанного этапа нет.
+
+    Запись этапа делает отдельная команда, и её забывают: прогон уходит
+    вперёд, а `state.json` остаётся без `phase` — либо его пишет не /go, либо
+    строку затёрли. Прежде этот случай отправлял человека к спеке, и он слышал
+    «стройка не начиналась» на прогоне, где уже шли проверки.
+
+    Спрашивается тот же `derive_phase.py`, которым живёт панель: два своих
+    ответа на вопрос «какой сейчас этап» разошлись бы при первой правке, и
+    человек не знал бы, чему верить — экрану или ответу на «где я».
+
+    Возвращает None в двух случаях, и оба честные: папки прогона нет вовсе;
+    следов работы в ней нет ни одного — тогда назвать этап значило бы выдумать
+    его, а выдуманный этап человек примет за факт.
+    """
+    run = project / RUN
+    if not run.is_dir():
+        return None
+    got = derive_phase.derive(run)
+    if not got.get("facts"):
+        return None
+    return {"name": got["name"], "owner": got.get("owner") or "",
+            "detail": got.get("why") or "", "derived": True}
 
 
 def find_specs(project: Path) -> list[Path]:
@@ -126,22 +151,32 @@ def evaluate(project: Path) -> dict:
     "evidence" — по нему можно перепроверить, откуда взялась строка, не
     поверив ей на слово.
     """
+    # Язык человека — запись прогона, а не догадка по его последней фразе:
+    # /what зовут в любой момент, и текст ответа обязан совпадать с языком
+    # панели и отчёта, а не с тем, чем эту команду сегодня позвали.
+    я = языки.read(project)
     paused = pause_since()
     if paused is not None:
         return {
             "reason": "paused",
-            "line": f"SUPERSTACK на паузе с {paused}.",
+            "line": языки.t("what_paused_line", я, since=paused),
             # Человек мог попасть сюда через /stop — скилл, написанный ровно
             # для того, чтобы останавливать систему СЛОВОМ, не открывая
             # терминал. Команда оболочки или путь к tools/ в ответе на
             # «где я» отменяла бы это обещание: не-разработчик такую строку
             # не выполнит. /stop сам умеет снимать паузу с фразы «включи»
             # (skills/stop/SKILL.md) — next называет именно её, а не файл.
-            "next": "скажи «включи» или позови /stop — сама пауза не пройдёт",
+            "next": языки.t("what_paused_next", я),
             "evidence": {"pause_flag": str(STATE / "PAUSE")},
         }
 
     phase = run_phase(project)
+    откуда = {"state": str(project / RUN / "state.json")}
+    if phase is None:
+        # Записанного этапа нет — спрашиваем следы. Один и тот же вопрос,
+        # один и тот же прибор, что у панели.
+        phase = derived_phase(project)
+        откуда = {"run": str(project / RUN), "по следам": True}
     if phase is not None:
         name = " ".join(str(phase["name"]).split())
         owner = str(phase.get("owner") or "")
@@ -149,35 +184,32 @@ def evaluate(project: Path) -> dict:
         # из data/plain-ru.json, откуда их читает и live_panel.py. Вторая
         # формулировка того же факта означала бы, что экран и ответ на
         # «где я» расходятся, — и человек не знает, чему верить.
-        who = plain_ru.role_word(owner) if owner else "чей сейчас ход — не записано"
+        who = (языки.role_word(owner, я) if owner
+               else языки.t("what_owner_unknown", я))
         detail = " ".join(str(phase.get("detail") or "").split())
         if owner == "человек":
-            step = f"дело за тобой: {detail}" if detail else "дело за тобой — скажи, что решил"
+            step = (языки.t("what_step_human", я, detail=detail) if detail
+                    else языки.t("what_step_human_bare", я))
         else:
-            step = "скажи «продолжи» — подхвачу с этого места"
+            step = языки.t("what_step_resume", я)
         return {
             "reason": "go-phase",
-            "line": f"Остановились на этапе «{name}»: {who}.",
+            # Название этапа переводится по тому же словарю, что и на панели:
+            # ключ этапа остаётся русским (он же ключ состояния), на экран
+            # идёт пара. Свой перевод здесь означал бы, что экран и ответ на
+            # «где я» называют одно место двумя именами.
+            "line": языки.t("what_phase_line", я,
+                            name=языки.phase_name(name, я), who=who),
             "next": step,
-            "evidence": {"state": str(project / RUN / "state.json"),
-                         "phase": phase},
-        }
-
-    spec = run_spec(project)
-    if spec is not None:
-        return {
-            "reason": "go-spec",
-            "line": "Спека написана, стройка не начиналась.",
-            "next": "скажи «продолжи» — разобью работу на части и начну строить",
-            "evidence": {"spec": str(spec)},
+            "evidence": {**откуда, "phase": phase},
         }
 
     specs = find_specs(project)
     if not specs:
         return {
             "reason": "no-spec",
-            "line": "Работа ещё не начата: ни одной спеки нет.",
-            "next": "скажи, что хочешь построить — это начнёт /go",
+            "line": языки.t("what_no_spec_line", я),
+            "next": языки.t("what_no_spec_next", я),
             "evidence": {"run_dir": str(project / RUN),
                          "specs_dir": str(project / ".claude" / "specs")},
         }
@@ -188,8 +220,8 @@ def evaluate(project: Path) -> dict:
     except OSError as e:
         return {
             "reason": "spec-unreadable",
-            "line": f"Спеку «{newest.name}» не удалось прочитать.",
-            "next": f"почини доступ к файлу: {newest}",
+            "line": языки.t("what_spec_unreadable_line", я, name=newest.name),
+            "next": языки.t("what_spec_unreadable_next", я, path=newest),
             "evidence": {"spec": str(newest), "error": str(e)},
         }
 
@@ -198,8 +230,9 @@ def evaluate(project: Path) -> dict:
         first = lint["problems"][0]
         return {
             "reason": "spec-problems",
-            "line": f"Спека «{newest.name}» недописана: {first['message']}.",
-            "next": "дополни спеку и вызови /go снова",
+            "line": языки.t("what_spec_problems_line", я, name=newest.name,
+                            problem=first["message"]),
+            "next": языки.t("what_spec_problems_next", я),
             "evidence": {"spec": str(newest), "problems": lint["problems"]},
         }
 
@@ -208,8 +241,8 @@ def evaluate(project: Path) -> dict:
     if not checks and not unrunnable:
         return {
             "reason": "no-checks",
-            "line": f"Спека «{newest.name}» готова, но само дело ещё нечем проверить.",
-            "next": "заведи хотя бы один тест — иначе «готово» нечем подтвердить",
+            "line": языки.t("what_no_checks_line", я, name=newest.name),
+            "next": языки.t("what_no_checks_next", я),
             "evidence": {"spec": str(newest), "project": str(project)},
         }
 
@@ -219,21 +252,21 @@ def evaluate(project: Path) -> dict:
     if v["status"] == "pass":
         return {
             "reason": "verified",
-            "line": "Всё сделано и проверено: гейт зелёный.",
-            "next": "можно показывать результат человеку",
+            "line": языки.t("what_verified_line", я),
+            "next": языки.t("what_verified_next", я),
             "evidence": {"spec": str(newest), "verify": v},
         }
     if v["status"] == "fail":
         return {
             "reason": "verify-fail",
-            "line": f"Тесты красные: {v['blockers'][0]}.",
+            "line": языки.t("what_fail_line", я, blocker=v["blockers"][0]),
             "next": v["next"],
             "evidence": {"spec": str(newest), "verify": v},
         }
     return {
         "reason": "verify-absent",
-        "line": f"Проверить получилось не всё: {v['blockers'][0]}." if v["blockers"]
-                else "Проверить получилось не всё.",
+        "line": (языки.t("what_absent_line", я, blocker=v["blockers"][0])
+                 if v["blockers"] else языки.t("what_absent_bare", я)),
         "next": v["next"],
         "evidence": {"spec": str(newest), "verify": v},
     }
@@ -256,7 +289,8 @@ def main() -> int:
     result = evaluate(project)
     if not quiet:
         print(result["line"], file=sys.stderr)
-        print(f"дальше: {result['next']}", file=sys.stderr)
+        print(языки.t("next_prefix", языки.read(project))
+              + f" {result['next']}", file=sys.stderr)
     print(json.dumps(result, ensure_ascii=False, indent=1))
     return 0
 

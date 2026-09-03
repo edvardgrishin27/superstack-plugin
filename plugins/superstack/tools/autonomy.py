@@ -28,9 +28,19 @@
 сама решает, ЧТО строить, а это другое решение, и оно не следует из желания не
 подтверждать план.
 
+Те же ступени, названные словами человека: «полный автомат» — верхняя,
+«обычно» — умолчание, «ручной» — нижняя. Второго механизма под это НЕ
+заводится: слово остаётся ПРОСЬБОЙ, и порядок прежний — сначала условие,
+потом ступень. Не выполнено — остаёмся ниже и говорим, чего не хватает.
+
+Глубина («строго» · «обычно» · «глубоко») — отдельное поле рядом. Она про то,
+сколько система додумывает сверх сказанного, и ступени не трогает: спрашивать
+реже и додумывать больше — разные решения, и одно из другого не следует.
+
   python3 autonomy.py <корень> --show
   python3 autonomy.py <корень> --set 2
   python3 autonomy.py <корень> --can 3      можно ли, и чего не хватает
+  python3 autonomy.py <корень> --words "полный автомат, продумай глубоко"
 
   код 0 — сделано/можно, 1 — нельзя (условие не выполнено), 2 — не смог,
   3 — ошибка вызова
@@ -42,6 +52,9 @@ import os
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import plain_ru  # noqa: E402
+
 MAX_LEVEL = 3
 
 LEVELS = {
@@ -52,18 +65,58 @@ LEVELS = {
 }
 
 
+#: Слово человека -> ступень, которую оно ПРОСИТ. Отдельной шкалы тут нет:
+#: «полный автомат» это верхняя ступень со всеми её условиями, «ручной» —
+#: нижняя, которой условие не нужно никогда.
+MODES = {"auto": MAX_LEVEL, "normal": 2, "manual": 0}
+DEFAULT_MODE = "normal"
+
+#: Сколько система додумывает сверх сказанного. Ступень этим не двигается.
+DEPTHS = ("strict", "normal", "deep")
+DEFAULT_DEPTH = "normal"
+
+#: По каким оборотам режим узнаётся в живой фразе. Списки НАРОЧНО разной
+#: широты и порядок НАРОЧНО такой. Ошибка в сторону «ручной» стоит лишнего
+#: вопроса, ошибка в сторону «полный автомат» — сделанного без спроса.
+#: Поэтому верхний режим узнаётся только по прямым оборотам, нижний — по
+#: любому упоминанию, и при совпадении сразу двух побеждает последний, то
+#: есть более осторожный.
+MODE_WORDS = {
+    "auto": ("полный автомат", "полностью автомат", "полном автомате",
+             "на автомате", "автопилот", "ничего не спрашивай",
+             "не спрашивай меня", "решай сам", "делай сам"),
+    "normal": ("как обычно", "обычный режим", "обычном режиме"),
+    "manual": ("ручн", "вручную", "спрашивай обо всем", "подтверждай каждый"),
+}
+
+#: Та же осторожность, повёрнутая обратно: «строго» и «глубоко» стоят человеку
+#: времени, а не неожиданностей, поэтому узнаются широко.
+DEPTH_WORDS = {
+    "normal": ("как обычно", "обычная глубина"),
+    "strict": ("строго", "строгий", "только то, что сказал", "ничего своего",
+               "без самодеятельности"),
+    "deep": ("глубок", "глубже", "продумай как следует", "все сценарии"),
+}
+
+
 def state_file(root: Path) -> Path:
     return root / ".superstack" / "autonomy.json"
+
+
+def _blank(why: str) -> dict:
+    return {"level": 0, "why": why, "mode": DEFAULT_MODE, "depth": DEFAULT_DEPTH}
 
 
 def read(root: Path) -> dict:
     try:
         d = json.loads(state_file(root).read_text("utf-8"))
     except (OSError, ValueError):
-        return {"level": 0, "why": "не задавалась — начинаем с нуля"}
+        return _blank("не задавалась — начинаем с нуля")
     lvl = d.get("level")
     if not isinstance(lvl, int) or not 0 <= lvl <= MAX_LEVEL:
-        return {"level": 0, "why": "запись повреждена — считаем нулём"}
+        return _blank("запись повреждена — считаем нулём")
+    d["mode"] = d.get("mode") if d.get("mode") in MODES else DEFAULT_MODE
+    d["depth"] = d.get("depth") if d.get("depth") in DEPTHS else DEFAULT_DEPTH
     return d
 
 
@@ -137,12 +190,77 @@ def can(root: Path, level: int) -> dict:
     return {"ok": not missing, "level": level, "missing": missing}
 
 
-def write(root: Path, level: int, missing: list) -> None:
+def write(root: Path, level: int, missing: list,
+          mode: "str | None" = None, depth: "str | None" = None) -> None:
+    """Одна запись на всё: ступень, режим и глубина.
+
+    Прежнее значение режима подхватывается, а не затирается: `--set` меняет
+    ступень, и молчаливая потеря выбранного режима означала бы, что система
+    вернулась к умолчанию, не сказав об этом ни слова.
+    """
+    было = read(root)
     f = state_file(root)
     f.parent.mkdir(parents=True, exist_ok=True)
     f.write_text(json.dumps({"level": level, "why": LEVELS[level],
+                             "mode": mode or было["mode"],
+                             "depth": depth or было["depth"],
                              "checked": [c for c in missing]},
                             ensure_ascii=False, indent=1), encoding="utf-8")
+
+
+def recognise(text: str) -> dict:
+    """Что человек сказал о режиме и о глубине СВОИМИ словами.
+
+    Ничего не нашлось — ничего и не возвращается. Молчание это не выбор
+    «обычно», а отсутствие просьбы, и перезаписывать им прежний выбор нельзя:
+    человек, сказавший «ручной» вчера, не отменял его сегодняшним «давай
+    дальше».
+    """
+    t = (text or "").lower().replace("ё", "е")
+    said = {"mode": None, "depth": None}
+    for mode, words in MODE_WORDS.items():
+        if any(w in t for w in words):
+            said["mode"] = mode
+    for depth, words in DEPTH_WORDS.items():
+        if any(w in t for w in words):
+            said["depth"] = depth
+    return said
+
+
+def ask(root: Path, mode: "str | None" = None,
+        depth: "str | None" = None) -> dict:
+    """Просьба о режиме. Ступень даёт условие, а не слово.
+
+    Просимая ступень берётся, только если её условие выполнено; иначе берётся
+    ближайшая снизу, которая заслужена, и причина возвращается вместе с
+    результатом. Тихо выдать верхнюю по слову значило бы снять подтверждения,
+    не добавив проверок, — ровно то, ради чего эта ступень и заведена.
+    """
+    было = read(root)
+    mode = mode or было["mode"]
+    depth = depth or было["depth"]
+    if mode not in MODES:
+        raise ValueError(f"неизвестный режим: {mode}")
+    if depth not in DEPTHS:
+        raise ValueError(f"неизвестная глубина: {depth}")
+    хотим = MODES[mode]
+    не_хватает = can(root, хотим)["missing"]
+    дают = хотим
+    while дают > 0 and not can(root, дают)["ok"]:
+        дают -= 1
+    write(root, дают, не_хватает, mode=mode, depth=depth)
+    return {"mode": mode, "depth": depth, "asked": хотим, "level": дают,
+            "missing": не_хватает if дают < хотим else []}
+
+
+def badges(root: Path) -> dict:
+    """Две плашки для панели: как работаем и насколько глубоко.
+
+    Отдаются опознавателями, а не словами: слова для человека лежат в
+    `data/plain-ru.json`, и правка формулировки не должна быть правкой кода.
+    """
+    d = read(root)
+    return {"mode": d["mode"], "depth": d["depth"], "level": d["level"]}
 
 
 def halt_if_paused() -> None:
@@ -151,6 +269,12 @@ def halt_if_paused() -> None:
     if (Path.home() / ".claude" / "superstack" / "PAUSE").exists():
         print("ОСТАНОВЛЕНО: система на паузе", file=sys.stderr)
         raise SystemExit(10)
+
+
+def _value_arg(argv: list, flag: str) -> "str | None":
+    if flag not in argv or argv.index(flag) + 1 >= len(argv):
+        return None
+    return argv[argv.index(flag) + 1]
 
 
 def _level_arg(argv: list, flag: str) -> "int | None":
@@ -162,22 +286,66 @@ def _level_arg(argv: list, flag: str) -> "int | None":
         return None
 
 
+def _сказать(mode: str, depth: str) -> str:
+    """Режим и глубина словами человека — из общего словаря, не отсюда."""
+    words = plain_ru.load()
+    return (f"{words['modes']['map'].get(mode, mode)} · глубина: "
+            f"{words['depths']['map'].get(depth, depth)}")
+
+
+def _по_словам(root: Path, сказано: str) -> int:
+    """Режим, названный словами. Печатается ПОСЛЕ записи, а не до неё."""
+    услышано = recognise(сказано)
+    if not услышано["mode"] and not услышано["depth"]:
+        print("НЕ УДАЛОСЬ: слов о режиме в этой фразе нет — оставляю как было",
+              file=sys.stderr)
+        return 2
+    out = ask(root, услышано["mode"], услышано["depth"])
+    print(f"РЕЖИМ: {_сказать(out['mode'], out['depth'])}", file=sys.stderr)
+    if out["mode"] == "auto":
+        # Одна фраза человеку в момент, когда он выбрал верхний режим: то,
+        # чего этот выбор НЕ отключает. Сказанное после первого прогона уже
+        # поздно — он к тому времени решил, что проверок не осталось.
+        print(plain_ru.copy("mode_auto_note"), file=sys.stderr)
+    if out["missing"]:
+        print(f"СТУПЕНЬ {out['asked']} НЕ ЗАСЛУЖЕНА — работаю на "
+              f"{out['level']}: {LEVELS[out['level']]}", file=sys.stderr)
+        for x in out["missing"]:
+            print(f"  ! {x}", file=sys.stderr)
+        print(json.dumps(out, ensure_ascii=False, indent=1))
+        return 1
+    print(json.dumps(out, ensure_ascii=False, indent=1))
+    return 0
+
+
 def main() -> int:
     halt_if_paused()
     argv = sys.argv[1:]
-    plain = [a for a in argv if not a.startswith("--") and not a.isdigit()]
+    # Фраза человека уходит из позиционных ДО подсчёта: она не начинается с
+    # «--» и без этого читалась бы как второй корень, то есть команда с
+    # режимом падала бы «вызов: …», не дойдя до распознавания слов.
+    сказано = _value_arg(argv, "--words")
+    остальное = list(argv)
+    if сказано is not None:
+        остальное.remove(сказано)
+    plain = [a for a in остальное
+             if not a.startswith("--") and not a.isdigit()]
     if len(plain) != 1:
-        print("вызов: autonomy.py <корень> --show | --set N | --can N",
-              file=sys.stderr)
+        print("вызов: autonomy.py <корень> --show | --set N | --can N | "
+              "--words «слова человека»", file=sys.stderr)
         return 3
     root = Path(plain[0]).expanduser().resolve()
     if not root.is_dir():
         print(f"НЕ УДАЛОСЬ: нет каталога {root}", file=sys.stderr)
         return 2
 
+    if сказано is not None:
+        return _по_словам(root, сказано)
+
     if "--show" in argv or (not any(f in argv for f in ("--set", "--can"))):
         cur = read(root)
         print(f"СТУПЕНЬ {cur['level']}: {LEVELS[cur['level']]}", file=sys.stderr)
+        print(f"РЕЖИМ: {_сказать(cur['mode'], cur['depth'])}", file=sys.stderr)
         print(json.dumps(cur, ensure_ascii=False, indent=1))
         return 0
 

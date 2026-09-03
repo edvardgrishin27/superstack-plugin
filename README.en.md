@@ -7,14 +7,14 @@
 <p align="center"><img src="assets/superstack-hero.jpg" alt="SUPERSTACK — the build is checked before it is called done" width="100%"></p>
 
 [![version](https://img.shields.io/badge/version-0.10.0-1f6feb)](.claude-plugin/marketplace.json)
-[![tests](https://img.shields.io/badge/tests-1964-2ea043)](tests)
-[![mutations](https://img.shields.io/badge/mutations-559-8957e5)](tests/mutations.json)
+[![tests](https://img.shields.io/badge/tests-1998-2ea043)](tests)
+[![mutations](https://img.shields.io/badge/mutations-576-8957e5)](tests/mutations.json)
 [![python](https://img.shields.io/badge/python-3.8%2B-3776ab)](#requirements-and-platforms)
 [![dependencies](https://img.shields.io/badge/dependencies-none-555555)](#under-the-hood)
 [![license](https://img.shields.io/badge/license-MIT-97ca00)](LICENSE)
 [![Claude Code plugin](https://img.shields.io/badge/Claude%20Code-plugin-d97757)](#quick-start)
 
-1964 tests · 559 mutations, all caught · 318 mechanisms.
+1998 tests · 576 mutations, all caught · 352 mechanisms.
 
 ## What this is
 
@@ -70,7 +70,7 @@ and answers with an exit code.
 downstream.
 
 **The plugin holds itself to the bar it sells.** Nine gates, and the harshest is
-mutation: **559 registered mutations** break the code on purpose, and every one
+mutation: **576 registered mutations** break the code on purpose, and every one
 of them must turn the suite red. A check that cannot fail is not a check.
 
 ## Quick start
@@ -149,24 +149,33 @@ phase before it establishes **what** to build; every phase after it proves that
 **this** is what got built.
 
 ```mermaid
-flowchart TD
-    A["Your sentence:<br/>“I want a booking site”"] --> B["0 · Open<br/>brief recorded verbatim, progress panel opens"]
-    B --> C["1 · Understand<br/>G1 — not one requirement left open"]
-    C --> D["2 · Spec<br/>G2 — reviewed by other eyes, folder set up from the spec"]
-    D --> E["2.5 · Direction<br/>design on a canvas — only if the product has an interface"]
-    E --> F["3 · Plan<br/>G3 — traces to requirements both ways<br/><b>you approve; no code before this</b>"]
-    F --> G["4 · Work<br/>one task per builder agent, in a fresh context"]
-    G --> H["5 · Verification<br/>verify.py ≠ 0 keeps the turn open"]
-    H --> I["5.4 · Security<br/>only if the product faces real people"]
-    I --> J["5.5 · Look at it<br/>open the page before showing it to anyone"]
-    J --> K["6 · Blind acceptance<br/>G4 — request and diff only, nothing else"]
-    K --> L["7 · What survives<br/>project memory, decisions, document links"]
-    L --> M["8 · Report<br/>assembled from files, with “How to open it”"]
+flowchart LR
+    A["Your sentence"]
+    B["0 Open"]
+    C["1 Understand · G1"]
+    D["2 Spec · G2"]
+    E["2.5 Direction"]
+    F["3 Plan · G3, you approve"]
+    G["4 Work"]
+    H["5 Verification · exit ≠ 0 holds"]
+    I["5.4 Security"]
+    J["5.5 Look"]
+    K["6 Blind acceptance · G4"]
+    L["7 Project memory"]
+    M["8 Report · “How to open”"]
+    A --> B --> C --> D --> E --> F --> G --> H --> I --> J --> K --> L --> M
 ```
 
 Skipping a phase is allowed; skipping it silently is not. When the design phase
 or the security phase does not apply, it says so in one line — because "we
 decided it wasn't needed" and "we forgot" look identical otherwise.
+
+
+<p align="center"><img src="assets/panel-en.jpg" alt="The SUPERSTACK progress panel: the headline number counts only machine-proved work" width="100%"></p>
+
+The progress panel: the headline number counts only what a machine proved; "the
+assistant says so" is shown separately and is never added to it. This is a
+screenshot of the real page on a demo state, not a mock-up.
 
 ## Under the hood
 
@@ -211,6 +220,51 @@ The counts at the top of this page — badges and summary line — are rewritten
 measurement at release time (`tools/sync_public.py`), in both language versions.
 A showcase for a product that promises never to claim the unmeasured does not
 get to type its own figures.
+
+## How it differs from the sets next to it
+
+Two other sets for Claude Code sit next to this one, and "how are they
+different" is asked before install. Cells about SUPERSTACK name a file you can
+open. Cells about the others carry only what was verified by reading their code
+and docs on 3 September 2026; where verification was not possible it says "not
+checked" — which is not the same as "no".
+
+| What is compared | SUPERSTACK | Superpowers | Skills Matt Pocock |
+| --- | --- | --- | --- |
+| Who decides "done" | **an exit code**: non-zero keeps the turn open (`hooks/verify-gate.py`) | the model, by written rules | the model, by written rules |
+| Breakages that must turn the suite red | **yes**, 576 registered (`tests/mutations.json`) | no | no |
+| Tests of the tool itself | **yes**, suite green under any `HOME` (`tools/gauntlet.py`) | 44 files | not found |
+| Blind acceptance | **yes**: the reviewer gets only the request and the diff (`tools/blind_accept.py`) | no, the spec is handed over | no, the spec is handed over |
+| Numbers on the panel | **from files**; "claimed" shown apart and never added up (`tools/progress.py`) | no panel | no panel |
+| "Put it back" | **yes**, one sentence, a snapshot at every stage (`tools/checkpoint.py`) | a branch, no command | no |
+| Stop with one word | **yes**, a file that holds even when the agent is silent (`tools/pause.py`) | no | no |
+| Your list of requirements | **yes**, verbatim and numbered; dropping needs your quote, checked by code (`tools/manifest.py`) | plan tasks, not requirements | numbered tickets |
+| See where the work is | **yes**: a page-file with a snapshot, no server, RU/EN, on a phone (`tools/live_panel.py`) | a log and a to-do list | an issue tracker |
+| Task size | **yes**: waves and tier computed by code (`tools/crew.py`) | yes | yes |
+| How it starts | a plugin once, then seven commands and ordinary words | a plugin, skills fire by themselves | a plugin or files |
+
+## What SUPERSTACK never does
+
+Every line below is not a promise but a place in the code where it is locked.
+
+- **Never calls the work done while the check returns non-zero.** The turn stays
+  open until the code is zero — `hooks/verify-gate.py`, `tools/verify.py`.
+- **Never writes code before you approve the plan.** The work phase does not
+  open earlier — `tools/gates.py`, `skills/go/phases/3-план.md`.
+- **Never drops one of your requirements on its own.** A drop needs your own
+  words, and code checks they are in the original request — `tools/manifest.py`.
+- **Deletes nothing.** Quarantine instead of deletion, a copy before the first
+  edit — `tools/apply.py`.
+- **Never copies your keys.** A backup keeps the file but not the password
+  value, and the value never reaches the log — `tools/apply.py`, `tools/log.py`.
+- **Never continues after "stop".** The brake is a file on disk, and it holds
+  even when the agent will not answer — `tools/pause.py`.
+- **Never runs destructive commands.** The list of dangerous ones is single for
+  the whole set, and a separate layer enforces it rather than the model's
+  memory — `tools/deny_list.py`.
+- **Never prints a number it did not measure.** The progress page counts from
+  files, and the figures on this page are rewritten at release time —
+  `tools/progress.py`, `tools/sync_public.py`.
 
 ## Requirements and platforms
 

@@ -60,6 +60,39 @@ _r = importlib.util.spec_from_file_location(
 plain_ru = importlib.util.module_from_spec(_r)
 _r.loader.exec_module(plain_ru)
 
+_a = importlib.util.spec_from_file_location(
+    "ss_autonomy_panel", PKG / "tools" / "autonomy.py")
+au = importlib.util.module_from_spec(_a)
+_a.loader.exec_module(au)
+
+
+class TestTheModeIsVisibleOnThePanel(unittest.TestCase):
+    """Режим участия человек называет словами — и обязан видеть их на панели.
+
+    Договорённость, которой не видно, к третьей части забывают обе стороны:
+    человек уверен, что его спросят, система уверена, что уже не надо. Здесь
+    заперт весь путь целиком — фраза, запись в состоянии, плашка на экране:
+    любое из трёх звеньев в отдельности зеленеет и при мёртвом соседе.
+    """
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.root = Path(self.tmp.name)
+        self.run = self.root / ".superstack"
+        self.run.mkdir()
+        (self.run / "state.json").write_text(
+            json.dumps(pr.EMPTY, ensure_ascii=False), encoding="utf-8")
+
+    def test_full_auto_said_in_words_reaches_the_panel(self):
+        услышано = au.recognise("давай в полном автомате, я сегодня занят")
+        self.assertEqual(услышано["mode"], "auto")
+        au.ask(self.root, услышано["mode"], услышано["depth"])
+        self.assertEqual(au.read(self.root)["mode"], "auto")
+        self.assertEqual(lp.state_with_phase(self.run)["mode"]["mode"], "auto")
+        html = lp.write_panel(self.run).read_text("utf-8")
+        self.assertIn(plain_ru.load()["modes"]["map"]["auto"], html)
+
 
 class TestTheHolderOfTheTurnIsNamed(unittest.TestCase):
     """«Идёт фаза 3» не говорит, ждут ли человека. Он ждёт систему, система
@@ -104,6 +137,24 @@ class TestThePanelIsBuiltSafely(unittest.TestCase):
     def test_the_phase_list_is_built_by_dom_methods(self):
         self.assertIn("createElement", self.html)
 
+    def test_the_dollar_helper_is_defined_before_its_first_caller(self):
+        """`let LANG = firstLang()` вызывает `snapshot()`, а та читает
+        `$('snapshot')` немедленно, при первой отрисовке — до первого опроса
+        сервера. Если `const $ = ...` стоит НИЖЕ этого вызова, `$` в момент
+        вызова лежит в мёртвой зоне константы: на чистом профиле браузера
+        (пустой localStorage, поэтому кэш языка не спасает) страница падает
+        раньше первой цифры, и панель молча остаётся пустой — ничего не
+        рисуется, но ни один прежний тест этого не видит, потому что все они
+        проверяют ГОТОВЫЙ html, а не порядок исполнения script при загрузке.
+        """
+        dollar = self.html.find("const $ = (id) => document.getElementById(id);")
+        first_lang_call = self.html.find("let LANG = firstLang();")
+        self.assertGreater(dollar, -1, "$ нигде не объявлен")
+        self.assertGreater(first_lang_call, -1, "firstLang() нигде не вызывается")
+        self.assertLess(dollar, first_lang_call,
+                        "$ объявлен ПОСЛЕ первого вызова firstLang() — на чистом"
+                        " профиле браузера страница падает раньше первой цифры")
+
 
 class TestTheBarGrowsOnlyFromProof(unittest.TestCase):
     """Разрешив полосе расти от заявленного, мы получили бы дашборд, на котором
@@ -144,10 +195,12 @@ class TestTheBarGrowsOnlyFromProof(unittest.TestCase):
 
         Проверяется РАЗМЕТКА, а не весь файл: в комментариях кода служебные
         слова законны — их читает тот, кто правит панель, а не тот, кто ждёт
-        работу.
+        работу. По той же причине вырезаются ВСЕ теги скрипта, а не только без
+        свойств: снимок состояния лежит в теге со свойствами, и его содержимое
+        — данные прогона, а не надпись, которую кто-то сочинил в разметке.
         """
         body = re.search(r"<body>(.+)</body>", self.html, re.S).group(1)
-        body = re.sub(r"<script>.+?</script>", "", body, flags=re.S)
+        body = re.sub(r"<script[^>]*>.+?</script>", "", body, flags=re.S)
         texts = [t.strip() for t in re.sub(r"<[^>]+>", "\n", body).split("\n")]
         words = plain_ru.load()["copy"]["map"]
         allowed = (set(words.values()) | {lp.BRAND, "",
@@ -484,6 +537,97 @@ class TestCommandLine(unittest.TestCase):
         self.assertIn("url", json.loads(r.stdout))
 
 
+class TestThePanelLivesWithoutAServer(unittest.TestCase):
+    """Панель, живущая только вместе с процессом, — не панель, а окно.
+
+    Сервер умирает вместе с сессией, вкладку закрывают, ноутбук перезагружают,
+    и назавтра по той же ссылке пусто. Читать соседний файл с диска браузер не
+    даёт, поэтому состояние едет ВНУТРИ страницы: каждая запись хода работ
+    вписывает снимок между границами, и файл, открытый двойным кликом,
+    показывает последнюю запись без всякого сервера.
+    """
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.run = Path(self.tmp.name) / ".superstack"
+        self.run.mkdir()
+        self.state = self.run / "state.json"
+
+    def _progress(self, *args):
+        return subprocess.run(
+            [sys.executable, str(PKG / "tools" / "progress.py"), *args],
+            capture_output=True, text=True, timeout=60,
+            env={**os.environ, "SUPERSTACK_IGNORE_PAUSE": "1"})
+
+    def test_a_recorded_phase_lands_in_the_page_as_a_snapshot(self):
+        """Ни сервера, ни запроса: только запись хода работ — и страница уже
+        знает этап. Проверяется РАЗОБРАННЫЙ снимок, а не вхождение названия в
+        файл: имя этапа встречается в разметке и просто как элемент списка."""
+        self._progress("init", str(self.state), "проба")
+        r = self._progress("phase", str(self.state), "Дизайн-система", "человек",
+                           "--detail", "ушёл собирать правила внешнего вида")
+        self.assertEqual(r.returncode, 0, r.stderr[-300:])
+
+        html = (self.run / lp.PANEL).read_text("utf-8")
+        a = html.find(lp.SNAPSHOT_BEGIN)
+        b = html.find(lp.SNAPSHOT_END)
+        self.assertGreater(b, a, "в странице нет границ снимка")
+        внутри = html[a + len(lp.SNAPSHOT_BEGIN):b]
+        снимок = json.loads(re.search(r'id="snapshot">(.*)</script>',
+                                      внутри, re.S).group(1))
+        self.assertEqual(снимок["phase"]["name"], "Дизайн-система")
+        self.assertEqual(снимок["phase"]["owner"], "человек")
+
+    def test_the_page_speaks_both_languages(self):
+        """Панель уезжает человеку одним файлом, и кто его откроет — заранее
+        не известно. Второй язык обязан ехать вместе с ней: догружать словарь
+        с диска странице неоткуда."""
+        self.state.write_text(json.dumps(pr.EMPTY), encoding="utf-8")
+        html = lp.write_panel(self.run).read_text("utf-8")
+        self.assertIn('data-lang="en"', html, "переключателя языка нет")
+        self.assertIn('data-lang="ru"', html)
+        английские = plain_ru.english()["names"]
+        for этап in lp.PHASES:
+            with self.subTest(phase=этап):
+                self.assertIn(английские[этап], html,
+                              f"этап «{этап}» некому назвать по-английски")
+
+
+class TestOpeningTheFileIsAnExitCode(unittest.TestCase):
+    """«Открыл» без проверки — подтверждение раньше результата.
+
+    Открывателя может не быть вовсе: машина без графической оболочки, урезанный
+    образ, отсутствующий `xdg-open`. Тогда честный ответ — код и путь словами, а
+    не бодрая строка про открытое окно, которого никто не видел.
+    """
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.d = Path(self.tmp.name)
+        (self.d / "state.json").write_text(json.dumps(pr.EMPTY), encoding="utf-8")
+        self.открыватель = self.d / "открыватель.sh"
+
+    def _run(self, код):
+        self.открыватель.write_text(f"#!/bin/sh\nexit {код}\n", encoding="utf-8")
+        self.открыватель.chmod(0o755)
+        return subprocess.run(
+            [sys.executable, str(TOOL), str(self.d), "--open"],
+            capture_output=True, text=True, timeout=60,
+            env={**os.environ, "SUPERSTACK_IGNORE_PAUSE": "1",
+                 lp.OPENER_ENV: str(self.открыватель)})
+
+    def test_a_refusing_opener_is_reported_not_swallowed(self):
+        r = self._run(1)
+        self.assertEqual(r.returncode, lp.OPEN_FAILED, r.stderr[-300:])
+        self.assertIn(str(self.d / lp.PANEL), r.stderr,
+                      "путь к файлу не назван — человеку нечего открыть самому")
+
+    def test_a_working_opener_returns_zero(self):
+        self.assertEqual(self._run(0).returncode, 0)
+
+
 class TestTheSkillOpensThePanel(unittest.TestCase):
     """Панель, которую никто не открывает, — это файл на диске, а не панель."""
 
@@ -515,3 +659,151 @@ class TestTheSkillOpensThePanel(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ВедомостьИЛентаДоезжаютДоСтраницы(unittest.TestCase):
+    """Панель обязана отвечать не «сколько процентов», а «что мне обещали и
+    что из этого подтверждено машиной».
+
+    Ведомость двойной записи — слева обещание словами человека, справа код
+    возврата — единственное место, где обещание и подтверждение стоят рядом и
+    не могут подтвердить друг друга. Лента «что произошло» держит их во
+    времени. Оба блока обязаны быть В ФАЙЛЕ: страница уезжает человеку одним
+    файлом и открывается без сервера.
+    """
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.run = Path(self.tmp.name) / ".superstack"
+        self.run.mkdir()
+        self.state = self.run / "state.json"
+
+    def _progress(self, *args):
+        r = subprocess.run(
+            [sys.executable, str(PKG / "tools" / "progress.py"), *args],
+            capture_output=True, text=True, timeout=60,
+            env={**os.environ, "SUPERSTACK_IGNORE_PAUSE": "1"})
+        self.assertEqual(r.returncode, 0, r.stderr[-300:])
+        return r
+
+    def test_a_live_run_lands_in_the_page_with_its_blocks_and_its_share(self):
+        (self.run / "manifest.json").write_text(json.dumps({
+            "schema": "superstack.manifest.v1",
+            "requirements": [
+                {"id": "R01", "kind": "explicit", "status": "done",
+                 "quote": "чтобы клиент выбирал мастера", "basis": ""},
+                {"id": "R02", "kind": "explicit", "status": "in-ticket",
+                 "quote": "записаться без регистрации", "basis": ""},
+            ]}, ensure_ascii=False), encoding="utf-8")
+        self._progress("init", str(self.state), "запись к парикмахеру")
+        self._progress("phase", str(self.state), "Пишем код", "исполнитель")
+        self._progress("task", str(self.state), "01", "Выбор мастера",
+                       "--wave", "1", "--status", "proven", "--exit-code", "0",
+                       "--requirements", "R01",
+                       "--started", "2026-09-03T13:00:00+00:00",
+                       "--finished", "2026-09-03T13:29:00+00:00")
+        self._progress("task", str(self.state), "02", "Форма записи",
+                       "--wave", "1", "--status", "claimed",
+                       "--requirements", "R02",
+                       "--started", "2026-09-03T13:30:00+00:00",
+                       "--finished", "2026-09-03T13:58:00+00:00")
+
+        html = (self.run / lp.PANEL).read_text("utf-8")
+        for блок in ("ledger", "feed", "you", "ticks", "saidbar"):
+            with self.subTest(block=блок):
+                self.assertIn(f'id="{блок}"', html, f"на странице нет «{блок}»")
+        for ключ in ("ledger_rubric", "ledger_left", "ledger_right",
+                     "feed_rubric", "you_rubric", "fine_note", "ruler_said"):
+            with self.subTest(key=ключ):
+                self.assertIn(plain_ru.copy(ключ), html,
+                              f"надписи «{ключ}» нет в файле")
+
+        внутри = html[html.find(lp.SNAPSHOT_BEGIN):html.find(lp.SNAPSHOT_END)]
+        снимок = json.loads(re.search(r'id="snapshot">(.*)</script>',
+                                      внутри, re.S).group(1))
+        факты = снимок["facts"]
+        # Одна часть из двух доказана, вторая названа готовой. Доля — ровно
+        # половина: слово помощника не двигает её ни на процент.
+        self.assertEqual(факты["parts"]["percent_proven"], 50)
+        self.assertEqual(факты["parts"]["gap"], 1)
+        # Ведомость: слева слова человека, справа — код возврата и «со слов».
+        состояния = {r["id"]: r["state"] for r in факты["ledger"]}
+        self.assertEqual(состояния, {"R01": "proven", "R02": "claimed"})
+        self.assertEqual(факты["ledger"][0]["code"], 0)
+        # У «со слов» на правой стороне не должно быть ни одного числа —
+        # цифра рядом со словом читается как измерение.
+        сказано = next(r for r in факты["ledger"] if r["state"] == "claimed")
+        self.assertNotIn("code", сказано)
+        self.assertIn("proven", {e["key"] for e in факты["events"]},
+                      "лента не знает о проверке, которая уже прошла")
+
+
+class TestThePanelAdaptsToTheScreen(unittest.TestCase):
+    """Панель уезжает человеку одним файлом и открывается на чём угодно — от
+    телефона до широкого монитора. Без точек перелома вёрстка, рассчитанная
+    на 1440px, ломается на первом же экране уже. Три точки:
+
+      · ≤600px  — четыре числа в столбик, поля рельса и сцены уже;
+      · ≤1000px или ≤1100px — числа 2×2, а рельс станций уходит наверх;
+      · ≤720px  — ведомость двойной записи из двух колонок становится
+        строкой обещания над строкой подтверждения.
+
+    Проверяется здесь БУКВОЙ: `@media` с этими порогами вообще есть в
+    собранной странице. То, что от них ничего не отваливается по ширине, —
+    отдельная ручная проверка снимком headless Chrome (см. отчёт), а не
+    то, что можно пришпилить как код возврата к строке CSS.
+    """
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.d = Path(self.tmp.name)
+        (self.d / "state.json").write_text(json.dumps(pr.EMPTY), encoding="utf-8")
+        self.html = lp.write_panel(self.d).read_text("utf-8")
+
+    def test_three_breakpoints_are_present(self):
+        for width in ("37.5rem", "45rem"):
+            with self.subTest(width=width):
+                self.assertIn(f"@media (max-width: {width})", self.html,
+                              f"нет точки перелома на {width}")
+        self.assertTrue(
+            re.search(r"@media \(max-width: (62\.5|68\.75)rem\)", self.html),
+            "нет точки перелома у ряда чисел или у рельса станций"
+            " (ожидались 1000px или 1100px)")
+
+
+class TestTheYouBarSaysItOnce(unittest.TestCase):
+    """Полоса «от тебя» раньше несла две строки — «ход/ничего не нужно» и
+    «долг/ничего» — и в частом случае (не твой ход, долга нет) обе говорили
+    одно и то же разными словами: «сейчас от тебя ничего не нужно» плюс
+    «пока ничего — заглушки … соберём к сдаче» рядом. Теперь ровно один
+    заголовок и одна фраза, а решает, что важнее — ход, долг или честное
+    «ничего», — сама drawYou()."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.d = Path(self.tmp.name)
+        (self.d / "state.json").write_text(json.dumps(pr.EMPTY), encoding="utf-8")
+        self.html = lp.write_panel(self.d).read_text("utf-8")
+
+    def test_there_is_only_one_value_line_in_the_you_block(self):
+        self.assertEqual(self.html.count('id="youv"'), 1,
+                         "в полосе «от тебя» больше одной строки значения")
+        self.assertNotIn('id="debt"', self.html,
+                         "старый второй блок «что нужно от тебя» не убран")
+        self.assertNotIn('id="debtrub"', self.html,
+                         "старый второй блок «что нужно от тебя» не убран")
+
+    def test_the_function_picks_one_reason_by_priority(self):
+        m = re.search(r"function drawYou\(s\) \{(.+?)\n\}", self.html, re.S)
+        self.assertIsNotNone(m, "drawYou нет вовсе")
+        body = m.group(1)
+        # Ход важнее долга, долг важнее «ничего» — и решение принимается ОДИН
+        # раз в if/else if/else, а не тремя независимыми присваиваниями,
+        # которые могли бы напечататься все разом.
+        self.assertIn("you_turn", body)
+        self.assertIn("debt.phrase", body)
+        self.assertIn("you_nothing", body)
+        self.assertRegex(body, r"if\s*\(mine\)[\s\S]+else if\s*\(debt\.total\)[\s\S]+else\b")

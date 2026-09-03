@@ -634,6 +634,60 @@ class СессияЭтажомВыше(unittest.TestCase):
         self.assertEqual(st.проверить_все(проект)["код"], 0)
 
 
+def журнал_с_cwd(путь: Path, cwd: Path, шаги: list) -> Path:
+    """Журнал в форме Claude Code: `cwd` стоит в первой же записи."""
+    журнал(путь, шаги)
+    строки = путь.read_text("utf-8").splitlines()
+    голова = json.dumps({"type": "user", "cwd": str(cwd), "isSidechain": True,
+                         "message": {"role": "user", "content": "задание"}},
+                        ensure_ascii=False)
+    путь.write_text("\n".join([голова, *строки]) + "\n", encoding="utf-8")
+    return путь
+
+
+class СоседнийПроектВТойЖеПапке(unittest.TestCase):
+    """Журнал сессии СОСЕДНЕГО проекта не считается своим.
+
+    Вторая половина той же находки. Поиск по предкам нашёл журналы сессии,
+    открытой этажом выше, — и заодно журналы любого другого проекта в той же
+    родительской папке. Сторож судил чужую работу как свою: чужая петля
+    читалась как наша, а собственное молчание маскировалось чужим движением.
+
+    Ожидание собрано по условию: два журнала лежат в ОДНОЙ папке сессии и
+    отличаются только объявленным `cwd` — тем самым полем, которое Claude Code
+    пишет первой записью.
+    """
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.дом = Path(self.tmp.name)
+        self._старый_home = os.environ.get("HOME")
+        os.environ["HOME"] = str(self.дом)
+
+    def tearDown(self):
+        if self._старый_home is None:
+            os.environ.pop("HOME", None)
+        else:
+            os.environ["HOME"] = self._старый_home
+        self.tmp.cleanup()
+
+    def test_берётся_только_журнал_своего_проекта(self):
+        родитель = self.дом / "рабочее"
+        наш, сосед = родитель / "наш", родитель / "сосед"
+        наш.mkdir(parents=True)
+        сосед.mkdir(parents=True)
+        subagents = подставной_дом(self.дом, родитель) / "сессия-1" / "subagents"
+        subagents.mkdir(parents=True)
+        шаги_ = [bash("pytest tests/")] * 8
+        журнал_с_cwd(subagents / "agent-наш.jsonl", наш, шаги_)
+        журнал_с_cwd(subagents / "agent-сосед.jsonl", сосед, шаги_)
+
+        найдено = st.подагенты(наш)
+        self.assertEqual([f.name for f in найдено], ["agent-наш.jsonl"],
+                         "журнал соседнего проекта попал в свою волну — "
+                         "сторож судит чужую работу как нашу")
+
+
 class СторожНеТрогаетДеревоПроекта(unittest.TestCase):
     """Файлы сторожа живут вне проекта, а «ноль журналов» называет место.
 

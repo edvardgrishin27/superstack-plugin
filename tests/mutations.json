@@ -1224,8 +1224,8 @@
   {
    "id": "handoff.return-contract-optional",
    "file": "plugins/superstack/tools/handoff.py",
-   "find": "        \"```\", RETURN_CONTRACT, \"```\",",
-   "replace": "        \"```\", \"верни что сочтёшь нужным\", \"```\",",
+   "find": "        \"\", \"## Сколько тебя хватит\", \"\", CEILING,\n        \"\", \"## Чем закончить — обязательное\", \"\",\n        \"Верни ровно этот блок, ничего к нему не добавляя:\", \"\",\n        \"```\", RETURN_CONTRACT, \"```\",",
+   "replace": "        \"\", \"## Сколько тебя хватит\", \"\", CEILING,\n        \"\", \"## Чем закончить — обязательное\", \"\",\n        \"Верни ровно этот блок, ничего к нему не добавляя:\", \"\",\n        \"```\", \"верни что сочтёшь нужным\", \"```\",",
    "why": "контракт возврата не доезжает: нечем обновить состояние и нечего передать следующему таску — работа сделана, результат потерян"
   },
   {
@@ -2015,16 +2015,16 @@
   {
    "id": "autonomy.ladder-removed",
    "file": "plugins/superstack/skills/go/phases/1-понять.md",
-   "find": "### Ступень подтверждений",
+   "find": "### Режим участия",
    "replace": "### Заметки о согласованиях",
-   "why": "ступень подтверждений перестаёт быть выбором человека — одно умолчание на всех дёргает новичка на каждом таске либо не спрашивает там, где он хотел посмотреть"
+   "why": "режим участия перестаёт быть выбором человека — одно умолчание на всех дёргает новичка на каждой части либо не спрашивает там, где он хотел посмотреть"
   },
   {
    "id": "autonomy.ladder-can-switch-off-gates",
    "file": "plugins/superstack/skills/go/phases/1-понять.md",
-   "find": "- **гейты остаются гейтами на всех трёх.**",
-   "replace": "- на верхней ступени гейты можно не запускать:",
-   "why": "шкала доверия превращается в тумблер «не проверяй» — человек, выбравший меньше подтверждений, теряет вместе с ними коды возврата, слепую приёмку и G4"
+   "find": "**слепая приёмка и G4 обязательны всегда**",
+   "replace": "на полном автомате приёмку можно пропустить",
+   "why": "ручка доверия превращается в тумблер «не проверяй» — человек, выбравший меньше вопросов, теряет вместе с ними слепую приёмку и G4, то есть единственную независимую проверку"
   },
   {
    "id": "sync.literal-split-breaks-fixtures",
@@ -2088,6 +2088,20 @@
    "find": "        stage = _flag(argv, \"--stage\", \"system\")",
    "replace": "        stage = _flag(argv, \"--stage\", \"both\")",
    "why": "по умолчанию печатаются оба этапа разом — человек несёт во внешний инструмент второй вместе с первым и получает экраны раньше системы, то есть систему под уже нарисованный экран"
+  },
+  {
+   "id": "panel.dollar-after-first-lang-call",
+   "file": "plugins/superstack/tools/live_panel.py",
+   "find": "const $ = (id) => document.getElementById(id);\n// Языков два, и ОБА вшиты в файл. Догружать второй словарь панели неоткуда:\n// она обязана работать открытой с диска, где соседние файлы читать нельзя.\nlet LANG = firstLang();",
+   "replace": "let LANG = firstLang();\n// Языков два, и ОБА вшиты в файл. Догружать второй словарь панели неоткуда:\n// она обязана работать открытой с диска, где соседние файлы читать нельзя.\nconst $ = (id) => document.getElementById(id);",
+   "why": "firstLang() зовёт snapshot(), а та немедленно читает $('snapshot') — если $ объявлен НИЖЕ этого вызова, он в момент вызова лежит в мёртвой зоне константы, и на чистом профиле браузера (пустой localStorage) страница падает раньше первой цифры: панель молча остаётся пустой"
+  },
+  {
+   "id": "panel.you-bar-hides-real-debt",
+   "file": "plugins/superstack/tools/live_panel.py",
+   "find": "  } else if (debt.total) {",
+   "replace": "  } else if (false) {",
+   "why": "не твой ход и есть незакрытый долг — полоса «от тебя» печатает «сейчас от тебя ничего не нужно» вместо списка заглушек: честная строка становится ложной именно тогда, когда долг реален"
   },
   {
    "id": "panel.bar-counts-claimed",
@@ -3661,8 +3675,8 @@
   {
    "id": "panel.empty-tasks-read-as-all-done",
    "file": "plugins/superstack/tools/live_panel.py",
-   "find": "  if (!tasks.length) { $('eta').textContent = W.copy.no_tasks; return; }",
-   "replace": "  if (false) { $('eta').textContent = W.copy.no_tasks; return; }",
+   "find": "  if (!tasks.length) { $('eta').textContent = W.copy.no_tasks; return null; }",
+   "replace": "  if (false) { $('eta').textContent = W.copy.no_tasks; return null; }",
    "why": "пустой список снова читается как «всё сделано»: работа ещё не разбита на части — это вся первая половина прогона, часы, — а панель показывает «все части закончены» с первой минуты"
   },
   {
@@ -3685,6 +3699,20 @@
    "find": "    out += [\"\", L,\n            \"Ничего не изменено. Доктор только смотрит.\",\n            \"Применить: /superstack apply <id>\", L]",
    "replace": "    pass",
    "why": "подвал пропадает из отчёта: человек не узнаёт ни что доктор ничего не менял, ни как применить найденное — а вернуть его на прежнее место между разделами значит снова спрятать за ним находки про безопасность"
+  },
+  {
+   "id": "panel.snapshot-not-written-into-the-page",
+   "file": "plugins/superstack/tools/progress.py",
+   "find": "    снимок_на_панель(path, data)",
+   "replace": "    pass",
+   "why": "запись хода работ перестаёт вписывать снимок в страницу: панель снова живёт только вместе с сервером — вкладку закрыли, ноутбук перезагрузили, и файл, открытый двойным кликом, показывает пустые полосы, то есть «ничего не происходит» вместо «нечего показывать»"
+  },
+  {
+   "id": "panel.english-words-gone",
+   "file": "plugins/superstack/data/plain-ru.json",
+   "find": " \"en\": {",
+   "replace": " \"en_\": {",
+   "why": "английская пара надписей пропадает из словаря, и панель уезжает человеку только на русском — переключатель на странице остаётся, но переключать нечего"
   },
   {
    "id": "panel.stale-run-text-reverts-to-human",
@@ -3794,8 +3822,8 @@
   {
    "id": "what.reads-only-the-folder-nobody-writes-to",
    "file": "plugins/superstack/tools/what.py",
-   "find": "    phase = run_phase(project)\n    if phase is not None:",
-   "replace": "    phase = run_phase(project)\n    if False and phase is not None:",
+   "find": "    if phase is not None:\n        name = \" \".join(str(phase[\"name\"]).split())",
+   "replace": "    if False and phase is not None:\n        name = \" \".join(str(phase[\"name\"]).split())",
    "why": "/what снова ищет состояние только в .claude/specs/ — папке, в которую не пишет ни один инструмент системы: после полного прогона /go человек слышит «работа ещё не начата» вместо этапа, на котором остановились"
   },
   {
@@ -3822,7 +3850,7 @@
   {
    "id": "report.no-way-into-what-was-built",
    "file": "plugins/superstack/tools/report.py",
-   "find": "    out.extend(как_открыть(пуск))",
+   "find": "    out.extend(как_открыть(пуск, я))",
    "replace": "    out.extend([])",
    "why": "отчёт снова кончается текстом: раздела «КАК ОТКРЫТЬ» нет, и человек уходит с описанием продукта, который живьём за весь прогон поднимали только помощники"
   },
@@ -3916,6 +3944,97 @@
    "find": "\"README.en.md\", \"assets\")",
    "replace": "\"README.en.md\")",
    "why": "картинки витрины остаются в приватном дереве: в публичном README ссылается на assets/superstack-hero.jpg, которого там нет, и вместо обложки человек видит битую картинку"
+  },
+  {
+   "id": "autonomy.mode-words-not-heard",
+   "file": "plugins/superstack/tools/autonomy.py",
+   "find": "        if any(w in t for w in words):\n            said[\"mode\"] = mode",
+   "replace": "        if False:\n            said[\"mode\"] = mode",
+   "why": "режим, названный словами, перестаёт узнаваться: человек сказал «полный автомат», система молча осталась на своём умолчании — и он узнаёт об этом по первому же вопросу, которого не ждал"
+  },
+  {
+   "id": "autonomy.depth-falls-back-to-default",
+   "file": "plugins/superstack/tools/autonomy.py",
+   "find": "    depth = depth or было[\"depth\"]",
+   "replace": "    depth = DEFAULT_DEPTH",
+   "why": "глубина не записывается: сказанное «строго» и «глубоко» одинаково превращается в умолчание, и система додумывает ровно столько же, сколько без просьбы"
+  },
+  {
+   "id": "what.phase-not-derived-from-traces",
+   "file": "plugins/superstack/tools/what.py",
+   "find": "        phase = derived_phase(project)",
+   "replace": "        phase = None",
+   "why": "незаписанный этап перестаёт вычисляться по следам: посреди идущих проверок человек снова слышит, что стройка не начиналась, — и идёт продолжать не оттуда"
+  },
+  {
+   "id": "handoff.single-prompt-loses-the-zone",
+   "file": "plugins/superstack/tools/handoff.py",
+   "find": "        f\"{зона.strip()}. Больше нигде.\",",
+   "replace": "        \"где сочтёшь нужным.\",",
+   "why": "зона исчезает из промпта одной правки: исполнитель правит соседние файлы, и «поправил цвет» с «уронил форму заказа» снова выглядят одинаково"
+  },
+  {
+   "id": "stall.a-neighbours-journal-counts-as-ours",
+   "file": "plugins/superstack/tools/stall.py",
+   "find": "            свои.extend(f for f in корень.glob(\"*/subagents/agent-*.jsonl\")\n                        if наш_журнал(f, проект))",
+   "replace": "            свои.extend(корень.glob(\"*/subagents/agent-*.jsonl\"))",
+   "why": "журналы соседнего проекта из той же родительской папки снова считаются своими: сторож судит чужую петлю как нашу, а наше молчание маскируется чужим движением"
+  },
+  {
+   "id": "sync.stale-files-stay-in-the-public-tree",
+   "file": "tools/sync_public.py",
+   "find": "    имена = лишнее(pub)\n    if not применить:\n        return имена",
+   "replace": "    имена = лишнее(pub)\n    if True:\n        return имена",
+   "why": "файл, который перестали переносить, остаётся в публичном дереве: пришедший по ссылке открывает прошлую редакцию витрины как текущую"
+  },
+  {
+   "id": "reference.polish-runs-without-a-sample",
+   "file": "plugins/superstack/tools/reference.py",
+   "find": "    if not есть:",
+   "replace": "    if False:",
+   "why": "доводка разрешается без образца: цикл сравнения идёт сверять работу с вкусом модели, и человек впервые видит этот вкус на сдаче"
+  },
+  {
+   "id": "polish.rounds-lose-their-ceiling",
+   "file": "plugins/superstack/skills/go/phases/polish.md",
+   "find": "- **потолок — три круга.** Считает `reference.py`, а не ощущение:",
+   "replace": "- **кругов столько, сколько понадобится.** Считать их не обязательно:",
+   "why": "у доводки исчезает потолок кругов: цикл кончается не результатом, а усталостью человека, и каждый лишний круг оплачен им"
+  },
+  {
+   "id": "lang.record-is-not-read",
+   "file": "plugins/superstack/tools/lang.py",
+   "find": "    got = (state or {}).get(\"lang\")",
+   "replace": "    got = None",
+   "why": "записанный язык перестаёт читаться: человек назвал английский в первой фразе, фаза 0 его записала, а отчёт и ответ на «где я» всё равно приходят по-русски — молча и с кодом 0"
+  },
+  {
+   "id": "plain-ru.english-jargon-list-vanishes",
+   "file": "plugins/superstack/tools/plain_ru.py",
+   "find": "        return ((data.get(\"en\") or {}).get(\"jargon\") or {}).get(\"words\") or {}",
+   "replace": "        return {}",
+   "why": "английский жаргон перестаёт находиться: проверка по-английски возвращает ноль на тексте, где стоят «gate», «deploy» и «stack trace», — то есть отвечает «чисто» вместо «не проверял»"
+  },
+  {
+   "id": "panel.claimed-counts-as-proven",
+   "file": "plugins/superstack/tools/progress.py",
+   "find": "    доказано = сколько[PROVEN]\n",
+   "replace": "    доказано = сколько[PROVEN] + сколько[CLAIMED]\n",
+   "why": "доля на панели начинает расти от слов помощника: часть, названную готовой, но не подтверждённую ни одним кодом возврата, главное число страницы засчитывает наравне с проверенной — и человек видит движение там, где его нет"
+  },
+  {
+   "id": "panel.requirements-are-not-read-from-the-file",
+   "file": "plugins/superstack/tools/progress.py",
+   "find": "    reqs = d.get(\"requirements\")\n",
+   "replace": "    reqs = []\n",
+   "why": "покрытие просьбы перестаёт читаться из файла требований: ведомость пустеет, а «сколько из твоей просьбы закрыто» показывает ноль из нуля — то есть отвечает «нечего показывать» там, где требования записаны"
+  },
+  {
+   "id": "readme.comparison-drops-our-own-column",
+   "file": "README.md",
+   "find": "| Что сравниваем | SUPERSTACK | Superpowers | Skills Matt Pocock |",
+   "replace": "| Что сравниваем | Superpowers | Skills Matt Pocock |",
+   "why": "витрина перестаёт сравнивать себя: из таблицы уходит наша колонка, и на месте ответа «чем это отличается» остаётся обзор чужих наборов — страница при этом выглядит целой, и человек уходит выбирать вслепую"
   }
  ]
 }
