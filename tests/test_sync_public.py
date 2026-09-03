@@ -137,6 +137,12 @@ class TestShowcaseCannotFailSilently(unittest.TestCase):
 
     ЧИСЛА = {"mutations": 545, "mechanisms": 302}
 
+    #: Место под версию в фикстурах обязательно: витрина, которой некуда её
+    #: подставить, теперь отказ сама по себе, и на такой проверять молчание
+    #: подстановок было бы проверкой другого механизма.
+    ВЕРСИЯ_RU = ("[![версия](https://img.shields.io/badge/version-0.9.9-1f6feb)](x)\n"
+                 "Версия 0.9.9. Все ворота зелёные.\n")
+
     def _pub(self, текст: str) -> Path:
         d = Path(tempfile.mkdtemp())
         self.addCleanup(lambda: __import__("shutil").rmtree(d, ignore_errors=True))
@@ -151,7 +157,8 @@ class TestShowcaseCannotFailSilently(unittest.TestCase):
 
     def test_summary_line_is_actually_rewritten(self):
         """Обратный контроль: проверка, никогда не зеленеющая, бесполезна."""
-        pub = self._pub("752 теста · 132 мутации, все ловятся · 59 механизмов.\n")
+        pub = self._pub(self.ВЕРСИЯ_RU
+                        + "752 теста · 132 мутации, все ловятся · 59 механизмов.\n")
         self.assertTrue(sp.refresh_readme(pub, self.ЧИСЛА, 1621))
         self.assertIn("1621 тестов · 545 мутаций, все ловятся · 302 механизмов.",
                       (pub / "README.md").read_text("utf-8"))
@@ -176,6 +183,11 @@ class TestTheShowcaseIsBilingualAndBothHalvesShip(unittest.TestCase):
 
     ЧИСЛА = {"mutations": 545, "mechanisms": 302}
 
+    ВЕРСИЯ_RU = ("[![версия](https://img.shields.io/badge/version-0.9.9-1f6feb)](x)\n"
+                 "Версия 0.9.9. Все ворота зелёные.\n")
+    ВЕРСИЯ_EN = ("[![version](https://img.shields.io/badge/version-0.9.9-1f6feb)](x)\n"
+                 "Version 0.9.9. All gates green.\n")
+
     def _pub(self, ru: str, en: str) -> Path:
         d = Path(tempfile.mkdtemp())
         self.addCleanup(lambda: __import__("shutil").rmtree(d, ignore_errors=True))
@@ -184,8 +196,10 @@ class TestTheShowcaseIsBilingualAndBothHalvesShip(unittest.TestCase):
         return d
 
     def test_both_summary_lines_are_rewritten_in_one_pass(self):
-        pub = self._pub("752 теста · 132 мутации, все ловятся · 59 механизмов.\n",
-                        "752 tests · 132 mutations, all caught · 59 mechanisms.\n")
+        pub = self._pub(self.ВЕРСИЯ_RU
+                        + "752 теста · 132 мутации, все ловятся · 59 механизмов.\n",
+                        self.ВЕРСИЯ_EN
+                        + "752 tests · 132 mutations, all caught · 59 mechanisms.\n")
         self.assertTrue(sp.refresh_readme(pub, self.ЧИСЛА, 1621))
         self.assertIn("1621 тестов · 545 мутаций, все ловятся · 302 механизмов.",
                       (pub / "README.md").read_text("utf-8"),
@@ -197,8 +211,9 @@ class TestTheShowcaseIsBilingualAndBothHalvesShip(unittest.TestCase):
     def test_a_half_with_nothing_to_rewrite_is_not_success(self):
         """«Нечего править» считается для КАЖДОЙ витрины отдельно: успех одной
         не имеет права закрывать молчание другой."""
-        pub = self._pub("752 теста · 132 мутации, все ловятся · 59 механизмов.\n",
-                        "# SUPERSTACK\n\nПро продукт, ни одного числа.\n")
+        pub = self._pub(self.ВЕРСИЯ_RU
+                        + "752 теста · 132 мутации, все ловятся · 59 механизмов.\n",
+                        self.ВЕРСИЯ_EN + "# SUPERSTACK\n\nПро продукт, ни одного числа.\n")
         self.assertFalse(sp.refresh_readme(pub, self.ЧИСЛА, 1621))
 
     def test_the_hero_image_is_carried_to_the_public_tree(self):
@@ -211,6 +226,69 @@ class TestTheShowcaseIsBilingualAndBothHalvesShip(unittest.TestCase):
                       "английская витрина не переносится — переключатель языка "
                       "на главной странице публичного дерева ведёт на файл, "
                       "которого там нет")
+
+
+class TestTheShowcaseVersionIsMeasuredToo(unittest.TestCase):
+    """Версия в витрине — такое же измеряемое число, как тесты и поломки.
+
+    Живой случай: после выкладки 0.11.0 оба манифеста показывали 0.11.0, а
+    обе половины витрины — бейдж в шапке и первая строка раздела «Статус» —
+    уверенно показывали 0.10.0. Выкладка переписывала строку-сводку, версию
+    обходила стороной и печатала «обновлено»; тот, кто менял версию, о витрине
+    не знал. Витрина утверждала то, чего никто не измерял, — ровно то, что
+    продукт про себя запрещает.
+    """
+
+    ЧИСЛА = {"mutations": 545, "mechanisms": 302}
+
+    ВИТРИНА_RU = ("[![версия](https://img.shields.io/badge/version-0.9.9-1f6feb)](x)\n"
+                  "\n752 теста · 132 мутации, все ловятся · 59 механизмов.\n"
+                  "\n## Статус\n\nВерсия 0.9.9. Все ворота зелёные.\n")
+    ВИТРИНА_EN = ("[![version](https://img.shields.io/badge/version-0.9.9-1f6feb)](x)\n"
+                  "\n752 tests · 132 mutations, all caught · 59 mechanisms.\n"
+                  "\n## Status\n\nVersion 0.9.9. All gates green.\n")
+
+    def _pub(self, ru: str, en: str) -> Path:
+        d = Path(tempfile.mkdtemp())
+        self.addCleanup(lambda: __import__("shutil").rmtree(d, ignore_errors=True))
+        (d / "README.md").write_text(ru, encoding="utf-8")
+        (d / "README.en.md").write_text(en, encoding="utf-8")
+        return d
+
+    def _манифест(self, версия):
+        """Версию подаёт манифест, а не тест: подстановка обязана брать её
+        оттуда, куда смотрит установщик."""
+        было = sp.версия_пакета
+        sp.версия_пакета = lambda *а, **к: версия
+        self.addCleanup(lambda: setattr(sp, "версия_пакета", было))
+
+    def test_version_is_taken_from_the_manifest_in_both_showcases(self):
+        self._манифест("1.2.3")
+        pub = self._pub(self.ВИТРИНА_RU, self.ВИТРИНА_EN)
+        self.assertTrue(sp.refresh_readme(pub, self.ЧИСЛА, 1621))
+        ru = (pub / "README.md").read_text("utf-8")
+        en = (pub / "README.en.md").read_text("utf-8")
+        for имя, текст, строка in (("README.md", ru, "Версия 1.2.3."),
+                                   ("README.en.md", en, "Version 1.2.3.")):
+            self.assertIn("badge/version-1.2.3-1f6feb", текст,
+                          f"{имя}: бейдж версии остался от прошлого релиза")
+            self.assertIn(строка, текст,
+                          f"{имя}: раздел «Статус» остался от прошлого релиза")
+            self.assertNotIn("0.9.9", текст,
+                             f"{имя}: версия прошлого релиза уцелела")
+
+    def test_a_showcase_with_nowhere_to_put_the_version_blocks_the_sync(self):
+        """Отсутствие места — отказ с честной строкой, а не тихое «обновлено»:
+        строка-сводка совпала, и её успех не имеет права закрыть молчание
+        версии."""
+        self._манифест("1.2.3")
+        без_версии = "752 теста · 132 мутации, все ловятся · 59 механизмов.\n"
+        pub = self._pub(без_версии, self.ВИТРИНА_EN)
+        self.assertFalse(sp.refresh_readme(pub, self.ЧИСЛА, 1621),
+                         "версию подставить некуда, а витрина отчиталась об успехе")
+        self.assertIn("версия", sp.почему_не_обновилась(self.ЧИСЛА, 1621, pub),
+                      "отказ не называет версию — человека отправят искать "
+                      "строку-сводку, которая на месте")
 
 
 class TestPublicTreeCanPassItsOwnGates(unittest.TestCase):
