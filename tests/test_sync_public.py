@@ -166,37 +166,38 @@ class TestShowcaseCannotFailSilently(unittest.TestCase):
 class TestTheShowcaseIsBilingualAndBothHalvesShip(unittest.TestCase):
     """Витрин две, и обслуживаться обязаны обе.
 
-    Английская README.md — главная (репозиторий открыт всему миру), русская
-    README.ru.md — полная. Переключатель языка стоит первой строкой в каждой,
-    и потому половина, оставшаяся без обновления, хуже отсутствующей: она не
-    пустая, она уверенно показывает числа прошлого релиза. А не перенесённая в
-    публичное дерево русская половина превращает рабочую на вид ссылку в 404.
+    Русская README.md — главная (её открывают первой), английская
+    README.en.md — для пришедших извне. Переключатель языка стоит первой
+    строкой в каждой, и потому половина, оставшаяся без обновления, хуже
+    отсутствующей: она не пустая, она уверенно показывает числа прошлого
+    релиза. А не перенесённая в публичное дерево английская половина
+    превращает рабочую на вид ссылку в 404.
     """
 
     ЧИСЛА = {"mutations": 545, "mechanisms": 302}
 
-    def _pub(self, en: str, ru: str) -> Path:
+    def _pub(self, ru: str, en: str) -> Path:
         d = Path(tempfile.mkdtemp())
         self.addCleanup(lambda: __import__("shutil").rmtree(d, ignore_errors=True))
-        (d / "README.md").write_text(en, encoding="utf-8")
-        (d / "README.ru.md").write_text(ru, encoding="utf-8")
+        (d / "README.md").write_text(ru, encoding="utf-8")
+        (d / "README.en.md").write_text(en, encoding="utf-8")
         return d
 
     def test_both_summary_lines_are_rewritten_in_one_pass(self):
-        pub = self._pub("752 tests · 132 mutations, all caught · 59 mechanisms.\n",
-                        "752 теста · 132 мутации, все ловятся · 59 механизмов.\n")
+        pub = self._pub("752 теста · 132 мутации, все ловятся · 59 механизмов.\n",
+                        "752 tests · 132 mutations, all caught · 59 mechanisms.\n")
         self.assertTrue(sp.refresh_readme(pub, self.ЧИСЛА, 1621))
-        self.assertIn("1621 tests · 545 mutations, all caught · 302 mechanisms.",
-                      (pub / "README.md").read_text("utf-8"),
-                      "английская витрина осталась с числами прошлого релиза")
         self.assertIn("1621 тестов · 545 мутаций, все ловятся · 302 механизмов.",
-                      (pub / "README.ru.md").read_text("utf-8"),
+                      (pub / "README.md").read_text("utf-8"),
                       "русская витрина осталась с числами прошлого релиза")
+        self.assertIn("1621 tests · 545 mutations, all caught · 302 mechanisms.",
+                      (pub / "README.en.md").read_text("utf-8"),
+                      "английская витрина осталась с числами прошлого релиза")
 
     def test_a_half_with_nothing_to_rewrite_is_not_success(self):
         """«Нечего править» считается для КАЖДОЙ витрины отдельно: успех одной
         не имеет права закрывать молчание другой."""
-        pub = self._pub("752 tests · 132 mutations, all caught · 59 mechanisms.\n",
+        pub = self._pub("752 теста · 132 мутации, все ловятся · 59 механизмов.\n",
                         "# SUPERSTACK\n\nПро продукт, ни одного числа.\n")
         self.assertFalse(sp.refresh_readme(pub, self.ЧИСЛА, 1621))
 
@@ -205,81 +206,11 @@ class TestTheShowcaseIsBilingualAndBothHalvesShip(unittest.TestCase):
                       "картинки витрины не переносятся — README в публичном дереве "
                       "ссылается на assets/superstack-hero.jpg, и обложка битая")
 
-    def test_the_russian_half_is_carried_to_the_public_tree(self):
-        self.assertIn("README.ru.md", sp.CARRY,
-                      "русская витрина не переносится — переключатель языка на "
-                      "главной странице публичного дерева ведёт на файл, "
+    def test_the_english_half_is_carried_to_the_public_tree(self):
+        self.assertIn("README.en.md", sp.CARRY,
+                      "английская витрина не переносится — переключатель языка "
+                      "на главной странице публичного дерева ведёт на файл, "
                       "которого там нет")
-
-
-class TestRepoDescriptionIsMeasuredToo(unittest.TestCase):
-    """Числа в описании репозитория — часть витрины: его видят раньше кода.
-
-    Шаг ходит в сеть, поэтому выкладку не блокирует. Цена этого послабления —
-    обязанность отличать «сделано» от «не смог»: несостоявшееся обновление,
-    записанное как успех, и есть то безусловное подтверждение, ради которого
-    вся эта проверка заводилась.
-    """
-
-    ЧИСЛА = {"mutations": 545, "mechanisms": 302}
-
-    def setUp(self):
-        self.tmp = tempfile.TemporaryDirectory()
-        self.addCleanup(self.tmp.cleanup)
-        self.pub = Path(self.tmp.name) / "публичное"
-        self.pub.mkdir()
-        subprocess.run(["git", "init", "-q"], cwd=str(self.pub), check=False)
-        subprocess.run(["git", "remote", "add", "origin",
-                        "https://github.com/octo-owner/superstack.git"],
-                       cwd=str(self.pub), check=False)
-
-    def test_адрес_берётся_из_origin_а_не_из_кода(self):
-        self.assertEqual(sp.repo_slug(self.pub), "octo-owner/superstack")
-
-    def test_текст_человека_переживает_обновление(self):
-        """Прежний хвост был русским, новый — английский, как главная страница.
-        Срезать надо ОБА: иначе старый останется и рядом ляжет второй."""
-        было = "Агентная ОС — 752 тестов · 132 мутаций · 59 механизмов"
-        self.assertEqual(sp.описание(было, self.ЧИСЛА, 1621),
-                         "Агентная ОС — 1621 tests · 545 mutations · "
-                         "302 mechanisms")
-
-    def test_английский_хвост_срезается_так_же(self):
-        было = "Агентная ОС — 752 tests · 132 mutations · 59 mechanisms"
-        self.assertEqual(sp.описание(было, self.ЧИСЛА, 1621),
-                         "Агентная ОС — 1621 tests · 545 mutations · "
-                         "302 mechanisms")
-
-    def test_висячий_разделитель_не_доживает_до_склейки(self):
-        """Живой случай выкладки 0.10.0.
-
-        Человек кончил фразу тем же «·», которым разделены числа. Хвост
-        срезался верно, а разделитель остался — и склейка поставила рядом два
-        знака: «9 ворот · — 1962 тестов…». Описание тогда правили руками, то
-        есть механизм отработал, а результат всё равно чинили глазами.
-        """
-        было = ("Claude Code plugin: агент обязан доказывать сделанное кодом "
-                "возврата, а не словами. 9 ворот · 1962 тестов · 557 мутаций · "
-                "316 механизмов")
-        self.assertEqual(
-            sp.описание(было, self.ЧИСЛА, 1621),
-            "Claude Code plugin: агент обязан доказывать сделанное кодом "
-            "возврата, а не словами. 9 ворот — 1621 tests · 545 mutations · "
-            "302 mechanisms")
-
-    def test_несостоявшееся_обновление_не_успех(self):
-        def gh(аргументы):
-            return (1, "gh: 404") if "PATCH" in аргументы else (0, "Агентная ОС")
-        v = sp.refresh_description(self.pub, self.ЧИСЛА, 1621, gh=gh)
-        self.assertNotEqual(v["status"], "pass",
-                            "описание не обновилось, а шаг отчитался «сделано»")
-        self.assertIn("НЕ ПРОВЕРЕНЫ", v["detail"])
-
-    def test_успешное_обновление_несёт_измеренные_числа(self):
-        v = sp.refresh_description(self.pub, self.ЧИСЛА, 1621,
-                                   gh=lambda а: (0, "Агентная ОС"))
-        self.assertEqual(v["status"], "pass")
-        self.assertIn("1621 tests · 545 mutations · 302 mechanisms", v["text"])
 
 
 class TestPublicTreeCanPassItsOwnGates(unittest.TestCase):

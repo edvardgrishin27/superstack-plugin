@@ -1,118 +1,116 @@
-🇬🇧 English · [🇷🇺 Русский](README.ru.md)
+🇷🇺 Русский · [🇬🇧 English](README.en.md)
 
 # SUPERSTACK
 
-**Say what you want built. Get a version whose "done" was closed by an exit code, not by a sentence in the chat.**
+**Скажи, что хочешь построить. Получи версию, у которой «готово» закрыто кодом возврата, а не фразой в чате.**
 
-<p align="center"><img src="assets/superstack-hero.jpg" alt="SUPERSTACK — the build is checked before it is called done" width="100%"></p>
+<p align="center"><img src="assets/superstack-hero.jpg" alt="SUPERSTACK — сборка проверена прежде, чем названа готовой" width="100%"></p>
 
-[![version](https://img.shields.io/badge/version-0.10.0-1f6feb)](.claude-plugin/marketplace.json)
-[![tests](https://img.shields.io/badge/tests-1970-2ea043)](tests)
-[![mutations](https://img.shields.io/badge/mutations-562-8957e5)](tests/mutations.json)
-[![python](https://img.shields.io/badge/python-3.8%2B-3776ab)](#requirements-and-platforms)
-[![dependencies](https://img.shields.io/badge/dependencies-none-555555)](#under-the-hood)
-[![license](https://img.shields.io/badge/license-MIT-97ca00)](LICENSE)
-[![Claude Code plugin](https://img.shields.io/badge/Claude%20Code-plugin-d97757)](#quick-start)
+[![версия](https://img.shields.io/badge/version-0.10.0-1f6feb)](.claude-plugin/marketplace.json)
+[![тесты](https://img.shields.io/badge/tests-1964-2ea043)](tests)
+[![мутации](https://img.shields.io/badge/mutations-559-8957e5)](tests/mutations.json)
+[![python](https://img.shields.io/badge/python-3.8%2B-3776ab)](#требования-и-платформы)
+[![зависимости](https://img.shields.io/badge/dependencies-none-555555)](#что-под-капотом)
+[![лицензия](https://img.shields.io/badge/license-MIT-97ca00)](LICENSE)
+[![плагин Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-d97757)](#быстрый-старт)
 
-1970 tests · 562 mutations, all caught · 320 mechanisms.
+1964 тестов · 559 мутаций, все ловятся · 318 механизмов.
 
-## What this is
+## Что это
 
-SUPERSTACK is a plugin for Claude Code. You describe a product in your own
-words — *"I want a site where people book a haircut"* — and it carries the job
-all the way to a version that was actually checked. The rule the whole thing is
-built around is short: **a report is a claim, not a proof.** "Should work" and
-"tests should pass" mean the work is not done.
+SUPERSTACK — плагин для Claude Code. Ты описываешь продукт своими словами —
+*«хочу сайт, где можно записаться к парикмахеру»* — и он доводит дело до
+версии, которую действительно проверили. Правило, вокруг которого построено
+всё остальное, короткое: **отчёт — это утверждение, а не доказательство.**
+«Должно работать» и «тесты должны проходить» означают, что работа не сделана.
 
-Here is what that looks like for the haircut site. It writes your sentence down
-verbatim, then asks only the handful of questions you alone can answer — who
-books, what happens on a double booking, what the client sees afterwards — and
-measures everything else itself. It turns the answers into a requirements list
-and a spec, designs the interface on a canvas and pulls the real values into the
-code instead of retelling them, and shows you a plan. **You approve the plan
-before a single line of code exists.** Then the tasks go out to a builder agent,
-one fresh context per task, and the result is put in front of commands whose
-exit code decides whether the turn may close.
+Как это выглядит на том самом сайте записи. Твоя фраза записывается дословно,
+дальше задаются только те вопросы, на которые можешь ответить один ты: кто
+записывается, что делать при двойной записи, что клиент видит после. Всё
+остальное система измеряет сама. Ответы превращаются в список требований и
+спеку, интерфейс рисуется на холсте, и значения подтягиваются в код
+значениями, а не пересказом. Потом показывается план. **План ты подтверждаешь
+до того, как появится первая строка кода.** Дальше задачи уходят агенту-
+исполнителю — по одной в свежем контексте, — а результат ставится перед
+командами, чей код возврата и решает, можно ли закрыть ход.
 
-Before it says "done", a separate agent reads only your original sentence and
-the diff — no spec, no plan, no conversation — and answers one question: is this
-what was asked for? What you get at the end is a report with a **How to open it**
-section. An address, not a status.
+Прежде чем сказать «готово», отдельный агент читает только твою исходную
+просьбу и сделанные изменения — без спеки, плана и разговора — и отвечает на
+единственный вопрос: сделали ли то, о чём просили. На выходе у тебя отчёт с
+разделом **«Как открыть»**. Адрес, а не статус.
 
-It also knows how to look at your Claude Code setup, explain where every finding
-came from, and change nothing without asking.
+Ещё умеет посмотреть, как настроен твой Claude Code, объяснить, откуда взялся
+каждый вывод, и без спроса ничего не поменять.
 
-## Why
+## Зачем это тебе
 
-**An exit code closes the turn, not a sentence.** The end-of-session check in
-`hooks/verify-gate.py` runs the project's own commands; while they return
-non-zero the turn stays open, and no wording in the chat can close it.
+**Ход закрывает код возврата, а не фраза.** Проверка в конце хода
+(`hooks/verify-gate.py`) запускает собственные команды проекта; пока они
+возвращают не ноль, ход не закрывается, и никакая формулировка в чате этого
+не меняет.
 
-**Blind acceptance before the word "done".** A separate agent
-(`agents/blind-acceptance.md`) is handed your original request and the diff and
-nothing else, so it grades what was asked for instead of agreeing with the plan
-it just read.
+**Слепая приёмка перед словом «готово».** Отдельный агент
+(`agents/blind-acceptance.md`) получает исходную просьбу и изменения — и
+больше ничего. Он судит соответствие просьбе, а не соглашается с планом,
+который только что прочитал.
 
-**Snapshots at every stage boundary, so "put it back" is one sentence.**
-`tools/checkpoint.py` snapshots the product folder before and after every edit;
-`/oops` shows you what would come back before it returns anything. Nothing in
-this system is deleted — removals go to quarantine, and a backup is written
-before the first change.
+**Снимки на границах этапов — «верни как было» одной фразой.**
+`tools/checkpoint.py` снимает папку продукта до и после каждой правки, а
+`/oops` сначала показывает, что именно вернётся. Здесь ничего не удаляется:
+удаляемое уходит в карантин, а бэкап пишется до первой правки.
 
-**Plain language enforced by code, not by good intentions.** Jargon is
-impossible to proofread out of your own writing — to notice an opaque word you
-have to stop understanding it. The product talks to you in Russian, and
-`tools/plain_ru.py` keeps that word list as data, finds the jargon by machine,
-and answers with an exit code.
+**Человеческий язык держится кодом, а не обещанием.** Жаргон невозможно
+вычитать у себя самого: чтобы заметить непонятное слово, нужно перестать его
+понимать. `tools/plain_ru.py` держит список слов данными, ищет их машиной и
+отвечает кодом возврата.
 
-**No dependencies at all.** Python 3 and the standard library — 72 tools, about
-24,800 lines, zero third-party packages, nothing to install, nothing to audit
-downstream.
+**Ни одной внешней зависимости.** Python 3 и стандартная библиотека: 72
+инструмента, около 24 800 строк, ноль сторонних пакетов — ставить нечего и
+проверять на стороне нечего.
 
-**The plugin holds itself to the bar it sells.** Nine gates, and the harshest is
-mutation: **562 registered mutations** break the code on purpose, and every one
-of them must turn the suite red. A check that cannot fail is not a check.
+**Плагин держит ту же планку, которую продаёт.** Девять ворот, и самые злые из
+них — мутационные: **559 зарегистрированных поломок** ломают код нарочно, и
+каждая обязана уронить набор. Проверка, которая не может покраснеть, — не проверка.
 
-## Quick start
+## Быстрый старт
 
-### Without opening a terminal
+### Не открывая терминал
 
-The plugin only works in Claude Code. Paste this text to your Claude Code and it
-will do the rest itself:
+Плагин работает только в Claude Code. Вставьте этот текст своему Claude Code,
+он всё сделает сам:
 
 ```
-Install SUPERSTACK for me. Run exactly these three commands in the terminal, one
-at a time, and do not stop if the first one comes back red:
+Поставь мне SUPERSTACK. Выполни в терминале ровно эти три команды, по одной,
+и не останавливайся, если первая покраснеет:
 
 CLAUDECODE= claude plugin marketplace add edvardgrishin27/superstack-plugin
 CLAUDECODE= claude plugin marketplace update superstack
 CLAUDECODE= claude plugin install superstack@superstack
 
-On a machine where SUPERSTACK was installed before, the first command answers
-"Marketplace 'superstack' is already installed" and exits with code 1. That is
-NOT a failed install and not a reason to stop: the marketplace is simply already
-there. Keep going.
+Первая команда на машине, где SUPERSTACK уже стоял, ответит «Marketplace
+'superstack' is already installed» и вернёт код 1. Это НЕ ошибка установки и
+не повод остановиться: маркетплейс просто уже добавлен. Иди дальше.
 
-The second command is the one this whole text was rewritten for. Without it, such
-a machine takes the OLD package list from its cache and installs the previous
-version. It looks successful: green command, plugin installed, wrong version. On
-a clean machine it is harmless, which is why it always runs.
+Вторая команда — та, ради которой всё и переписано. Без неё на такой машине
+берётся СТАРЫЙ список пакетов из кэша, и ставится прежняя версия. Внешне
+успешно: команда зелёная, плагин установлен, только не тот. На чистой машине
+она безвредна, поэтому выполняется всегда.
 
-The CLAUDECODE= prefix is required: without it `claude` refuses to start from
-inside a session ("cannot be launched inside another Claude Code session"), and
-that is not a bug — it is the guard against nested sessions.
+Префикс `CLAUDECODE=` обязателен: без него `claude` откажется запускаться
+изнутри сессии («cannot be launched inside another Claude Code session»),
+и это не поломка — это защита от вложенных сессий.
 
-Install nothing else. When you are finished, say in one line that it is done, and
-tell the person to restart the whole application — not a new chat in the same
-window: quit it completely (Cmd+Q on a Mac) and open it again. Plugins are read
-at startup.
+Больше ничего не устанавливай. Когда закончишь — напиши одной строкой, что
+готово, и скажи человеку перезапустить не новым чатом в этом же окне, а
+приложением целиком: закрыть его полностью (Cmd+Q на Mac) и открыть заново.
+Плагины читаются при старте.
 ```
 
-Verified by running it, not reasoned about: both sequences were executed against
-an isolated config (`CLAUDE_CONFIG_DIR`), on a clean machine and again on top of
-an existing install. Both ended on a working version.
+Проверено запуском, а не выведено: обе последовательности прогнаны на
+изолированном конфиге (`CLAUDE_CONFIG_DIR`) — на чистой машине и повторно
+поверх уже установленного. В обоих случаях на выходе рабочая версия.
 
-### From a terminal
+### Из терминала
 
 ```bash
 claude plugin marketplace add edvardgrishin27/superstack-plugin
@@ -120,173 +118,174 @@ claude plugin marketplace update superstack
 claude plugin install superstack@superstack
 ```
 
-No prefix needed here — you are already outside a session. On a machine that
-already has the marketplace, the first line exits with code 1; that is fine, the
-second line fixes it.
+Здесь префикс не нужен — вы уже вне сессии. Первая строка на машине, где
+маркетплейс уже добавлен, вернёт код 1: это нормально, вторая всё поправит.
 
-Then quit Claude Code completely (Cmd+Q on a Mac) and open it again. After that
-you can just talk to it — there are no magic words to memorise.
+Дальше закройте Claude Code целиком (Cmd+Q на Mac) и откройте заново. После
+этого он заговорит сам — специальных слов знать не нужно.
 
-## Commands
+## Команды
 
-Seven commands. You never have to type them: each one also answers to ordinary
-language, which is what the middle column is for.
+Их семь. Печатать их не обязательно: каждая отзывается и на обычные слова —
+ровно для этого средний столбец.
 
-| Command | Say it like this | What you get | What it does **not** do |
+| Команда | Как позвать словами | Что даёт | Чего **не** делает |
 |---|---|---|---|
-| `/go` | "I want a site for booking haircuts", "build me a bot that…" | A new product, or a large new part of one, from your sentence to a proved version: requirements list → spec → design on a canvas → a plan **you** approve → tasks built by agents → verification by exit code → a security pass → blind acceptance → project memory → a report with "How to open it" | Writes no code before you approve the plan; never calls the work done while the check returns non-zero; never drops a requirement on its own |
-| `/change` | "fix the button", "change that text", "add a field" | One small edit to something that already works: snapshot before, the edit written by the builder agent, verification, snapshot after — so "changed the colour" and "broke the order form" cannot look alike in the chat | Not for building something large — that is `/go`; does not edit product files by hand, and does not fix unrelated things along the way |
-| `/what` | "where was I", "what's next" | Exactly one line of state and exactly one next step, read from the tools rather than from the conversation | Not a menu, not a report; will not lift a pause on your behalf |
-| `/stop` | "stop", "turn superstack off" — and back: "switch it on" | Everything pauses on your word alone, with no terminal, and the same way it comes back. The brake holds even when the agent stops responding, because it is a file on disk | Does not argue, does not talk you out of it, does not pause on its own initiative |
-| `/oops` | "undo that", "put it back the way it was" | Two different things it never mixes up: the Claude Code settings this system changed, and your project folder returned to a snapshot from the build. It shows what will come back and rolls back only after you say yes | Does not return anything the system never touched; does not restore a secret — a backup keeps the file, never the password value |
-| `/fix` | "not working", "nothing happens", "error again" | The links of the system itself, checked in order and stopping at the first broken one: is Python there, are the plugin files in place, does an automatic check point at a file that is gone, is everything paused, can the system write to its own folder. You get one broken link and one action | Does not look at your product and does not fix it — this is about the system, not about what you built. No menus, no stack traces |
-| `/superstack` | "check my setup", "what do I have installed", "why is the agent behaving like this" | A profile of this machine and a repair pass: probes read configs, count skills and automatic checks, look at memory and connectors; the verdict opens as a page where every finding carries its origin — measured · inferred · ambiguous | Deletes nothing (quarantine instead, backup before the first change); applies no blocking finding without an explicit yes; prints no number a probe did not return |
+| `/go` | «хочу сайт для записи к парикмахеру», «сделай бота, который…» | Новый продукт или крупную часть существующего — от фразы до доказанной версии: список требований → спека → дизайн на холсте → план, который подтверждаешь **ты** → работа исполнителями → проверка кодом возврата → безопасность → слепая приёмка → память проекта → отчёт с разделом «Как открыть» | Не пишет код до подтверждения плана; не называет работу готовой, пока проверка возвращает не ноль; не снимает требование сам |
+| `/change` | «поправь кнопку», «измени текст», «добавь поле» | Одну малую правку того, что уже работает: снимок до, правку пишет агент-исполнитель, проверка, снимок после — чтобы «поправил цвет» и «уронил форму заказа» не выглядели в чате одинаково | Не берёт стройку большого — это `/go`; не правит файлы продукта руками и не чинит заодно соседнее |
+| `/what` | «где я», «что дальше», «на чём я остановился» | Ровно одну строку состояния и ровно один следующий шаг — прочитанные инструментом, а не вспомненные из разговора | Не меню и не отчёт; паузу за тебя не снимает |
+| `/stop` | «останови», «выключи суперстек» — и обратно: «включи» | Всё встаёт на паузу с одной фразы, без единой команды в терминале, и так же словами включается обратно. Тормоз держится, даже когда агент не отвечает: это файл на диске | Не уговаривает и не объясняет, почему проверки полезны; не ставит паузу по своей инициативе |
+| `/oops` | «отмени», «верни как было» | Две разные вещи, которые он никогда не путает: настройки Claude Code, которые система меняла сама, и папку проекта — к снимку, снятому во время сборки. Сначала показывает, что вернётся, и откатывает только после согласия | Не возвращает того, чего система не трогала; не восстанавливает секрет — бэкап хранит файл, но не значение пароля |
+| `/fix` | «не работает», «ничего не происходит», «опять ошибка» | Звенья самой системы, проверенные по порядку и с остановкой на первом разорванном: есть ли Python, все ли файлы плагина на месте, не ссылается ли автоматическая проверка на пропавший файл, не стоит ли всё на паузе, может ли система писать в свою папку. В ответ — одно звено и одно действие | Твой продукт не смотрит и не чинит — он про систему, а не про то, что ты построил. Без меню и без технической простыни |
+| `/superstack` | «проверь мою установку», «что у меня стоит», «почему агент так себя ведёт» | Профиль машины и починку установки: пробы читают настройки, считают скиллы и автоматические проверки, смотрят память и подключения; вердикт открывается страницей, где у каждой находки есть происхождение — измерено · выведено · неоднозначно | Ничего не удаляет (карантин вместо удаления, бэкап до первой правки); не применяет блокирующую находку без явного согласия; не печатает числа, которых не вернула проба |
 
-## How it works
+## Как это устроено
 
-`/go` runs in phases, and the code is written in the second-to-last one. Every
-phase before it establishes **what** to build; every phase after it proves that
-**this** is what got built.
+`/go` идёт фазами, и код пишется в предпоследней. Всё до неё выясняет, **что**
+строить; всё после — доказывает, что построили **именно это**.
 
 ```mermaid
 flowchart TD
-    A["Your sentence:<br/>“I want a booking site”"] --> B["0 · Open<br/>brief recorded verbatim, progress panel opens"]
-    B --> C["1 · Understand<br/>G1 — not one requirement left open"]
-    C --> D["2 · Spec<br/>G2 — reviewed by other eyes, folder set up from the spec"]
-    D --> E["2.5 · Direction<br/>design on a canvas — only if the product has an interface"]
-    E --> F["3 · Plan<br/>G3 — traces to requirements both ways<br/><b>you approve; no code before this</b>"]
-    F --> G["4 · Work<br/>one task per builder agent, in a fresh context"]
-    G --> H["5 · Verification<br/>verify.py ≠ 0 keeps the turn open"]
-    H --> I["5.4 · Security<br/>only if the product faces real people"]
-    I --> J["5.5 · Look at it<br/>open the page before showing it to anyone"]
-    J --> K["6 · Blind acceptance<br/>G4 — request and diff only, nothing else"]
-    K --> L["7 · What survives<br/>project memory, decisions, document links"]
-    L --> M["8 · Report<br/>assembled from files, with “How to open it”"]
+    A["Твоя фраза:<br/>«хочу сайт записи»"] --> B["0 · Завести<br/>просьба записана дословно, панель хода открыта"]
+    B --> C["1 · Понять<br/>G1 — ни одного нерешённого требования"]
+    C --> D["2 · Спека<br/>G2 — сверка чужими глазами, папка настроена из спеки"]
+    D --> E["2.5 · Направление<br/>дизайн на холсте — только если есть интерфейс"]
+    E --> F["3 · План<br/>G3 — трассируется к требованиям в обе стороны<br/><b>подтверждаешь ты; кода до этого нет</b>"]
+    F --> G["4 · Работа<br/>по одной задаче на исполнителя, в свежем контексте"]
+    G --> H["5 · Верификация<br/>verify.py ≠ 0 держит ход открытым"]
+    H --> I["5.4 · Безопасность<br/>если продукт выходит к людям"]
+    I --> J["5.5 · Глазами<br/>открыть и посмотреть, прежде чем показывать"]
+    J --> K["6 · Слепая приёмка<br/>G4 — только просьба и изменения, больше ничего"]
+    K --> L["7 · Что переживёт<br/>память проекта, решения, связность документов"]
+    L --> M["8 · Отчёт<br/>собран из файлов, с разделом «Как открыть»"]
 ```
 
-Skipping a phase is allowed; skipping it silently is not. When the design phase
-or the security phase does not apply, it says so in one line — because "we
-decided it wasn't needed" and "we forgot" look identical otherwise.
+Пропустить фазу можно. Пропустить молча — нельзя: когда дизайн или
+безопасность не нужны, это говорится одной строкой, потому что «решили, что не
+нужно» и «забыли» иначе выглядят одинаково.
 
-## Under the hood
+## Что под капотом
 
-Python 3 and the standard library. Nothing else. 72 tools (about 24,800 lines),
-7 skills, 3 agents, and three automatic checks wired into the session: one at
-start-up, one before the context is compacted, one at the end of a turn.
+Python 3 и стандартная библиотека. Больше ничего. 72 инструмента (около
+24 800 строк), 7 скиллов, 3 агента и три автоматические проверки в сеансе:
+на старте, перед сжатием контекста и в конце хода.
 
-The mechanisms worth naming, each of them a file you can open:
+Механизмы, которые стоит назвать, — каждый лежит в файле, который можно
+открыть:
 
-| Mechanism | Where it lives | What it buys |
+| Механизм | Где лежит | Что даёт |
 |---|---|---|
-| Verification closes the turn | `hooks/verify-gate.py`, `tools/verify.py` | "Done" is an exit code of zero; anything else keeps the turn open |
-| Blind acceptance | `agents/blind-acceptance.md`, `tools/blind_accept.py` | Judgement made from the original request and the diff, with no plan to agree with |
-| Snapshots and rollback | `tools/checkpoint.py`, `tools/oops.py` | Every stage boundary is a restore point; "put it back" is one sentence |
-| Plain-language check | `tools/plain_ru.py` | Jargon in text meant for a human is found by code, not by proofreading |
-| Live progress panel | `tools/live_panel.py`, `tools/progress.py` | A page on `localhost:8787` with an honest "how much is left" |
-| Hand-off notice | `tools/notify.py` | You are told when the turn came back to you, instead of watching a chat |
-| Builder wave watchdog | `tools/watchdog.py`, `tools/stall.py` | A stalled agent is noticed by the system rather than by you |
-| Design pulled, not retold | `tools/design_pull.py` | Canvas values land in the code as values; contrast below 4.5:1 is refused |
-| Security pass | `tools/security_pack.py`, `tools/data_rollback.py` | For products that face people; a data rollback path is named in commands or it does not count as ready |
-| Builder contracts | `tools/contract.py` | "DONE" reported over a red suite is caught by code, not by reading |
-| The pause file | `tools/pause.py`, `~/.claude/superstack/PAUSE` | An emergency brake that holds even when the agent will not answer |
-| Nothing is deleted | `tools/apply.py`, quarantine + backups | Every change is reversible, and secrets are never copied — not even into a backup |
+| Верификация закрывает ход | `hooks/verify-gate.py`, `tools/verify.py` | «Готово» — это код возврата ноль; всё остальное держит ход открытым |
+| Слепая приёмка | `agents/blind-acceptance.md`, `tools/blind_accept.py` | Вердикт по исходной просьбе и изменениям, без плана, с которым можно согласиться |
+| Снимки и откат | `tools/checkpoint.py`, `tools/oops.py` | Каждая граница этапа — точка возврата; «верни как было» — одна фраза |
+| Словарь простого русского | `tools/plain_ru.py` | Жаргон в тексте для человека ловится кодом, а не вычиткой |
+| Панель хода | `tools/live_panel.py`, `tools/progress.py` | Страница на `localhost:8787` с честной оценкой «сколько ещё» |
+| Уведомление о ходе | `tools/notify.py` | Тебе говорят, когда ход вернулся к тебе, — не надо сидеть в чате |
+| Сторож волны исполнителей | `tools/watchdog.py`, `tools/stall.py` | Замерший агент замечается системой, а не тобой |
+| Дизайн подтягивается, а не пересказывается | `tools/design_pull.py` | Значения с холста попадают в код значениями; контраст ниже 4.5:1 — отказ |
+| Пакет безопасности | `tools/security_pack.py`, `tools/data_rollback.py` | Для продуктов, выходящих к людям; путь отката данных объявлен командами или не считается готовым |
+| Контракты исполнителей | `tools/contract.py` | «DONE при красных тестах» ловится кодом, а не чтением |
+| Файл-тормоз | `tools/pause.py`, `~/.claude/superstack/PAUSE` | Аварийный тормоз держится, даже когда агент не отвечает |
+| Ничего не удаляется | `tools/apply.py`, карантин и бэкапы | Любая правка обратима, а секреты не копируются даже в бэкап |
 
-### The bar the plugin holds itself to
+### Планка, которую плагин держит на себе
 
-Nine gates, run by `tools/gauntlet.py`. Numbers below are measured, not typed in.
+Девять ворот, гоняет `tools/gauntlet.py`. Числа ниже измерены, а не вписаны
+руками.
 
-| Gate | What it proves |
+| Ворота | Что доказывают |
 |---|---|
-| suite | the whole test suite green |
-| hermetic | the same suite, still green, under any `HOME` |
-| mutations | every registered breakage must turn the suite red |
-| wiring | every tool reachable from a skill or an automatic check — built but unreachable is a real failure mode here |
-| rules | the rule files are intact |
-| manifest | marketplace entries match the tree, versions agree, schemas valid |
-| plan | every mechanism in the map is present, and most of them are proved by an actual breakage |
-| reconciliation | the map was read against the plan, and the plan has not changed since |
-| skill weight | every skill stays under the size ceiling |
+| **набор** | весь набор тестов зелёный |
+| **герметичность** | тот же набор, всё ещё зелёный, при любом `HOME` |
+| **мутации** | 559 зарегистрированных поломок, каждая обязана уронить набор |
+| **проводка** | каждый инструмент достижим из скилла или автоматической проверки — «построено, но не подключено» здесь настоящий класс отказа |
+| **правила** | файлы правил целы |
+| **объявления пакета** | записи маркетплейса сходятся с деревом, версии совпадают, схемы валидны |
+| **план** | каждый механизм карты на месте, и большинство проверено настоящей поломкой |
+| **сверка** | карту читали против плана, и план с тех пор не менялся |
+| **вес скиллов** | каждый скилл под потолком размера |
 
-The counts at the top of this page — badges and summary line — are rewritten by
-measurement at release time (`tools/sync_public.py`), in both language versions.
-A showcase for a product that promises never to claim the unmeasured does not
-get to type its own figures.
+Числа наверху страницы — бейджи, строка-сводка и счёт поломок — переписывает
+измерением выкладка (`tools/sync_public.py`), в обеих языковых версиях. Витрина
+продукта, который обещает не утверждать неизмеренного, не имеет права вписывать
+свои цифры руками.
 
-## Requirements and platforms
+## Требования и платформы
 
-- **Claude Code**, desktop app or terminal. The plugin runs nowhere else —
-  `claude plugin …` exists only here.
-- **Python 3.8 or newer**, whatever the system already has. The floor comes from
-  the syntax in the code: assignment expressions (`:=`) are used, nothing newer
-  is. No third-party packages, at any version.
-- **pytest**, only if you want to run the test suite.
-- **macOS and Linux** — run live, end to end.
-- **Windows** — the code paths are there (file locking falls back to `msvcrt`
-  where `fcntl` is absent; the process-alive probe knows `os.kill` behaves
-  differently), but **no live run has ever been done**. That is a status, not a
-  disclaimer: `tools/platform_check.py` says it out loud at the start of a
-  session and names what stops working — self-launch where the interpreter is
-  not called `python3`, non-ASCII output in the Windows console, and the
-  one-line `.sh` wrappers next to the tools.
+- **Claude Code**, десктопное приложение или терминал. Больше плагин нигде не
+  работает — команд `claude plugin …` нет ни в одном другом месте.
+- **Python 3.8 или новее**, тот, что уже есть в системе. Нижняя граница взята
+  из синтаксиса кода: используются присваивающие выражения (`:=`) и ничего
+  новее. Сторонних пакетов нет ни одного, ни в какой версии.
+- **pytest** — только если хочешь прогнать набор тестов.
+- **macOS и Linux** — прогнаны живьём, от начала до конца.
+- **Windows** — код готов (запирание файла переходит на `msvcrt` там, где нет
+  `fcntl`; проверка «жив ли процесс» знает, что `os.kill` там ведёт себя
+  иначе), но **живой прогон не делался ни разу**. Это статус, а не оговорка:
+  `tools/platform_check.py` говорит это вслух на старте сеанса и называет
+  поимённо, что перестаёт работать, — самозапуск там, где толкователь языка
+  назван не `python3`, русские буквы в окне команд Windows и однострочные
+  обёртки `.sh` рядом с инструментами.
 
-## Status
+## Статус
 
-Version 0.10.0. All nine gates green on the tree this text ships from.
+Версия 0.10.0. Все девять ворот зелёные на том дереве, из которого едет этот
+текст.
 
-Known **not** done, and said here rather than discovered later:
+Что известно как **не** сделанное — сказано здесь, а не обнаружено потом:
 
-- Windows has never been run live. See above.
+- Windows живьём не запускался. См. выше.
 
-## Contributing
+## Как участвовать
 
-The rule for anything new is fixed, and it runs in this order:
+Порядок для всего нового один и не меняется:
 
-> **mechanism → map → test → mutation → code.**
+> **механизм → карта → тест → мутация → код.**
 
-A mechanism is finished when it exists in `data/plan-coverage.json` with an
-evidence file and a literal substring of executable text, has a test in `tests/`,
-and has a registered breakage in `tests/mutations.json` that actually turns the
-suite red. A mechanism nothing can break is not a mechanism.
+Механизм готов, когда он есть в `data/plan-coverage.json` с файлом-уликой и
+буквальной подстрокой исполняемого текста, у него есть тест в `tests/` и есть
+зарегистрированная поломка в `tests/mutations.json`, которая действительно
+роняет набор. Механизм, который нечем сломать, — не механизм.
 
 ```bash
-python3 -m pytest tests/ -q          # the suite
-python3 tools/gauntlet.py --quick    # fast loop: skips mutations and hermetic
-python3 tools/gauntlet.py            # everything, roughly two hours
+python3 -m pytest tests/ -q          # набор
+python3 tools/gauntlet.py --quick    # быстрая петля: без мутаций и герметичности
+python3 tools/gauntlet.py            # всё целиком, примерно два часа
 ```
 
-`--quick` exits with code 2 by design — two gates are not run in it, and
-"skipped" is deliberately not "passed".
+`--quick` возвращает код 2 намеренно: двое ворот в нём не запускаются, а
+«пропущено» — специально не то же самое, что «пройдено».
 
-## License
+## Лицензия
 
-MIT — see [LICENSE](LICENSE).
+MIT — см. [LICENSE](LICENSE).
 
 <details>
-<summary>If you installed before version 0.3.0</summary>
+<summary>Если ставили до версии 0.3.0</summary>
 
-Up to version 0.3.0 the system shipped as seven packages (`superstack-core`,
-`-install`, `-spec`, `-guard`, `-build`, `-brain`, `-control`). There is one
-package now, and the old seven have to be removed — otherwise two copies of the
-same skills sit side by side and either of them can be picked up by description.
+До версии 0.3.0 система ставилась семью пакетами (`superstack-core`,
+`-install`, `-spec`, `-guard`, `-build`, `-brain`, `-control`). Теперь пакет
+один, и старые семь надо снять — иначе рядом окажутся две копии одних и тех же
+скиллов, и по описанию подтянется любая из них.
 
-In the desktop app: **settings → plugins**, remove each of the seven old ones,
-then **update** the `superstack` marketplace and install `superstack`. The order
-matters twice. While the old ones are still there, two copies of the same skills
-sit side by side. And without updating the marketplace, the old cached list is
-used — the one with seven packages — and the previous version gets installed,
-looking no different from the new one.
+В десктопном приложении: **настройки → плагины**, у каждого из семи старых —
+удалить, затем у маркетплейса `superstack` — **обновить** и поставить
+`superstack`. Порядок важен дважды. Пока старые на месте, рядом лежат две копии
+одних и тех же скиллов, и по описанию подтянется любая. А без обновления
+маркетплейса берётся старый список из кэша — тот самый, где пакетов семь, — и
+поставится прежняя версия, ничем внешне не отличаясь от новой.
 
-Why the split is gone. Seven packages would have made sense if they were
-installed and updated separately. Neither ever happened once: the whole set went
-in together and was updated together, seven identical actions in a row. The price
-was cross-package addressing — a skill in one package calling a tool in another
-through a path that does not exist inside its own package. That is how 14 tools
-out of 29 once became unreachable, and how both calls in the only build skill
-pointed at nothing for several runs. One package removes that whole class of
-failure instead of patching it with another check.
+Почему разделения больше нет. Семь пакетов имели смысл, если бы их ставили и
+обновляли по отдельности. Ни того, ни другого не случилось ни разу: ставилась
+связка целиком, обновлялась тоже целиком — семью одинаковыми действиями подряд.
+Платой была межпакетная адресация: скилл из одного пакета звал инструмент из
+другого через путь, который в его пакете не существует. Так однажды оказались
+недостижимы 14 инструментов из 29, и оба вызова единственного сборочного скилла
+несколько заходов указывали в пустоту. Один пакет убирает этот класс отказов
+целиком, а не чинит его очередной проверкой.
 
-**The `/plugin` slash command will not help.** It exists only in terminal Claude
-Code; the desktop app does not have it, and trying it there answers "isn't
-available in this environment". Verified on the desktop, not inferred.
+**Слэш-команда `/plugin` не подойдёт.** Она есть только в терминальном Claude
+Code; в десктопном приложении её нет, и попытка выполнить её там отвечает
+«isn't available in this environment». Проверено на десктопе, не выведено.
 
 </details>

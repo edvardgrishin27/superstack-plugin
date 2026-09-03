@@ -8,11 +8,11 @@
 было, стояли в основном потоке. И список из трёх скиллов там, где их семь, —
 без тех двух, которые новичок зовёт первыми: «не работает» и «верни как было».
 
-Витрин теперь две. Английская — главная: репозиторий открыт всему миру, и
-русская первая страница отсекала читателя раньше, чем он доходил до сути.
-Русская — полная, не огрызок. Проверки ниже идут ПО ОБЕИМ: половина, из
-которой уехала суть, хуже отсутствующей — на неё ведёт переключатель языка
-первой строкой, и человек читает её как единственную.
+Витрин теперь две. Русская README.md — главная: её открывают первой.
+Английская README.en.md — для тех, кто пришёл извне, и она полная, не огрызок.
+Проверки ниже идут ПО ОБЕИМ: половина, из которой уехала суть, хуже
+отсутствующей — на неё ведёт переключатель языка первой строкой, и человек
+читает её как единственную.
 
 Отдельно — строки-сводки с числами. Их переписывает `tools/sync_public.py` по
 своей форме; разойдётся форма — витрина молча покажет числа прошлого релиза,
@@ -28,8 +28,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from paths import REPO  # noqa: E402
 
-README = (REPO / "README.md").read_text("utf-8")
-README_RU = (REPO / "README.ru.md").read_text("utf-8")
+README_RU = (REPO / "README.md").read_text("utf-8")
+README_EN = (REPO / "README.en.md").read_text("utf-8")
 
 #: Ровно те формы, которые подставляет sync_public.refresh_readme.
 СВОДКА_RU = re.compile(
@@ -38,10 +38,10 @@ README_RU = (REPO / "README.ru.md").read_text("utf-8")
     r"^\d+ tests · \d+ mutations, all caught · \d+ mechanisms\.", re.M)
 
 #: Раздел про снятие семи пакетов — в каждой витрине своим заголовком.
-СЕМЬ_ПАКЕТОВ = {"README.md": "If you installed before version 0.3.0",
-                "README.ru.md": "Если ставили до версии 0.3.0"}
+СЕМЬ_ПАКЕТОВ = {"README.md": "Если ставили до версии 0.3.0",
+                "README.en.md": "If you installed before version 0.3.0"}
 
-ОБЕ = (("README.md", README), ("README.ru.md", README_RU))
+ОБЕ = (("README.md", README_RU), ("README.en.md", README_EN))
 
 
 class TestBothShowcasesPointAtEachOther(unittest.TestCase):
@@ -51,16 +51,16 @@ class TestBothShowcasesPointAtEachOther(unittest.TestCase):
     выглядит рабочей и приводит на 404.
     """
 
-    def test_the_english_front_page_offers_russian_in_its_first_line(self):
-        первая = README.splitlines()[0]
-        self.assertIn("README.ru.md", первая,
-                      "первая строка главной витрины не ведёт на русскую — "
+    def test_the_russian_front_page_offers_english_in_its_first_line(self):
+        первая = README_RU.splitlines()[0]
+        self.assertIn("README.en.md", первая,
+                      "первая строка главной витрины не ведёт на английскую — "
                       f"там сейчас: {первая!r}")
 
-    def test_the_russian_page_leads_back_in_its_first_line(self):
-        первая = README_RU.splitlines()[0]
-        self.assertIn("README.md", первая,
-                      "с русской витрины нет дороги обратно на главную — "
+    def test_the_english_page_leads_back_in_its_first_line(self):
+        первая = README_EN.splitlines()[0]
+        self.assertIn("(README.md)", первая,
+                      "с английской витрины нет дороги обратно на главную — "
                       f"первая строка: {первая!r}")
 
 
@@ -96,14 +96,15 @@ class TestReadmeDoesNotMisleadANewcomer(unittest.TestCase):
 
     def test_the_summary_lines_match_what_sync_public_rewrites(self):
         self.assertRegex(
-            README, СВОДКА_EN,
-            "английской строки-сводки нет или её форма разошлась с "
-            "подстановкой в tools/sync_public.py — выкладка перестанет "
-            "обновлять числа на главной странице")
-        self.assertRegex(
             README_RU, СВОДКА_RU,
             "русской строки-сводки нет или её форма разошлась с подстановкой "
-            "в tools/sync_public.py — выкладка перестанет обновлять числа")
+            "в tools/sync_public.py — выкладка перестанет обновлять числа на "
+            "главной странице")
+        self.assertRegex(
+            README_EN, СВОДКА_EN,
+            "английской строки-сводки нет или её форма разошлась с "
+            "подстановкой в tools/sync_public.py — выкладка перестанет "
+            "обновлять числа")
 
 
 if __name__ == "__main__":
