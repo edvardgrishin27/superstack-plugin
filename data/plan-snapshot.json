@@ -1,0 +1,258 @@
+{
+ "schema": "superstack.plan-snapshot.v1",
+ "why": "Переносимый отпечаток плана, с которым сверялась карта механизмов. Нужен, чтобы ворота «сверка» работали в любом клоне, а не только там, где лежит личный файл автора. Содержимого плана здесь нет — только отпечатки и числа.",
+ "plan_digest": "sha256:2dd04984c5b49bd0d90d4fe1ad69c1ed1c2e97a45a8dfacdc09f7cdb0ca82f71",
+ "bytes": 148345,
+ "lines": 1656,
+ "sections": [
+  {
+   "digest": "sha256:47921df8d728de3b3113f20788b48bd3597c4fdbae26deeb5dbd07c255ebe25f",
+   "lines": 2
+  },
+  {
+   "digest": "sha256:dbdceb6b6f0b47fadfc3b88bc93591850a0e4e2b3d64b18d539076045bb5825b",
+   "lines": 18
+  },
+  {
+   "digest": "sha256:c5c322518d8ebefd26529c5137ec2e5a7e0579f63425e44b64d29928e1d4ae1b",
+   "lines": 33
+  },
+  {
+   "digest": "sha256:a122d218d2319d32c1ad475c00197a22c31996bf4e4b660ea5855bf7051900e8",
+   "lines": 30
+  },
+  {
+   "digest": "sha256:494265726035be0980098552a744ade97ecb620d23597f1373db8ceeabe142a4",
+   "lines": 44
+  },
+  {
+   "digest": "sha256:4d57aa5562e325996982992a51c3b925f5f1ea7f4b4cc8c050b0f57a8220422b",
+   "lines": 22
+  },
+  {
+   "digest": "sha256:a1cbc8c225e3323864d8c545876a872b1d2437805389688bb688d93bc2c32111",
+   "lines": 42
+  },
+  {
+   "digest": "sha256:41bc2fc98c31d711321f6f59f6148a5273ead341d075f38d0fb022d7d60ce67c",
+   "lines": 61
+  },
+  {
+   "digest": "sha256:11aedc604eb993c68662eef27fd67d1c284b1b207a1341e7b19c80aeb8b19bf2",
+   "lines": 30
+  },
+  {
+   "digest": "sha256:29b699714e75f17663b36cd473a16bc886baaa0810e4d9e917ac640efbf2e575",
+   "lines": 24
+  },
+  {
+   "digest": "sha256:a37d082276d4328d4b640c3305b2f439c17c6b3b2d532a9d69b38a4dcba314c6",
+   "lines": 129
+  },
+  {
+   "digest": "sha256:d7729b68e4ca8d387140e39511bd429859cc83bd09afd297c7885c5dac28ff07",
+   "lines": 17
+  },
+  {
+   "digest": "sha256:f1d1dcdcf8327c53da758bf4041306d3c47aaea11c19689a1f19aaa580597d66",
+   "lines": 36
+  },
+  {
+   "digest": "sha256:eedfbd8d5458de35fd154678058a724a6009a7fe5c3d4820e9a7a6988f753385",
+   "lines": 99
+  },
+  {
+   "digest": "sha256:8e88cfcf8c233b67b170e5eb524ed67c77d27e1f75f3f8ebb361d9bc2f394477",
+   "lines": 35
+  },
+  {
+   "digest": "sha256:1e547cd4946ebde9e86376217ba959e878e2f96fb2bce792109ade508339b706",
+   "lines": 19
+  },
+  {
+   "digest": "sha256:61e79346b01e77a68d05878132e77137de654d322de05f77feb7810c98bb7961",
+   "lines": 16
+  },
+  {
+   "digest": "sha256:825af748292f3ab915c02a5b8412ff85d7bf665bde5ca5e1f30e0804087a9620",
+   "lines": 49
+  },
+  {
+   "digest": "sha256:b4c4cfd5743563e090798eeedbc26eeb084bf59c146a479468598561e4e703bb",
+   "lines": 22
+  },
+  {
+   "digest": "sha256:dfe798b1fffc20adb1712475b29d87f906d72bb42e7e184b926c404acc044d93",
+   "lines": 16
+  },
+  {
+   "digest": "sha256:ae5003499319453e7881151ff216eace409f7c39863d01664a0affa5015e2143",
+   "lines": 18
+  },
+  {
+   "digest": "sha256:4aca0ae75b1f1fe71f868c9ad65bc5fa038ced65881afd9e0b9918f52a99b0a2",
+   "lines": 9
+  },
+  {
+   "digest": "sha256:16318ebe148540b552a9641482a888d6b41f78edfe1f42e91b7049abcf1e9b49",
+   "lines": 18
+  },
+  {
+   "digest": "sha256:a60121637492b3b910b19b7daecba8b81eb41d5ce55828248b66086b92cf87ad",
+   "lines": 10
+  },
+  {
+   "digest": "sha256:916fe7d1290c03e8b7d20fed8e80ed4204148528d2a5fc4f38b3edf376070c08",
+   "lines": 17
+  },
+  {
+   "digest": "sha256:d2aafb4785fc7206008d2315e904f07fb77188101c9548ee3a6cf97e3af1f4a2",
+   "lines": 14
+  },
+  {
+   "digest": "sha256:103687aec3aecb922222cc4fae51f384aa9e06aff42db2eaad1883a9cff4b275",
+   "lines": 20
+  },
+  {
+   "digest": "sha256:e5650b065bfc233f38a65e3430053a90eaafe41d65ab6c915672ac0d2703f361",
+   "lines": 23
+  },
+  {
+   "digest": "sha256:d09b7e821604a7138f39fef5a61ad1226eae07dfd46233f091c99f762be4b323",
+   "lines": 17
+  },
+  {
+   "digest": "sha256:9390e000abdc0ca27dbf2ce730b3f38e5319e02de9a15e4aa212bcb652f56316",
+   "lines": 15
+  },
+  {
+   "digest": "sha256:d90f25ff1a20dcc7d5d8fe663c4d2a1eb729aaa005ba10149c4b7fda8d487c3e",
+   "lines": 60
+  },
+  {
+   "digest": "sha256:5b31d2a3ad8380379b6a3e3718c9417c73897f6e959f42cd12956de15288a600",
+   "lines": 17
+  },
+  {
+   "digest": "sha256:3549c7593110bb0fc1fe60fdc72343f50afd036b3f1303ba551728c57b0ac498",
+   "lines": 15
+  },
+  {
+   "digest": "sha256:7bff9e80909f494eb10e85a640c673c7dfa545c352bdc57c23b587438b349376",
+   "lines": 31
+  },
+  {
+   "digest": "sha256:d8c026b10481d2a7c35d15d04187a4f8b3622aed7658341cbca49b4e57fcf49d",
+   "lines": 41
+  },
+  {
+   "digest": "sha256:878cf20e14f1ca362d8c160a7ca0af87f445f05daf8fe1583d8b18f571d7db7e",
+   "lines": 12
+  },
+  {
+   "digest": "sha256:bfd0eac41ef5c853633b706687bbdf24fd5d320451cc0199739b3de7492bdda7",
+   "lines": 21
+  },
+  {
+   "digest": "sha256:9ab05ad3be26a9e7c43c371765e783d8dd49a691e2e79087883b0a7a11559658",
+   "lines": 23
+  },
+  {
+   "digest": "sha256:7cbf0b9627845233d2a7f9bd973449b141c995d54a0324397ab12d9b63f03990",
+   "lines": 7
+  },
+  {
+   "digest": "sha256:dc9c094f3dd8affce17adb8a5fd135272172b05bad5d4d01e8c84470dc4d2aa1",
+   "lines": 10
+  },
+  {
+   "digest": "sha256:fd338d2d10a2ed17d150f2772d9dfde72736e4c30b062701efc9e65999d62cb7",
+   "lines": 17
+  },
+  {
+   "digest": "sha256:1fe85fdb13bb96e9362e7effb2fe67e76c57fa78696889e3899ceda3be779ea1",
+   "lines": 35
+  },
+  {
+   "digest": "sha256:1a8722466b48847effef85a4a7e75f6bc6567a8935f4f91b49a45b169822af9a",
+   "lines": 71
+  },
+  {
+   "digest": "sha256:489a8613b8ee4c1774250d41f87d34143e7969ebc9b49258951d07a9d9d8d407",
+   "lines": 5
+  },
+  {
+   "digest": "sha256:a59ed6008572247c978a3d8f3296d6f3f553d9c8febd8783192f2cfac38e9e4e",
+   "lines": 21
+  },
+  {
+   "digest": "sha256:4efbab53aef44f4e7d87c1fe9d936520a57b3081743c5c27933833f5bcfaeb25",
+   "lines": 19
+  },
+  {
+   "digest": "sha256:bde0c08fa5849f3e17e39faec8e7bda66b063fc1a0903fb406e3d6c8677cdf2d",
+   "lines": 7
+  },
+  {
+   "digest": "sha256:6b315699005640f90037d31405bbe7523b585c55fbcab5c162e4cb769653319c",
+   "lines": 53
+  },
+  {
+   "digest": "sha256:bd0ca47e3cc907d7a83f2645e2532416bf6446e88e9c3fcb0c9253a1c846af07",
+   "lines": 29
+  },
+  {
+   "digest": "sha256:188a6ab8ac56bbb61a329940a8f42bfb6f339163a1a63c3c7b05d1d4d7044d4c",
+   "lines": 14
+  },
+  {
+   "digest": "sha256:71f5d1c5a384cfb3c9c1009680f3fdcdf29b1f719ed766d38f8d6055e5315601",
+   "lines": 36
+  },
+  {
+   "digest": "sha256:90e737029779e2565863fc4c48e851c9a3989125d16e35c8112941bc1ddf6be7",
+   "lines": 6
+  },
+  {
+   "digest": "sha256:31d87aca8dc42ed2c085b4c07ed14543905eae20692f6d86f68473b13761a0ff",
+   "lines": 10
+  },
+  {
+   "digest": "sha256:e9e5f18c29e5aaef8c1c90feec2b5fb5f8fbfb3d50624074fb0c63fe4be36c00",
+   "lines": 19
+  },
+  {
+   "digest": "sha256:51d7f22fc28e630871a4dedebaacb73435acfb9081be848c5b9e44ddb5061e52",
+   "lines": 16
+  },
+  {
+   "digest": "sha256:539fd25ef7c45e8bf57ad9b1cdb68d2e3b2b6d654ac10074ef1b1c5dbb81c317",
+   "lines": 21
+  },
+  {
+   "digest": "sha256:80d897d1e9124ea2c5d9cdfb551d8f87eb1d331ca4989b610398ca2366fe7ff0",
+   "lines": 16
+  },
+  {
+   "digest": "sha256:431c2e10a2357fd1f7449993e0e4fd9c07b09dce339faa06ed4498b46a066ed2",
+   "lines": 40
+  },
+  {
+   "digest": "sha256:49c6aa96d58eab5444e15be11e911e1d61392d4c3194d28a189a6521abbd0f8e",
+   "lines": 27
+  },
+  {
+   "digest": "sha256:0ad4d3f447f5191ecc113520efd6fb8ac4ee226b1b24784972499399c45ba478",
+   "lines": 24
+  },
+  {
+   "digest": "sha256:09ba528b9689d5957fbca28aa88f81199eee5391849dcaff3a77eaf31f440931",
+   "lines": 14
+  },
+  {
+   "digest": "sha256:bdfb8adb49f6463d61cba9b5ef02310eefd56a734af196837d661886b8e43708",
+   "lines": 14
+  }
+ ],
+ "self": "sha256:1ad935349aa86484831a404684c5a130599a3ecb5aef49963ba4f9cfab95760d"
+}

@@ -63,8 +63,16 @@
  "rt.subagent_model_routing": null,
  "rt.version_conflict": false,
  "rt.versions_installed": {},
+ "sec.scan_denied": [],
  "sec.scan_files": [],
  "sec.scan_unreadable": [],
  "sec.secret_matches": [],
- "cc.constitution_lines": 45
+ "cc.constitution_lines": 45,
+ "cc.config_dir": null,
+ "mcp.by_scope": [],
+ "mcp.scopes_covered": [],
+ "mcp.scopes_unreadable": [],
+ "cc.plugins.by_scope": [],
+ "cc.permissions.by_scope": [],
+ "cc.settings_scopes_unreadable": []
 }

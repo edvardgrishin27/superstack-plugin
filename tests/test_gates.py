@@ -209,6 +209,55 @@ class TestG4TheManifestMayNotOutliveTheTruth(Base):
             {"id": "R02", "verdict": gt.PARTIAL}]})
         self.assertEqual(gt.gate_g4(d)["status"], gt.PASS)
 
+    def test_done_row_the_blind_check_never_touched_is_drift(self):
+        """Молчание приёмки — расхождение, а не пропуск. Требование, готовое по
+        манифесту и не оценённое никем со стороны, раньше выпадало из сверки, и
+        все четыре гейта были зелёными ровно на том, ради чего приёмка есть."""
+        d = manifest(self.dir, ("done", "done"), blind={"checked": [
+            {"id": "R01", "verdict": gt.BUILT}]})
+        r = gt.gate_g4(d)
+        self.assertEqual(r["status"], gt.FAIL)
+        self.assertEqual([x["id"] for x in r["drift"]], ["R02"])
+        self.assertIn("не выносила", r["drift"][0]["why"])
+
+    def test_completeness_is_asked_of_done_rows_only(self):
+        """Граница: строку, готовой не объявленную, приёмка оценивать не
+        обязана — иначе гейт требовал бы приёмки непостроенного."""
+        d = manifest(self.dir, ("done", "in-spec"), blind={"checked": [
+            {"id": "R01", "verdict": gt.BUILT}]})
+        self.assertEqual(gt.gate_g4(d)["status"], gt.PASS)
+
+    def test_a_row_without_an_id_is_not_dropped_in_silence(self):
+        """Фильтр `if "id" in c` делал приёмку короче, чем она была, и
+        расхождения считались по остатку."""
+        d = manifest(self.dir, ("done", "done"), blind={"checked": [
+            {"id": "R01", "verdict": gt.BUILT}, {"verdict": gt.BUILT}]})
+        r = gt.gate_g4(d)
+        self.assertEqual(r["status"], gt.UNKNOWN)
+        self.assertIn("без id", " ".join(r["unparsed"]))
+
+    def test_a_verdict_outside_the_set_is_unparsed_not_neutral(self):
+        d = manifest(self.dir, ("done", "done"), blind={"checked": [
+            {"id": "R01", "verdict": gt.BUILT},
+            {"id": "R02", "verdict": "скорее да"}]})
+        r = gt.gate_g4(d)
+        self.assertEqual(r["status"], gt.UNKNOWN)
+        self.assertIn("скорее да", " ".join(r["unparsed"]))
+
+    def test_a_repeated_id_is_unparsed(self):
+        d = manifest(self.dir, ("done", "done"), blind={"checked": [
+            {"id": "R01", "verdict": gt.BUILT},
+            {"id": "R02", "verdict": gt.BUILT},
+            {"id": "R02", "verdict": gt.ABSENT}]})
+        self.assertEqual(gt.gate_g4(d)["status"], gt.UNKNOWN)
+
+    def test_a_result_that_is_not_a_list_is_unparsed(self):
+        d = manifest(self.dir, ("done", "done"),
+                     blind={"checked": {"R01": gt.BUILT, "R02": gt.BUILT}})
+        r = gt.gate_g4(d)
+        self.assertEqual(r["status"], gt.UNKNOWN)
+        self.assertIn("не списком", " ".join(r["unparsed"]))
+
     def test_drift_is_computed_here_not_copied_from_the_checker(self):
         """Расхождение, которое надо не забыть переписать в отчёт, однажды не
         перепишут. Считаем сами из двух источников."""

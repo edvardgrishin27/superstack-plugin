@@ -49,6 +49,12 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
+# Запись — общим модулем: уникальный временный сосед, атомарная замена и режим
+# доступа, который от записи не расширяется. Каталог скрипта при импорте из
+# теста в sys.path не попадает, поэтому добавляется явно — как у соседей.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import atomic_store  # noqa: E402
+
 SCHEMA = "superstack.baseline.v1"
 DIFF_SCHEMA = "superstack.baseline.diff.v1"
 
@@ -281,13 +287,15 @@ def snapshot_path(store: Path, stamp: str) -> Path:
 
 
 def write_atomic(path: Path, data: dict) -> None:
-    """Запись через временный файл: оборванный снимок не должен подменять
-    собой предыдущий и выглядеть базовой линией."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(path.suffix + ".tmp")
-    tmp.write_text(json.dumps(data, ensure_ascii=False, indent=1) + "\n",
-                   encoding="utf-8")
-    os.replace(tmp, path)
+    """Запись общим модулем: оборванный снимок не должен подменять собой
+    предыдущий и выглядеть базовой линией, а права снимка — расти при записи.
+
+    Отступ и перевод строки в конце оставлены как были: снимок читает человек,
+    и переформатировать файл заодно с починкой записи значит выдать шум за
+    правку.
+    """
+    atomic_store.записать(
+        path, json.dumps(data, ensure_ascii=False, indent=1) + "\n")
 
 
 # --------------------------------------------------------------------------

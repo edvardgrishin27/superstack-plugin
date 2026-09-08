@@ -199,26 +199,59 @@ class TestSecretNeverMultiplies(ApplyFixture):
         self.assertIn(self.SECRET, live["permissions"]["allow"],
                       "откат затёр живой секрет меткой из бэкапа")
 
-    def test_undo_that_restored_nothing_is_not_reported_as_success(self):
-        """Тот же откат, но взгляд на КОД, а не на файл.
+    #: Метка на месте вырезанного секрета — той же формы, что ставит копия.
+    #: Настоящего значения тут нет: длина и отпечаток выдуманы.
+    REDACTED_MARK = "<ВЫРЕЗАНО-SUPERSTACK len=8 fp=0123456789ab>"
 
-        Пропуск файла с вырезанным секретом — правильное поведение (тест
-        выше), но раньше оно заканчивалось `return 0`. Ноль читает слой выше
-        и печатает человеку «откатил», хотя не вернулся НИ ОДИН файл: успех
-        объявлен раньше, чем получен. Код обязан отличаться и от нуля, и от
-        «нет такого отката» — на одном коде верхний слой сказал бы одно и то
-        же про два разных случая.
+    #: Что по журналу оставил на этом месте сам инструмент. Живое значение
+    #: обязано совпадать с ним, иначе решает сравнение с чужой правкой, а не
+    #: запрет писать метку, — и запрет остаётся непроверенным.
+    WROTE = "значение-которое-оставил-инструмент"
+
+    def _backup_whose_only_field_is_redacted(self) -> Path:
+        """Копия, где единственное возвращаемое ЗНАЧЕНИЕ — метка, а не значение.
+
+        Записывается руками, и это единственный способ. Запрет переехал с
+        файла на поле, а ни одно описанное действие не перезаписывает уже
+        заданное значение — значит в настоящем прогоне вырезанный секрет в
+        возвращаемом значении не окажется никогда. Форма записи — ровно та,
+        которую пишет сам инструмент.
         """
-        self.settings({"permissions": {"allow": [self.SECRET]}})
-        self.assertEqual(apply_mod.cmd_run([self._findings_with_secret()]), 0)
-        bdir = next(apply_mod.BACKUPS.iterdir())
-        self.assertIn("ВЫРЕЗАНО-SUPERSTACK",
-                      (bdir / "settings.json").read_text(encoding="utf-8"),
-                      "секрет не вырезан — проверять нечего")
+        bdir = apply_mod.BACKUPS / "20260101-000000"
+        bdir.mkdir(parents=True)
+        (bdir / "manifest.json").write_text(json.dumps({
+            "created": "2026-01-01T00:00:00+00:00",
+            "backup": {"dir": str(bdir), "files": ["settings.json"],
+                       "redacted": [{"file": "settings.json", "count": 1}],
+                       "format": apply_mod.UNDO_FORMAT,
+                       "before": {"settings.json": {"before_exists": True}}},
+            "applied": [{"id": "ctx.default-mode-unset", "action": "тест",
+                         "changed": True, "file": "settings.json",
+                         "field": "внешний.ключ", "before_present": True,
+                         "before": self.REDACTED_MARK,
+                         "after": self.WROTE}],
+        }, ensure_ascii=False), encoding="utf-8")
+        (bdir / "settings.json").write_text("{}", encoding="utf-8")
+        return bdir
+
+    def test_undo_that_restored_nothing_is_not_reported_as_success(self):
+        """Тот же запрет, но взгляд на КОД, а не на файл.
+
+        Пропуск вырезанного секрета — правильное поведение (тест выше), но
+        раньше оно заканчивалось `return 0`. Ноль читает слой выше и печатает
+        человеку «откатил», хотя не вернулось НИ ОДНОГО поля: успех объявлен
+        раньше, чем получен. Код обязан отличаться и от нуля, и от «нет такого
+        отката» — на одном коде верхний слой сказал бы одно и то же про два
+        разных случая.
+        """
+        bdir = self._backup_whose_only_field_is_redacted()
+        self.settings({"внешний": {"ключ": self.WROTE}})
         err = io.StringIO()
         with contextlib.redirect_stderr(err):
             rc = apply_mod.cmd_undo([bdir.name])
         said = err.getvalue()
+        self.assertEqual(self.read_settings()["внешний"]["ключ"], self.WROTE,
+                         "живое значение затёрто меткой из копии")
         self.assertEqual(rc, apply_mod.UNDO_NOTHING_RESTORED)
         self.assertNotEqual(rc, 0, "ноль здесь становится «откатил» этажом выше")
         self.assertNotEqual(rc, 1, "это не «нет такого отката» — откат есть")

@@ -237,6 +237,140 @@ class TestGitignoreMentionIsNotALeak(unittest.TestCase):
         self.assertEqual(v["status"], "leaked", v)
 
 
+class TestFileNamesInEveryFormGitPrints(unittest.TestCase):
+    """Границу файла ищет разбор, а не глаз, и форм у неё несколько.
+
+    Git берёт путь в кавычки, как только в имени есть кавычка, обратный слэш
+    или управляющий символ — а по умолчанию ещё и любая не-ASCII буква, и её
+    байты печатаются восьмеричными escape. Пробел он не экранирует вовсе.
+    Половины заголовка кодируются НЕЗАВИСИМО, поэтому смешанная строка —
+    обычное дело, а не редкость.
+    """
+
+    def test_octal_escapes_become_the_real_name(self):
+        self.assertEqual(ba.unquote_name(r'"a/\320\242\320\227.md"'), "a/ТЗ.md")
+
+    def test_a_quote_inside_the_name_survives(self):
+        self.assertEqual(ba.unquote_name(r'"a/quo\"te.py"'), 'a/quo"te.py')
+
+    def test_a_control_character_inside_the_name_survives(self):
+        self.assertEqual(ba.unquote_name(r'"a/таб\tтам.py"'), "a/таб\tтам.py")
+
+    def test_a_broken_escape_is_not_guessed(self):
+        """Догадка об имени, которое не разобралось, тише и дороже отказа."""
+        for token in (r'"a/\9.md"', r'"a/\32.md"', r'"a/\377.md"',
+                      '"a/x.md', "a/x.md"):
+            with self.subTest(token=token):
+                self.assertIsNone(ba.unquote_name(token))
+
+    def test_the_header_is_read_in_every_form(self):
+        for line, ожидание in (
+                ("diff --git a/src/a.py b/src/a.py", ("src/a.py", "src/a.py")),
+                (r'diff --git "a/\320\242\320\227.md" "b/\320\242\320\227.md"',
+                 ("ТЗ.md", "ТЗ.md")),
+                ("diff --git a/мой файл.py b/мой файл.py",
+                 ("мой файл.py", "мой файл.py")),
+                (r'diff --git "a/\320\242\320\227.md" b/notes.md',
+                 ("ТЗ.md", "notes.md")),
+                (r'diff --git a/notes.md "b/\320\242\320\227.md"',
+                 ("notes.md", "ТЗ.md")),
+        ):
+            with self.subTest(line=line):
+                self.assertEqual(ba.parse_file_line(line), ожидание)
+
+    def test_a_name_containing_the_second_half_is_read_by_the_pair(self):
+        """Имя умеет содержать ` b/` внутри себя — мест для разреза тогда
+        несколько, и верное то, где половины совпали."""
+        self.assertEqual(
+            ba.parse_file_line("diff --git a/док b/схема.md b/док b/схема.md"),
+            ("док b/схема.md", "док b/схема.md"))
+
+    def test_a_header_without_the_service_prefixes_is_not_guessed(self):
+        for line in ("diff --git src/a.py src/a.py",
+                     "diff --git a/только-одна-половина",
+                     "diff --git a/x.py c/x.py"):
+            with self.subTest(line=line):
+                self.assertIsNone(ba.parse_file_line(line))
+
+
+class TestUnrecognisedBoundaryStopsThePacket(unittest.TestCase):
+    """Граница, которую не разобрали, — не «файлов нет» и не «всё показано».
+
+    Пока строка `diff --git` не узнана, следующий за ней текст продолжает
+    предыдущий файл: показанным числится один путь, скрытых нет, пакет
+    объявлен готовым — и пересказ просьбы едет судье внутри разрешённого
+    файла. Из всех исходов этот худший: он выглядит как успех.
+    """
+
+    def _смесь(self) -> str:
+        return (diff_for("src/a.py")
+                + "diff --git ТЗ.md ТЗ.md\n--- ТЗ.md\n+++ ТЗ.md\n"
+                  "@@ -1 +1,2 @@\n+вход по коду из письма\n")
+
+    def test_the_unrecognised_line_is_named(self):
+        p = ba.build_packet("просьба", self._смесь())
+        self.assertTrue(p["unparsed"], p)
+        self.assertIn("ТЗ.md", p["unparsed"][0])
+
+    def test_the_packet_is_refused_not_merely_marked(self):
+        v = ba.verdict(ba.build_packet("просьба", self._смесь()))
+        self.assertEqual(v["status"], "unknown", v)
+        self.assertEqual(ba.EXIT[v["status"]], 2)
+
+    def test_the_orphan_text_is_not_glued_to_the_allowed_file(self):
+        p = ba.build_packet("просьба", self._смесь())
+        self.assertEqual(p["shown_files"], ["src/a.py"], p)
+        self.assertNotIn("вход по коду", p["changes"], p)
+
+    def test_the_reason_is_about_boundaries_not_about_emptiness(self):
+        v = ba.verdict(ba.build_packet("просьба", self._смесь()))
+        self.assertIn("границ", v["next"].lower(), v["next"])
+        self.assertNotIn("изменений нет вовсе", v["next"])
+
+    def test_the_human_line_names_it_too(self):
+        self.assertIn("граница",
+                      ba.human(ba.verdict(ba.build_packet("просьба",
+                                                          self._смесь()))))
+
+    def test_a_clean_diff_has_nothing_unparsed(self):
+        """Обратный контроль: отказ на каждом диффе — не строгость."""
+        p = ba.build_packet("просьба", diff_for("src/a.py", "PLAN.md"))
+        self.assertEqual(p["unparsed"], [])
+
+
+class TestRenameIsCheckedOnBothSides(unittest.TestCase):
+    """Спека, переехавшая под нейтральным именем, остаётся пересказом."""
+
+    def _переезд(self, было: str, стало: str) -> dict:
+        d = (f"diff --git a/{было} b/{стало}\nsimilarity index 88%\n"
+             f"rename from {было}\nrename to {стало}\n"
+             f"--- a/{было}\n+++ b/{стало}\n@@ -1 +1,2 @@\n+строка спеки\n")
+        return ba.build_packet("просьба", d)
+
+    def test_the_old_name_still_decides(self):
+        p = self._переезд("PLAN.md", "notes.md")
+        self.assertEqual([h["path"] for h in p["hidden_files"]], ["notes.md"], p)
+        self.assertEqual(p["shown_files"], [], p)
+
+    def test_the_new_name_decides_too(self):
+        p = self._переезд("notes.md", "PLAN.md")
+        self.assertEqual([h["path"] for h in p["hidden_files"]], ["PLAN.md"], p)
+
+    def test_a_rename_of_ordinary_code_is_shown(self):
+        """Обратный контроль: перестраховка вырезала бы обычный переезд."""
+        p = self._переезд("src/a.py", "src/b.py")
+        self.assertEqual(p["shown_files"], ["src/b.py"], p)
+
+    def test_the_gitignore_exception_follows_the_new_name(self):
+        """Послабление для списка путей не переезжает вместе со старым
+        именем: файл, ставший обычным кодом, снова обычный код."""
+        d = ("diff --git a/.gitignore b/src/a.js\nrename from .gitignore\n"
+             "rename to src/a.js\n--- a/.gitignore\n+++ b/src/a.js\n"
+             "@@ -1 +1,2 @@\n+const plan = require('../.superstack/state.json')\n")
+        self.assertEqual(ba.verdict(ba.build_packet("просьба", d))["status"],
+                         "leaked")
+
+
 class TestNothingToJudgeIsNotSuccess(unittest.TestCase):
     """«Не смог проверить» и «прошло» — разные утверждения."""
 
@@ -267,9 +401,13 @@ class TestNothingToJudgeIsNotSuccess(unittest.TestCase):
 
 class TestPacketCarriesOnlyTwoThings(unittest.TestCase):
     def test_no_conversation_or_spec_fields_leak_in(self):
+        # `unparsed` — список НЕРАЗОБРАННЫХ границ между файлами. Он про
+        # устройство самих изменений, а не про разговор, спеку или план, и
+        # без него отказ «границу не разобрал» пришлось бы выдавать теми же
+        # словами, что и «изменений нет вовсе» — то есть подменять причину.
         p = ba.build_packet("просьба", diff_for("src/a.py"))
         allowed = {"gate", "request", "changes", "shown_files", "hidden_files",
-                   "diff_parsed", "truncated"}
+                   "diff_parsed", "unparsed", "truncated"}
         self.assertEqual(set(p), allowed, "в пакете появилось лишнее поле")
 
     def test_oversized_changes_are_marked_not_silently_cut(self):

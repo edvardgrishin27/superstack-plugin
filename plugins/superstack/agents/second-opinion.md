@@ -66,9 +66,3 @@ tools: Read, Grep, Glob
 Если `model: fable` не поддерживается этой версией Claude Code, ты исполняешься
 **той же моделью, что писала код**, и об этом никто не предупредит. Проверка:
 `superstack doctor` — правило `ass.second-opinion-degraded`.
-
----
-
-Паттерн взят из [fable-advisor](https://github.com/DannyMac180/fable-advisor)
-(MIT, Danny McAteer): роль советчика, ограничение на чтение и запрет
-самоаттестации. Полосы реализации оттуда не взяты — см. `references/`.

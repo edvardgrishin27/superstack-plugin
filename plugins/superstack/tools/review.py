@@ -49,6 +49,12 @@ import os
 import sys
 from pathlib import Path
 
+# Запись — общим модулем: уникальный временный сосед, атомарная замена и режим
+# доступа, который от записи не расширяется. Каталог скрипта при импорте из
+# теста в sys.path не попадает, поэтому добавляется явно — как у соседей.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import atomic_store  # noqa: E402
+
 MANIFEST, SPEC, CRAFT = "manifest", "spec", "craft"
 AXES = (MANIFEST, SPEC, CRAFT)
 
@@ -87,10 +93,9 @@ def load(path: Path) -> dict:
 def save(path: Path, data: dict, now: str = None) -> None:
     from datetime import datetime, timezone
     data["updated"] = now or datetime.now(timezone.utc).isoformat(timespec="seconds")
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(path.suffix + ".tmp")
-    tmp.write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
-    os.replace(tmp, path)
+    # Запись общим модулем. Отступ прежний: файл читает человек, и
+    # переформатировать его заодно с починкой записи значит выдать шум за правку.
+    atomic_store.записать_json(path, data, indent=1)
 
 
 def pack(axis: str, material: dict) -> dict:

@@ -53,6 +53,12 @@ import re
 import sys
 from pathlib import Path
 
+# Замок и запись — общие для всех инструментов, которые пишут одни и те же
+# файлы. Каталог скрипта при импорте из теста в sys.path не попадает, поэтому
+# добавляется явно — как у соседей.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import atomic_store  # noqa: E402
+
 #: Статусы. Порядок — это путь требования от просьбы до готового.
 OPEN, IN_SPEC, IN_TICKET, DONE = "open", "in-spec", "in-ticket", "done"
 PLACEHOLDER, DEFERRED, DROPPED = "placeholder", "deferred", "dropped"
@@ -116,10 +122,7 @@ def load(path: Path) -> dict:
 def save(path: Path, data: dict, now: "str | None" = None) -> None:
     from datetime import datetime, timezone
     data["updated"] = now or datetime.now(timezone.utc).isoformat(timespec="seconds")
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(path.suffix + ".tmp")
-    tmp.write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
-    os.replace(tmp, path)
+    atomic_store.записать_json(path, data, indent=1)
 
 
 #: Код отказа «здесь уже начата работа». Ноль здесь означал бы «завёл», а
@@ -427,6 +430,11 @@ def main() -> int:
         return 3
     cmd, path = argv[0], Path(argv[1])
     rest = argv[2:]
+    # Замок держится до конца операции: читаем, меняем и пишем под ним.
+    # Иначе параллельный помощник, начавший читать между нашими чтением и
+    # записью, вернёт файл к прежнему виду — молча и с кодом 0.
+    lock = atomic_store.Lock(path)
+    lock.__enter__()
     data = load(path)
 
     try:
@@ -443,6 +451,7 @@ def main() -> int:
             if занято(path):
                 if "--fresh" not in rest:
                     print(уже_начато(path, data), file=sys.stderr)
+                    lock.__exit__()
                     return ЗАНЯТО
                 копия = отложить(path)
                 print(f"прежние требования отложены сюда: {копия}",
@@ -533,9 +542,11 @@ def main() -> int:
         else:
             return _fail(f"неизвестная команда: {cmd}")
     except ValueError as e:
+        lock.__exit__()
         return _fail(str(e))
 
     save(path, data)
+    lock.__exit__()
     out = report(data, path)
     print(json.dumps(out, ensure_ascii=False, indent=1))
     # Код записи отвечает за ЗАПИСЬ, а не за состояние целиком.

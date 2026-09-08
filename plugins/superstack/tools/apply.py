@@ -11,9 +11,20 @@
   2. Секреты в бэкап НЕ копируются. Иначе «критическая находка про пароль»
      превращала бы одну копию пароля в две. На их месте метка-отпечаток,
      и человеку это говорится ЗАРАНЕЕ, до действия: откат вернёт файл,
-     но не вернёт секрет.
+     но не вернёт секрет. Ищутся они в том содержимом, которое СЕЙЧАС ляжет
+     в копию, а не в списке, собранном раньше: пустой список означает «сканер
+     ничего не увидел», а не «в файле ничего нет». Файл, который не
+     разобрался, — отдельное состояние «не проверено»: он не копируется вовсе,
+     не меняется ничего, и человеку названы файл и причина.
   3. Удаления нет. Есть карантин: файл переезжает и может вернуться.
-  4. Каждое действие пишется в манифест. Откат читает манифест, а не гадает.
+  4. Каждое действие пишется в журнал: какое поле, было ли оно, что было и
+     что стало. Откат возвращает СВОИ поля — и только те, в которых до сих
+     пор лежит записанное им. Всё остальное человек правил сам после нас:
+     оно остаётся, а ему говорится, что именно не откатили и почему.
+     Отсутствие файла — тоже состояние, оно записывается до первой записи:
+     созданный здесь файл убирается, если в нём не появилось чужого.
+     Имена в журнале проверяются при чтении: своя же запись, сделанная
+     вчера, — внешние данные.
   5. Класс находки решает, можно ли применять без человека:
        AUTO   — можно
        GATE   — только с явного согласия
@@ -22,18 +33,26 @@
      Секрет в настройках имеет класс BLOCK/ASK именно поэтому: удалять
      чужой пароль автоматически нельзя, а «починить» его молча — тем более.
 
+Раскладка. Здесь — профиль, копия, действия и команды: всё, что ПИШЕТ.
+Рядом три соседа, каждый со своим контрактом и без единого пути к профилю:
+
+  tools/base_kit.py      — перечень базового набора: данные, не решение
+  tools/settings_copy.py — чтение настроек и очистка их копии от секретов
+  tools/undo_fields.py   — формат `superstack.undo.v2`: единица отката — поле
+
   python3 apply.py plan findings.json          показать, что будет сделано
   python3 apply.py run  findings.json [--yes]  сделать
   python3 apply.py undo <id>                   откатить
   python3 apply.py list                        какие откаты доступны
   python3 apply.py base [facts.json]            что из базового набора уже есть
-  коды: 0 — сделано; 1 — нет такого отката (или базовый набор неполон);
-  2 — ошибка вызова; 4 — факты не прочитались; 5 — откат не вернул ни
-  одного файла; 6 — нужно явное согласие; 10 — система на паузе
+  коды: 0 — сделано; 1 — нет такого отката, имя не то, формат копии
+  незнаком, базовый набор неполон или копия не снята (файл настроек не
+  разбирается, и вслепую его не сохраняем); 2 — ошибка вызова; 4 — факты не
+  прочитались; 5 — откат не вернул ни одного поля; 6 — нужно явное
+  согласие; 10 — система на паузе
 """
 from __future__ import annotations
 
-import hashlib
 import json
 import os
 import shutil
@@ -41,21 +60,76 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
+# Замок и запись — общие для всех инструментов, которые пишут одни и те же
+# файлы: одинаковая ошибка, размноженная копипастом, чинится по одному файлу и
+# возвращается в остальных. Каталог скрипта при импорте из теста в sys.path не
+# попадает, поэтому добавляется явно — как у соседей.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import atomic_store  # noqa: E402
+from base_kit import BASE_KIT, _kit_row  # noqa: E402
+# Имена перечислены полностью, включая те, что зовутся не отсюда: apply.py
+# остаётся ЕДИНЫМ адресом для тех, кто ходит к нему снаружи (tools/oops.py,
+# тесты), и переезд куска в соседний модуль не имеет права менять этот адрес.
+from undo_fields import (  # noqa: E402,F401
+    UnsafeName, _drop_created_file, _restore_one_field, _взять, _звенья,
+    _коротко, _положить, _секрет_вырезан, _убрать, _undo_journal,
+    _undo_legacy, _формат_копии,
+)
+from settings_copy import (  # noqa: E402,F401
+    REDACTION_MARK, WRITABLE, _отказ_непроверенное, _отказ_остатки,
+    _проба, _прочитать_конфиг, _redact_journal, _redact_walk,
+    _свежие_находки, _что_вырезать, _остатки_в_тексте, redact,
+)
+
+
 HOME = Path.home()
-CLAUDE = HOME / ".claude"
-STATE = CLAUDE / "superstack"
-BACKUPS = STATE / "backups"
-QUARANTINE = STATE / "quarantine"
 
-#: что инструменту вообще разрешено трогать. Всё остальное — не его дело.
-WRITABLE = ("settings.json", "settings.local.json")
+#: Каталог настроек, который читает ХОСТ, и то, откуда взят этот путь.
+#:
+#: Здесь путь собирался литералом `Path.home() / ".claude"`, а находки —
+#: сборщиком, который уважает `CLAUDE_CONFIG_DIR`. На машине с назначенным
+#: профилем это означало правку одного каталога по диагнозу о другом, с нулевым
+#: кодом возврата. Из всех троих, кто так делал, этот — единственный, кто ПИШЕТ.
+CLAUDE, CLAUDE_SOURCE = _проба().config_dir()
 
-#: Код `undo`, когда вернуть не удалось НИ ОДНОГО файла: всё, что лежит в
-#: копии, помечено вырезанным секретом, и возврат затёр бы живое значение
-#: меткой. Отдельный от 1 намеренно: 1 — «отката с таким именем нет», 5 —
-#: «откат есть, и он ничего не вернул». Слой выше говорит на них РАЗНОЕ, а на
-#: одном коде сказал бы одно и то же — то есть соврал бы в одном из случаев.
+#: Свой каталог системы — тормоз. За назначенным профилем он НЕ едет: флаг
+#: паузы кладёт `tools/pause.py` по домашнему адресу, и там же его ищут
+#: остальные инструменты. Пишущий инструмент, который смотрит в другое место,
+#: не «не нашёл паузу» — он продолжает править настройки остановленной системы.
+STATE = HOME / ".claude" / "superstack"
+
+#: Копия и карантин — В ТОМ ЖЕ профиле, который правится. Копия в одном
+#: профиле и правка в другом — это потеря данных с успешным кодом возврата:
+#: откат ищет копию рядом с изменённым файлом и не находит её там никогда.
+BACKUPS = CLAUDE / "superstack" / "backups"
+QUARANTINE = CLAUDE / "superstack" / "quarantine"
+
+
+def профиль_строкой() -> str:
+    """Профиль, в который пойдёт правка, и то, откуда взят его путь.
+
+    Инструмент, который ПИШЕТ, обязан сказать КУДА, прежде чем это сделает.
+    Согласие на изменение «настроек» — это согласие на изменение конкретного
+    файла, и без имени каталога человек соглашается вслепую. Причина стоит
+    рядом с путём: имя без причины нечем перепроверить, а «в твоём профиле» и
+    «в чужом профиле» — разные утверждения.
+    """
+    return f"Профиль настроек: {CLAUDE}   путь взят: {CLAUDE_SOURCE}"
+
+#: Код `undo`, когда вернуть не удалось НИ ОДНОГО поля. Причин к этому три, и
+#: все три названы человеку словами: на месте поля в копии вырезан секрет и
+#: возврат затёр бы живое значение меткой; поле изменилось после применения, и
+#: чужое не трогаем; возвращать было нечего с самого начала. Код отдельный от 1
+#: намеренно: 1 — «отката с таким именем нет», 5 — «откат есть, и он ничего не
+#: вернул». Слой выше говорит на них РАЗНОЕ, а на одном коде сказал бы одно и
+#: то же — то есть соврал бы в одном из случаев.
 UNDO_NOTHING_RESTORED = 5
+
+#: Метка формата копии. Копия, снятая ПРЕЖНЕЙ версией, её не имеет: полей в
+#: ней не записано ни одного, и откатывается она прежним способом — файлом
+#: целиком. Разобрать старую копию как новую значило бы не вернуть из неё
+#: ничего и сказать об этом кодом успеха, то есть молча её испортить.
+UNDO_FORMAT = "superstack.undo.v2"
 
 #: классы находок и право на автоматическое применение
 AUTO_APPLICABLE = {"AUTO"}
@@ -86,30 +160,33 @@ def stamp() -> str:
 
 
 # --------------------------------------------------------------------------
-# редактирование секретов в бэкапе
+# чтение настроек: сам разбор файла — в tools/settings_copy.py
 # --------------------------------------------------------------------------
-def redact(obj, hits: list[dict], path: str = ""):
-    """Убрать из копии значения, помеченные пробой как секреты.
+def прочитать_настройки() -> tuple:
+    """Все файлы настроек ОДНИМ проходом: разобранное и непроверенное.
 
-    Совпадения приходят из находок и содержат ПУТЬ, а не значение. Здесь
-    путь используется, чтобы заменить значение меткой. Отпечаток остаётся,
-    поэтому по бэкапу можно понять, тот ли это был секрет, — но не какой.
+    Возвращает (имя -> содержимое, список непроверенных). Непроверенное — это
+    отдельное состояние, а не пустота: неудача разбора говорит о разборщике и
+    не сообщает о содержимом ничего. Прежде из неё выводилось «вырезать нечего
+    и незачем», и файл уезжал в копию сырым, вместе с тем, что в нём лежало.
+
+    Проход именно один. Два прохода означали бы два чтения одного файла и,
+    между ними, две разные правды о нём — ровно тот разрыв, из-за которого
+    секрет и попадал в копию: там расходились кодировки, здесь разошлось бы
+    время чтения.
     """
-    locations = {h.get("location") for h in hits if h.get("location")}
-    return _redact_walk(obj, "", locations)
-
-
-def _redact_walk(obj, path: str, locations: set):
-    if isinstance(obj, dict):
-        return {k: _redact_walk(v, f"{path}.{k}" if path else str(k), locations)
-                for k, v in obj.items()}
-    if isinstance(obj, list):
-        return [_redact_walk(v, f"{path}[{i}]", locations)
-                for i, v in enumerate(obj)]
-    if path in locations and isinstance(obj, str):
-        fp = hashlib.sha256(obj.encode("utf-8")).hexdigest()[:12]
-        return f"<ВЫРЕЗАНО-SUPERSTACK len={len(obj)} fp={fp}>"
-    return obj
+    прочитано: dict = {}
+    непроверенные: list[dict] = []
+    for name in WRITABLE:
+        src = CLAUDE / name
+        if not src.is_file():
+            continue
+        данные, беда = _прочитать_конфиг(src)
+        if беда:
+            непроверенные.append({"file": name, "why": беда})
+            continue
+        прочитано[name] = данные
+    return прочитано, непроверенные
 
 
 # --------------------------------------------------------------------------
@@ -135,31 +212,76 @@ def verify_backup(bdir: Path, names: list[str]) -> None:
                              f"Ничего не менял.")
 
 
+def new_backup_dir() -> Path:
+    """Каталог копии с собственным именем, созданный ЭКСКЛЮЗИВНО.
+
+    Имя было меткой времени с точностью до секунды, а каталог создавался
+    «можно поверх существующего». Два настоящих применения в одну секунду
+    писали в один каталог: второе клало туда уже изменённое состояние,
+    исходное терялось — и откат отчитывался успехом, оставив настройку на
+    месте. Потеря исходного состояния выглядела как удачный откат.
+
+    Поэтому создание эксклюзивное: занятое имя — отказ файловой системы, а не
+    молчаливое слияние. Отказ гасится не согласием писать в чужой каталог, а
+    следующим именем. Порядок имён при этом сохраняется — слой выше находит
+    последнюю копию сортировкой строк, и суффикс идёт после метки времени.
+    """
+    BACKUPS.mkdir(parents=True, exist_ok=True)
+    основа = stamp()
+    for n in range(1, 1000):
+        имя = основа if n == 1 else f"{основа}-{n:03d}"
+        try:
+            (BACKUPS / имя).mkdir(exist_ok=False)
+        except FileExistsError:
+            continue
+        return BACKUPS / имя
+    raise SystemExit(f"ОТКАЗ: свободного имени для копии не нашлось ({основа}). "
+                     f"Ничего не менял.")
+
+
+def _record_before_state(name: str) -> dict:
+    """Состояние файла ДО первой записи — включая его ОТСУТСТВИЕ.
+
+    Отсутствующий файл прежде просто пропускался, и в копии о нём не
+    оставалось ни строки. Инструмент создавал файл настроек с нуля, а откат
+    не знал, что до него файла не было: возвращать нечего, файл оставался
+    навсегда. Отсутствие — такое же состояние, как содержимое, и записывается
+    ровно так же, до первой записи, а не выводится потом по догадке.
+    """
+    return {"before_exists": (CLAUDE / name).is_file()}
+
+
 def make_backup(secret_hits: list[dict]) -> dict:
     """Полная копия конфигурации ДО изменений, с вырезанными секретами.
 
     Возвращает описание бэкапа. Копия сразу перечитывается: бэкап, который
     не прочитали, доказывает только то, что вызов записи не бросил исключение.
-    """
-    bdir = BACKUPS / stamp()
-    bdir.mkdir(parents=True, exist_ok=True)
-    saved, redacted_files = [], []
 
-    for name in WRITABLE:
-        src = CLAUDE / name
-        if not src.is_file():
-            continue
-        dst = bdir / name
-        try:
-            data = json.loads(src.read_text(encoding="utf-8-sig"))
-        except Exception:
-            # Не разбирается — копируем как есть, вырезать нечего и незачем.
-            shutil.copy2(src, dst)
-            saved.append(name)
-            continue
-        hits = [h for h in secret_hits if h.get("file") in (name, "user", "user-local")]
-        clean = redact(data, hits) if hits else data
-        dst.write_text(json.dumps(clean, ensure_ascii=False, indent=2), encoding="utf-8")
+    Порядок здесь — часть механизма. Сначала разбирается ВСЁ, потом готовится
+    и проверяется весь текст копии, и только потом появляется каталог. Отказ
+    на любом шаге не оставляет ни половины копии, ни пустого каталога, и слова
+    «ничего не менял» остаются правдой буквально.
+    """
+    прочитано, непроверенные = прочитать_настройки()
+    if непроверенные:
+        raise SystemExit(_отказ_непроверенное(непроверенные))
+
+    готово: list = []
+    for name, data in прочитано.items():
+        hits = _что_вырезать(name, data, secret_hits)
+        текст = json.dumps(redact(data, hits) if hits else data,
+                           ensure_ascii=False, indent=2)
+        остатки = _остатки_в_тексте(текст)
+        if остатки:
+            raise SystemExit(_отказ_остатки(name, остатки))
+        готово.append((name, текст, hits))
+
+    bdir = new_backup_dir()
+    saved, redacted_files = [], []
+    состояние = {name: _record_before_state(name) for name in WRITABLE}
+
+    for name, текст, hits in готово:
+        (bdir / name).write_text(текст, encoding="utf-8")
         saved.append(name)
         if hits:
             redacted_files.append({"file": name, "count": len(hits)})
@@ -168,7 +290,7 @@ def make_backup(secret_hits: list[dict]) -> dict:
     verified = saved
 
     return {"dir": str(bdir), "files": verified, "redacted": redacted_files,
-            "created": now()}
+            "created": now(), "format": UNDO_FORMAT, "before": состояние}
 
 
 # --------------------------------------------------------------------------
@@ -198,22 +320,47 @@ def plan_actions(findings: list[dict]) -> tuple[list[dict], list[dict]]:
     return doable, human
 
 
+def _write_json(path: Path, data) -> None:
+    """Запись настроек одним движением — общим модулем, а не своей копией.
+
+    Своя копия здесь была, и в ней нашлись три дефекта сразу: общее на всех имя
+    временного файла, потеря режима доступа при замене и отсутствие замка на
+    цикл. Все три жили одинаково ещё в девяти инструментах — ровно то, ради
+    чего запись съехалась в один модуль (tools/atomic_store.py).
+
+    Отступ два: файл настроек читает человек, и переформатировать его заодно с
+    правкой одного поля значит выдать её за правку всего файла.
+    """
+    atomic_store.записать_json(path, data, indent=2)
+
+
 def act_set_default_mode(dry: bool) -> dict:
-    """Задать permissions.defaultMode явно."""
+    """Задать permissions.defaultMode явно.
+
+    Возвращает запись для журнала: какое поле, было ли оно, что было и что
+    стало. Откат читает именно её, а не файл целиком, — поэтому здесь важно
+    не только сделать правку, но и назвать её точно.
+    """
     path = CLAUDE / "settings.json"
-    data = json.loads(path.read_text(encoding="utf-8-sig")) if path.is_file() else {}
-    perms = data.setdefault("permissions", {})
-    before = perms.get("defaultMode")
-    if before:
-        return {"changed": False, "why": f"уже задан: {before}"}
-    if not dry:
-        perms["defaultMode"] = "plan"
-        path.parent.mkdir(parents=True, exist_ok=True)
-        tmp = path.with_suffix(".json.tmp")
-        tmp.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
-        os.replace(tmp, path)
-    return {"changed": True, "field": "permissions.defaultMode",
-            "before": before, "after": "plan"}
+    # Замок держится на ВЕСЬ цикл, а не на запись: между чтением и записью и
+    # находится дыра. Stop-хук, фаза и планка ходят одновременно; оба процесса
+    # читают старые настройки, каждый меняет своё поле и пишет файл целиком —
+    # записавший вторым затирает чужую правку, и оба выходят нулём.
+    with atomic_store.Lock(path):
+        data = json.loads(path.read_text(encoding="utf-8-sig")) if path.is_file() else {}
+        родитель_был = isinstance(data.get("permissions"), dict)
+        perms = data.setdefault("permissions", {})
+        before = perms.get("defaultMode")
+        if before:
+            return {"changed": False, "why": f"уже задан: {before}"}
+        поле_было = "defaultMode" in perms
+        if not dry:
+            perms["defaultMode"] = "plan"
+            _write_json(path, data)
+    return {"changed": True, "file": "settings.json",
+            "field": "permissions.defaultMode",
+            "before_present": поле_было, "before": before, "after": "plan",
+            "created_parents": [] if родитель_был else ["permissions"]}
 
 
 def act_base_item(item: dict, dry: bool) -> dict:
@@ -272,17 +419,20 @@ def _set_setting(key: str, value, dry: bool) -> dict:
     и «поставлю как лучше» здесь означает потерю его решения.
     """
     path = CLAUDE / "settings.json"
-    data = json.loads(path.read_text(encoding="utf-8-sig")) if path.is_file() else {}
-    before = data.get(key)
-    if before is not None:
-        return {"changed": False, "why": f"уже задано: {key}"}
-    if not dry:
-        data[key] = value
-        path.parent.mkdir(parents=True, exist_ok=True)
-        tmp = path.with_suffix(".json.tmp")
-        tmp.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
-        os.replace(tmp, path)
-    return {"changed": True, "field": key, "before": before, "after": value}
+    # Замок на весь цикл — по той же причине, что и в соседней правке: два
+    # процесса, читающие одно и то же старое состояние, пишут файл целиком.
+    with atomic_store.Lock(path):
+        data = json.loads(path.read_text(encoding="utf-8-sig")) if path.is_file() else {}
+        before = data.get(key)
+        if before is not None:
+            return {"changed": False, "why": f"уже задано: {key}"}
+        поле_было = key in data
+        if not dry:
+            data[key] = value
+            _write_json(path, data)
+    return {"changed": True, "file": "settings.json", "field": key,
+            "before_present": поле_было, "before": before, "after": value,
+            "created_parents": []}
 
 
 _BASE_ACTIONS = {
@@ -298,96 +448,20 @@ _BASE_ACTIONS = {
 ACTIONS: dict[str, dict] = {
     "ctx.default-mode-unset": {
         "kind": "edit-settings",
-        "describe": "задам permissions.defaultMode = plan в ~/.claude/settings.json",
+        # Каталог здесь НЕ называется: он один на весь запуск и печатается
+        # отдельной строкой из `профиль_строкой()`. Прежде тут стоял литерал
+        # `~/.claude/settings.json` — и на машине с назначенным профилем это
+        # было прямое враньё в единственном месте, которое человек читает
+        # перед тем, как согласиться.
+        "describe": "задам permissions.defaultMode = plan в settings.json",
         "run": act_set_default_mode,
     },
 }
 
 
 # --------------------------------------------------------------------------
-# базовый набор
+# базовый набор: сам перечень — в tools/base_kit.py, здесь только применение
 # --------------------------------------------------------------------------
-#: Что получает КАЖДЫЙ, без вопросов и без решателя.
-#:
-#: Зачем отдельно от ACTIONS. Реестр выше чинит найденное — он реагирует. Этот
-#: реестр ставит то, чего человек не просил и о чём не знает, что оно бывает:
-#: новичок не может попросить TDD-гейт, потому что не слышал слова «гейт».
-#: Диагностика без применения оставляет его ровно там, где нашла, — со списком
-#: проблем и без единого решения. Ради этого списка ничего и не строилось.
-#:
-#: Правило, которое здесь нельзя ослабить: НИЧЕГО НЕ СТАВИТСЯ МОЛЧА. Каждый
-#: пункт называет себя вслух, а всё, что трогает чужую машину дальше файлов
-#: настроек, идёт классом GATE и ждёт явного согласия. Установщик, который
-#: «сделал как лучше», — это тот же захват, что и хук, запускающий проверку
-#: без спроса.
-BASE_KIT: tuple = (
-    {
-        "id": "base.plan-mode",
-        "touches": "settings",
-        "what": "режим прав задан явно",
-        "why": "с 14 августа 2026 значение по умолчанию меняет сам вендор; "
-               "не задав своё, человек однажды получает чужое",
-        "class": "AUTO",
-        "present": lambda facts: facts.get("cc.default_mode") is not None,
-    },
-    {
-        "id": "base.tdd-gate",
-        "command": 'npx -y @nizos/probity install',
-        "touches": "machine",
-        "what": "PreToolUse-гейт TDD (probity)",
-        "why": "единственный гейт, срабатывающий РАНЬШЕ проверки прав: "
-               "его не обходит даже режим, разрешающий всё",
-        "class": "GATE",
-        "present": lambda facts: bool(facts.get("hooks.wired.count")),
-    },
-    {
-        "id": "base.stop-gate",
-        "touches": "settings",
-        "what": "Stop-гейт «тесты, линт, типы»",
-        "why": "без него ход закрывается словами: «должно работать» "
-               "означает, что работа не сделана",
-        "class": "AUTO",
-        "present": lambda facts: bool(facts.get("hooks.wired.count")),
-    },
-    {
-        "id": "base.secret-scan",
-        "command": 'brew install gitleaks && gitleaks protect --staged',
-        "touches": "machine",
-        "what": "офлайн-сканер секретов до коммита",
-        "why": "дешевле любого ревью моделью: секунды, ноль токенов, жёсткий блок",
-        "class": "GATE",
-        "present": lambda facts: bool(facts.get("host.git")),
-    },
-    {
-        "id": "base.oracle",
-        "command": 'npx -y playwright install --with-deps chromium',
-        "touches": "machine",
-        "what": "браузерный оракул для проверок интерфейса",
-        "why": "единственный источник ДОКАЗАТЕЛЬСТВА вместо утверждения: "
-               "результат видно, а не пересказано",
-        "class": "GATE",
-        "present": lambda facts: False,
-    },
-    {
-        "id": "base.cost-visible",
-        "touches": "settings",
-        "what": "расход виден в строке состояния",
-        "why": "без него бюджетные пороги считаются от самооценки модели, "
-               "которую никто не сверял",
-        "class": "AUTO",
-        "present": lambda facts: bool(facts.get("cc.statusline")),
-    },
-    {
-        "id": "base.kill-switch",
-        "touches": "settings",
-        "what": "аварийный выключатель",
-        "why": "тормоз обязан работать, когда тот, кого тормозят, не отвечает",
-        "class": "AUTO",
-        "present": lambda facts: bool(facts.get("disc.kill_switch_present")),
-    },
-)
-
-
 def base_kit_status(facts: dict) -> dict:
     """Что из базового набора уже есть, чего нет и кто это ставит.
 
@@ -411,9 +485,6 @@ def base_kit_status(facts: dict) -> dict:
     }
 
 
-def _kit_row(item: dict) -> dict:
-    return {k: item[k] for k in ("id", "what", "why", "class", "touches")}
-
 
 def cmd_base(argv: list[str]) -> int:
     """Показать состояние базового набора. Показать, а не поставить.
@@ -432,6 +503,7 @@ def cmd_base(argv: list[str]) -> int:
         facts = {k: (v.get("value") if isinstance(v, dict) else v)
                  for k, v in raw.items()}
     st = base_kit_status(facts)
+    print(профиль_строкой())
     for row in st["present"]:
         print(f"  + {row['what']}")
     for row in st["missing"]:
@@ -475,6 +547,7 @@ def load_findings(arg: str) -> tuple[list[dict], list[dict]]:
 def cmd_plan(argv: list[str]) -> int:
     findings, _ = load_findings(argv[0])
     doable, human = plan_actions(findings)
+    print(профиль_строкой())
     print("ЧТО Я СДЕЛАЮ САМ")
     if not doable:
         print("  ничего — все находки требуют решения человека")
@@ -486,11 +559,25 @@ def cmd_plan(argv: list[str]) -> int:
     print("\nПеред первым изменением будет полный бэкап настроек.")
     print("Секреты в бэкап НЕ копируются: откат вернёт файл, но не вернёт")
     print("значение секрета — на его месте будет метка с отпечатком.")
+    # О непроверенном человек узнаёт ЗДЕСЬ, а не в момент отказа: план
+    # существует ровно затем, чтобы неожиданностей на шаге «run» не было.
+    непроверенные = прочитать_настройки()[1]
+    if непроверенные:
+        print("\nЧТО Я НЕ ПРОВЕРИЛ")
+        for э in непроверенные:
+            print(f"  · {э['file']}: {э['why']}")
+        print("  Эти файлы не разбираются, поэтому о содержимом я не знаю "
+              "ничего:\n  в них могут лежать незакрытые значения. Копию с них "
+              "не снимаю и\n  менять ничего не буду, пока они такие.")
     return 0
 
 
 def cmd_run(argv: list[str]) -> int:
     consent = "--yes" in argv
+    # Куда пойдёт правка — ПЕРВОЙ строкой и до любого решения об изменении:
+    # отказ по согласию, «применять нечего» и сама правка одинаково относятся
+    # к конкретному каталогу, и человек обязан видеть, к какому.
+    print(профиль_строкой())
     findings, hits = load_findings(argv[0])
     doable, human = plan_actions(findings)
 
@@ -514,7 +601,8 @@ def cmd_run(argv: list[str]) -> int:
     manifest = {"created": now(), "backup": backup, "applied": []}
     for a in doable:
         result = ACTIONS[a["id"]]["run"](dry=False)
-        manifest["applied"].append({"id": a["id"], "action": a["action"], **result})
+        manifest["applied"].append(_redact_journal(
+            {"id": a["id"], "action": a["action"], **result}, hits))
         mark = "изменено" if result.get("changed") else "без изменений"
         print(f"  {mark}: {a['action']}")
 
@@ -526,47 +614,87 @@ def cmd_run(argv: list[str]) -> int:
     return 0
 
 
+def safe_target(имя) -> Path:
+    """Файл, который откату разрешено трогать. Имя ПРОВЕРЯЕТСЯ, а не берётся.
+
+    Откат брал имена из записи и присоединял их к каталогу настроек без
+    единой проверки. Имя, поднимающееся на уровень выше, переписывало файл
+    СНАРУЖИ каталога настроек. Своя же запись, сделанная вчера, — внешние
+    данные: между записью и чтением она лежала на диске, где её мог править
+    кто угодно, и «мы её сами писали» ничего не доказывает.
+
+    Проверок две, и каждая ловит своё. Список имён отсекает файл, к которому
+    инструмент не имеет отношения, даже когда тот лежит ровно в каталоге
+    настроек. Разбор пути отсекает то, что список пропустил бы по форме:
+    разрешённое имя, оказавшееся ссылкой наружу.
+    """
+    if not isinstance(имя, str) or имя not in WRITABLE:
+        raise UnsafeName(f"«{имя}» не из тех файлов, что откату разрешено "
+                         f"трогать ({', '.join(WRITABLE)})")
+    цель = (CLAUDE / имя).resolve()
+    корень = CLAUDE.resolve()
+    if not цель.is_relative_to(корень):
+        raise UnsafeName(f"«{имя}» после разбора пути уводит за каталог "
+                         f"настроек: {цель}")
+    return CLAUDE / имя
+
+
 def cmd_undo(argv: list[str]) -> int:
-    bdir = BACKUPS / argv[0]
+    ид = argv[0]
+    if not isinstance(ид, str) or ид in ("", ".", "..") or "/" in ид or "\\" in ид:
+        # Имя копии — тоже путь, и оно тоже приходит снаружи.
+        print(f"нет такого отката: {ид}", file=sys.stderr)
+        return 1
+    bdir = BACKUPS / ид
     if not bdir.is_dir():
-        print(f"нет такого отката: {argv[0]}", file=sys.stderr)
+        # Где искали — часть ответа. Копия, снятая в другом профиле, здесь
+        # выглядит как «отката не было»: без имени каталога человек ищет
+        # причину в списке откатов, а она в том, какой профиль сейчас активен.
+        print(f"нет такого отката: {ид}\n"
+              f"  искал здесь: {BACKUPS}\n"
+              f"  {профиль_строкой()}", file=sys.stderr)
         return 1
     manifest = json.loads((bdir / "manifest.json").read_text(encoding="utf-8"))
-    restored, skipped = [], []
-    for name in manifest["backup"]["files"]:
-        src, dst = bdir / name, CLAUDE / name
-        text = src.read_text(encoding="utf-8")
-        if "<ВЫРЕЗАНО-SUPERSTACK" in text:
-            # Возврат такого файла затёр бы живой секрет меткой. Это потеря
-            # данных под видом отката — поэтому файл не трогаем и говорим об этом.
-            skipped.append(name)
-            continue
-        shutil.copy2(src, dst)
-        restored.append(name)
+    формат = _формат_копии(manifest)
+    if формат is not None and формат != UNDO_FORMAT:
+        print(f"ОТКАЗ: копия «{ид}» записана форматом «{формат}» — этот "
+              f"инструмент его не знает и разбирать по догадке не будет. "
+              f"Ничего не менял. Копия лежит здесь: {bdir}", file=sys.stderr)
+        return 1
+    if формат == UNDO_FORMAT:
+        # Куда писать и чем писать — отсюда: модуль отката знает формат
+        # журнала и не знает профиля человека (см. его докстринг).
+        restored, отказы = _undo_journal(manifest, safe_target, _write_json)
+    else:
+        restored, отказы = _undo_legacy(bdir, manifest, safe_target)
+
     print(f"Восстановлено: {', '.join(restored) if restored else '—'}")
-    if skipped:
-        print(f"НЕ восстановлено (в копии вырезаны секреты): {', '.join(skipped)}")
-        print(f"  Копия лежит здесь: {bdir}")
-        print("  Верни руками те поля, которые нужны, — иначе откат затрёт секрет меткой.")
+    for о in отказы:
+        print(f"НЕ восстановлено — {о['что']}: {о['почему']}", file=sys.stderr)
     if not restored:
         # Ноль здесь означал бы «сделано» — и слой выше (oops.py) печатал бы на
-        # нём «откатил» человеку, у которого не вернулся НИ ОДИН файл. Это то
+        # нём «откатил» человеку, у которого не вернулось НИ ОДНОГО поля. Это то
         # самое подтверждение раньше результата, только этажом ниже: там код
         # честно проверяется, но врёт сам код.
-        причина = ("в копии вырезаны секреты, и возврат такого файла затёр бы "
-                   "живое значение меткой"
-                   if skipped else
-                   "в копии не оказалось ни одного файла")
+        причина = ("; ".join(о["почему"] for о in отказы[:3]) if отказы
+                   else "в копии не оказалось ничего, что можно вернуть")
         print(f"НЕ восстановлено ничего: {причина}. Копия лежит здесь: {bdir} "
               f"— нужные поля верни руками, из копии они не вернутся.",
               file=sys.stderr)
         return UNDO_NOTHING_RESTORED
+    if отказы:
+        # Рядом с самими отказами, а не в общем выводе: подсказка, оторванная
+        # от того, к чему она относится, читается как общая фраза и теряется.
+        print(f"  Копия лежит здесь: {bdir}\n"
+              "  Что не откатилось — верни руками: чужое я не трогаю.",
+              file=sys.stderr)
     return 0
 
 
 def cmd_list(_argv: list[str]) -> int:
+    print(профиль_строкой())
     if not BACKUPS.is_dir():
-        print("откатов пока нет")
+        print(f"откатов пока нет  (искал здесь: {BACKUPS})")
         return 0
     for d in sorted(BACKUPS.iterdir(), reverse=True):
         m = d / "manifest.json"

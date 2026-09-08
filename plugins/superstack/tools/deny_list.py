@@ -37,6 +37,12 @@ import os
 import sys
 from pathlib import Path
 
+# Запись — общим модулем: замок на весь цикл, уникальный временный сосед и
+# режим доступа, который от записи не расширяется. Тот же файл настроек правит
+# установщик, и замок обязан быть ОДИН на обоих — свой у каждого не защищает.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import atomic_store  # noqa: E402
+
 HERE = Path(__file__).resolve().parent
 СПИСОК = HERE.parent / "data" / "destructive-commands.json"
 НАСТРОЙКИ = Path.home() / ".claude" / "settings.json"
@@ -139,16 +145,30 @@ def main() -> int:
         print("добавлять нечего: все запреты уже стоят", file=sys.stderr)
         return 0
 
-    perms = данные.setdefault("permissions", {})
-    deny = perms.setdefault("deny", [])
-    if not isinstance(deny, list):
-        print("НЕ УДАЛОСЬ: permissions.deny — не список", file=sys.stderr)
-        return 2
-    deny.extend(c["pattern"] for c in нет)
-    tmp = p.with_suffix(p.suffix + ".tmp")
-    tmp.write_text(json.dumps(данные, ensure_ascii=False, indent=2) + "\n",
-                   encoding="utf-8")
-    os.replace(tmp, p)
+    # Замок держится на ВЕСЬ цикл, а не на запись, и настройки перечитываются
+    # ПОД ним. Тот же файл правит установщик, и он берёт тот же замок: между
+    # прежним чтением и записью помещалась вся его правка целиком — оба
+    # процесса писали файл ЦЕЛИКОМ, записавший вторым затирал чужое поле, и
+    # оба выходили нулём.
+    with atomic_store.Lock(p):
+        данные, отказ = _настройки(p)
+        if данные is None:
+            print(f"НЕ УДАЛОСЬ: {отказ}", file=sys.stderr)
+            return 2
+        нет = missing(данные, команды)
+        if not нет:
+            print("добавлять нечего: все запреты уже стоят", file=sys.stderr)
+            return 0
+        perms = данные.setdefault("permissions", {})
+        deny = perms.setdefault("deny", [])
+        if not isinstance(deny, list):
+            print("НЕ УДАЛОСЬ: permissions.deny — не список", file=sys.stderr)
+            return 2
+        deny.extend(c["pattern"] for c in нет)
+        # Отступ два: файл настроек читает человек, и переформатировать его
+        # заодно с дописыванием запретов значит выдать это за правку всего файла.
+        atomic_store.записать(
+            p, json.dumps(данные, ensure_ascii=False, indent=2) + "\n")
     print(f"ДОБАВЛЕНО ЗАПРЕТОВ: {len(нет)} в {p}", file=sys.stderr)
     print(json.dumps({"added": [c["pattern"] for c in нет], "file": str(p)},
                      ensure_ascii=False, indent=1))

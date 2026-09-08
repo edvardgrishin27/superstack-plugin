@@ -54,10 +54,24 @@
   },
   {
    "id": "verify.empty-markers-blind",
-   "file": "plugins/superstack/tools/verify.py",
+   "file": "plugins/superstack/tools/verify_report.py",
    "find": "    return any(rx.search(out) for rx in EMPTY_MARKERS)",
    "replace": "    return False  # маркеры пустоты не читаются",
    "why": "самая тихая форма ложного зелёного: инструмент отработал, тестов ноль, код успешный"
+  },
+  {
+   "id": "verify.runner-report-ignored",
+   "file": "plugins/superstack/tools/verify_report.py",
+   "find": "    if _is_pytest(check):\n        if code == 5:\n            return REPORT_EMPTY\n        if code == 0:\n            return REPORT_RAN\n    report = _pytest_report(out)\n    if report is not None:\n        return report\n    if _is_pytest(check):\n        return REPORT_UNCLEAR\n    return REPORT_EMPTY if _nothing_was_checked(code, out) else REPORT_RAN",
+   "replace": "    return REPORT_EMPTY if _nothing_was_checked(code, out) else REPORT_RAN",
+   "why": "отчёт прогонщика перестаёт перевешивать признаки пустоты: честно упавший тест, в чьём теле попалась фраза вроде «no tests ran», снова читается как «проверять было нечего» — гейт отдаёт 2 вместо 1, и красный набор закрывает ход «без доказательства»"
+  },
+  {
+   "id": "verify.unclear-report-counts-as-green",
+   "file": "plugins/superstack/tools/verify.py",
+   "find": "        if state == \"pass\" and r.unclear:\n            state = \"unclear\"",
+   "replace": "        if False:\n            state = \"unclear\"",
+   "why": "прогон, отчёт которого разобрать не вышло, снова выдаётся за зелёный: «не смог прочитать» молча превращается в доказательство"
   },
   {
    "id": "adjudicate.no-sort",
@@ -474,14 +488,14 @@
   },
   {
    "id": "verify.zero-passing-substring",
-   "file": "plugins/superstack/tools/verify.py",
+   "file": "plugins/superstack/tools/verify_report.py",
    "find": "    re.compile(r\"(?<!\\d)0 passing\", re.I),",
    "replace": "    re.compile(r\"0 passing\", re.I),",
    "why": "снята граница перед нулём: «0 passing» снова находится внутри «10 passing», и зелёный mocha-прогон на 10, 20, 100 тестах объявляется пустым — гейт для такого проекта не зеленеет никогда"
   },
   {
    "id": "verify.npm-stub-read-as-failure",
-   "file": "plugins/superstack/tools/verify.py",
+   "file": "plugins/superstack/tools/verify_report.py",
    "find": "    if any(rx.search(out) for rx in STUB_MARKERS):\n        return True",
    "replace": "    if False:\n        return True",
    "why": "заглушка `npm init` («no test specified» + код 1) снова читается как красные тесты: ход блокируется требованием починить тесты, которых в проекте нет — «не нашёл» подменяется на «провалилось»"
@@ -517,8 +531,8 @@
   {
    "id": "bar.mutations-not-actually-run",
    "file": "tools/gauntlet.py",
-   "find": "            caught = code != 0",
-   "replace": "            caught = True",
+   "find": "            elif code == 0:\n                исход = \"survived\"",
+   "replace": "            elif False:\n                исход = \"survived\"",
    "why": "ворота мутаций объявляют пойманным всё подряд, не глядя на код возврата набора: выжившая мутация перестаёт называться, и единственные ворота, доказывающие, что тесты что-то держат, становятся декорацией"
   },
   {
@@ -685,7 +699,7 @@
   {
    "id": "precompact.no-copy-mechanism",
    "file": "plugins/superstack/hooks/precompact.py",
-   "find": "        shutil.copyfile(src, tmp)",
+   "find": "        _общая_запись().скопировать(src, куда)",
    "replace": "        pass",
    "why": "снята запись копии транскрипта: после компакции разговор потерян навсегда, а хук молча притворяется, что сохранил его"
   },
@@ -733,21 +747,21 @@
   },
   {
    "id": "verify.attempts-no-ceiling",
-   "file": "plugins/superstack/tools/verify.py",
+   "file": "plugins/superstack/tools/verify_attempts.py",
    "find": "    v[\"gave_up\"] = attempt >= MAX_ATTEMPTS",
    "replace": "    v[\"gave_up\"] = False",
    "why": "потолок попыток снят: гейт вечно говорит «почини ещё раз» одним и тем же текстом, цикл ревью-фикс за ночь сжигает подписку и никогда не сдаётся"
   },
   {
    "id": "verify.attempts-not-persisted",
-   "file": "plugins/superstack/tools/verify.py",
+   "file": "plugins/superstack/tools/verify_attempts.py",
    "find": "    state[key] = entry\n    _save_attempts(state_path, state)",
    "replace": "    state[key] = entry",
    "why": "счётчик попыток не пишется на диск: гейт перезапускается новым процессом на каждый вызов, и без персистентности серия провалов забывается сразу же, потолок никогда не срабатывает"
   },
   {
    "id": "verify.attempts-reset-on-absent",
-   "file": "plugins/superstack/tools/verify.py",
+   "file": "plugins/superstack/tools/verify_attempts.py",
    "find": "    if v[\"status\"] == \"pass\":",
    "replace": "    if v[\"status\"] != \"fail\":",
    "why": "сброс серии провалов расширен с «зелёный прогон» на «любой не-провал»: временно недоступный прогонщик (pytest пропал на минуту, статус absent) прячет реальную серию провалов вместо того, чтобы оставить её нетронутой"
@@ -789,7 +803,7 @@
   },
   {
    "id": "basekit.consent-downgraded-to-auto",
-   "file": "plugins/superstack/tools/apply.py",
+   "file": "plugins/superstack/tools/base_kit.py",
    "find": "        \"why\": \"единственный гейт, срабатывающий РАНЬШЕ проверки прав: \"\n               \"его не обходит даже режим, разрешающий всё\",\n        \"class\": \"GATE\",",
    "replace": "        \"why\": \"единственный гейт, срабатывающий РАНЬШЕ проверки прав: \"\n               \"его не обходит даже режим, разрешающий всё\",\n        \"class\": \"AUTO\",",
    "why": "пункт, трогающий чужую машину, понижен до автоприменения: установщик ставит без спроса — тот же захват, что и хук, запускающий проверку без согласия"
@@ -895,22 +909,22 @@
   {
    "id": "basekit.overwrites-existing-choice",
    "file": "plugins/superstack/tools/apply.py",
-   "find": "    if before is not None:\n        return {\"changed\": False, \"why\": f\"уже задано: {key}\"}",
-   "replace": "    if False:\n        return {\"changed\": False, \"why\": f\"уже задано: {key}\"}",
+   "find": "        if before is not None:\n            return {\"changed\": False, \"why\": f\"уже задано: {key}\"}",
+   "replace": "        if False:\n            return {\"changed\": False, \"why\": f\"уже задано: {key}\"}",
    "why": "существующая настройка человека затирается: «поставлю как лучше» означает потерю чужого решения без единого сообщения"
   },
   {
    "id": "basekit.dry-run-writes",
    "file": "plugins/superstack/tools/apply.py",
-   "find": "    if not dry:\n        data[key] = value",
-   "replace": "    if True:\n        data[key] = value",
+   "find": "        if not dry:\n            data[key] = value",
+   "replace": "        if True:\n            data[key] = value",
    "why": "сухой прогон пишет на диск: человек смотрит план, а изменения уже применены — согласие спрашивают после факта"
   },
   {
    "id": "blind.spec-reaches-the-judge",
    "file": "plugins/superstack/tools/blind_accept.py",
-   "find": "        (hidden if is_retelling(path) else shown).append((path, text))",
-   "replace": "        shown.append((path, text))",
+   "find": "        (hidden if скрыть else shown).append((стало, text))",
+   "replace": "        shown.append((стало, text))",
    "why": "спека и план снова попадают судье: он сверяет пересказ с пересказом и всегда находит совпадение — расхождение «сделали не то» становится невидимым"
   },
   {
@@ -1157,6 +1171,27 @@
    "find": "    blind = data.get(\"blind\") or {}",
    "replace": "    return []  # МУТАЦИЯ: расхождения не ищутся\n    blind = data.get(\"blind\") or {}",
    "why": "расхождение манифеста со слепой приёмкой не вычисляется — манифест остаётся утверждающим то, что независимая проверка отрицает, и по нему пишется отчёт человеку"
+  },
+  {
+   "id": "gates.g4-unchecked-done-passes",
+   "file": "plugins/superstack/tools/gates.py",
+   "find": "            if r[\"status\"] != mf.DONE:",
+   "replace": "            if r[\"status\"] != mf.DONE or True:",
+   "why": "требование, объявленное готовым и НИ РАЗУ не оценённое слепой приёмкой, снова молча пропускается — все четыре гейта зеленеют ровно на том, ради чего приёмка и заведена, а по такому манифесту пишется отчёт человеку"
+  },
+  {
+   "id": "gates.g4-alien-verdict-is-neutral",
+   "file": "plugins/superstack/tools/gates.py",
+   "find": "        if c.get(\"verdict\") not in VERDICTS:",
+   "replace": "        if c.get(\"verdict\") not in VERDICTS and False:",
+   "why": "вердикт вне набора «реализовано / частично / нет» снова читается как нейтральный: неразобранный результат чужой проверки не совпадает ни с одной веткой и не считается расхождением"
+  },
+  {
+   "id": "gates.g4-idless-row-dropped",
+   "file": "plugins/superstack/tools/gates.py",
+   "find": "        if not rid:",
+   "replace": "        if not rid and False:",
+   "why": "запись приёмки без id снова выбрасывается молча — приёмка становится короче, чем была, и расхождения считаются по остатку, который никто не объявлял полным"
   },
   {
    "id": "gates.partial-run-passes",
@@ -1546,8 +1581,8 @@
   {
    "id": "provetests.red-suite-still-measured",
    "file": "plugins/superstack/tools/prove_tests.py",
-   "find": "    if code != 0:\n        return {\"status\": \"unknown\",\n                \"detail\": f\"набор красный ДО поломок",
-   "replace": "    if False:\n        return {\"status\": \"unknown\",\n                \"detail\": f\"набор красный ДО поломок",
+   "find": "    причина = _baseline(root, cmd)",
+   "replace": "    причина = None",
    "why": "красный набор до поломок перестаёт останавливать измерение — тогда ЛЮБАЯ мутация «поймана», и отчёт выходит блестящим при полном отсутствии проверки"
   },
   {
@@ -1567,7 +1602,7 @@
   {
    "id": "provetests.survivor-reported-as-caught",
    "file": "plugins/superstack/tools/prove_tests.py",
-   "find": "        if not caught:",
+   "find": "        if исход == \"выжила\":",
    "replace": "        if False:",
    "why": "выжившая поломка объявляется пойманной — инструмент, чья единственная задача отличать настоящие тесты от зелёных, начинает утверждать обратное"
   },
@@ -1577,6 +1612,48 @@
    "find": "    if \"stub\" in m:",
    "replace": "    if False:",
    "why": "режим заглушки перестаёт работать — а именно им ловится молча выключенная интеграция, не зависящий от языка случай, ради которого инструмент и написан"
+  },
+  {
+   "id": "provetests.timeout-looks-like-a-dead-command",
+   "file": "plugins/superstack/tools/prove_tests.py",
+   "find": "        return 124, f\"не завершилось за {TIMEOUT} с\"",
+   "replace": "        return 127, f\"не завершилось за {TIMEOUT} с\"",
+   "why": "прогон, не уложившийся в отведённое время, снова неотличим от команды, которой нет: человеку называется не та причина, и чинить он идёт не то"
+  },
+  {
+   "id": "provetests.timeout-counts-as-caught",
+   "file": "plugins/superstack/tools/prove_tests.py",
+   "find": "            if rc in НЕ_СОСТОЯЛСЯ:",
+   "replace": "            if False:",
+   "why": "подвешенный и незапустившийся прогон снова числятся пойманной поломкой: человек получает «твои тесты ловят подмену» там, где не выполнилось ни одного теста"
+  },
+  {
+   "id": "provetests.inconclusive-passes-as-a-pass",
+   "file": "plugins/superstack/tools/prove_tests.py",
+   "find": "    if неясные:",
+   "replace": "    if False:",
+   "why": "несостоявшиеся прогоны перестают гасить вердикт: инструмент отдаёт чистый успех, купленный сорванным запуском вместо проверки"
+  },
+  {
+   "id": "provetests.one-loud-number",
+   "file": "plugins/superstack/tools/prove_tests.py",
+   "find": "    числа = (f\"зарегистрировано {len(muts)}, выполнено {выполнено}, \"\n             f\"поймано {поймано}, неизвестно {len(неясные)}\")",
+   "replace": "    числа = f\"поломок {len(muts)}\"",
+   "why": "четыре честных числа схлопываются в одно громкое: «столько-то поломок» снова читается как «столько-то проверено», хотя часть прогонов не состоялась"
+  },
+  {
+   "id": "provetests.stale-bytecode-fakes-a-survivor",
+   "file": "plugins/superstack/tools/prove_tests.py",
+   "find": "    purge_bytecode(root)\n",
+   "replace": "    pass\n",
+   "why": "кэш байткода не сносится перед прогоном с подменой: подмена того же размера в ту же секунду неотличима для инвалидации, прогон идёт по старому .pyc — и поломка объявляется ВЫЖИВШЕЙ, ни разу не исполнившись, то есть чужие тесты обвиняются в том, чего не было"
+  },
+  {
+   "id": "provetests.runs-write-bytecode-again",
+   "file": "plugins/superstack/tools/prove_tests.py",
+   "find": "\"PYTHONDONTWRITEBYTECODE\": \"1\"",
+   "replace": "\"PYTHONDONTWRITEBYTECODE_OFF\": \"1\"",
+   "why": "прогоны снова пишут .pyc в чужом дереве: появляется то, что устареет под следующей подменой и останется у человека после нас"
   },
   {
    "id": "manifest.status-reason-overwrites-the-basis",
@@ -1972,7 +2049,7 @@
   },
   {
    "id": "verify.exit-two-read-as-failure",
-   "file": "plugins/superstack/tools/verify.py",
+   "file": "plugins/superstack/tools/verify_report.py",
    "find": "    re.compile(r\"тестов не найдено\", re.I),",
    "replace": "    re.compile(r\"НИКОГДА-НЕ-СОВПАДЁТ\", re.I),",
    "why": "прогонщик, честно печатающий «тестов не найдено», перестаёт опознаваться — пустой набор снова читается как провал, и человека отправляют чинить работающий код"
@@ -2596,7 +2673,7 @@
   {
    "id": "drift.changed-plan-passes",
    "file": "tools/gauntlet.py",
-   "find": "    if plan_stamp.digest(p) != отметка[\"digest\"]:",
+   "find": "    if not по_снимку and plan_stamp.digest(p) != отметка[\"digest\"]:",
    "replace": "    if False:",
    "why": "правка плана перестаёт гасить вердикт — карта расходится с планом молча, ровно как когда «34 из 34» горело поверх 14 групп пропусков"
   },
@@ -3093,8 +3170,8 @@
   {
    "id": "sync.readme-refresh-always-succeeds",
    "file": "tools/sync_public.py",
-   "find": "        if not заменено:\n            return False\n        p.write_text(t, encoding=\"utf-8\")\n        обновлено += 1",
-   "replace": "        p.write_text(t, encoding=\"utf-8\")\n        обновлено += 1",
+   "find": "            заменено += сколько\n        if not заменено:\n            return False",
+   "replace": "            заменено += сколько",
    "why": "витрина отчитывается «обновлено», когда в ней не совпала ни одна подстановка: механизм «витрина не врёт» выключается молча, а числа прошлого релиза уезжают в публичное дерево как измеренные. С двумя витринами цена выше — молчание одной половины прикрывается успехом другой"
   },
   {
@@ -3233,8 +3310,8 @@
   {
    "id": "gauntlet.mutates-the-live-tree",
    "file": "tools/gauntlet.py",
-   "find": "        v = _mutate_all(muts, копия)",
-   "replace": "        v = _mutate_all(muts)",
+   "find": "        v = _mutate_all(muts, копия, реестр=total)",
+   "replace": "        v = _mutate_all(muts, реестр=total)",
    "why": "ворота снова ломают рабочее дерево человека: обрыв прогона оставляет в файле `if False:`, и восемь красных тестов в четырёх файлах выглядят настоящими дефектами"
   },
   {
@@ -3638,6 +3715,34 @@
    "why": "исключение расползается на любой файл: путь рабочего каталога в обычном коде перестаёт считаться протечкой, и судья увидит пересказ просьбы"
   },
   {
+   "id": "blind.non-ascii-name-not-decoded",
+   "file": "plugins/superstack/tools/blind_accept.py",
+   "find": "        elif len(тройка) == 3 and all(c in _OCTAL for c in тройка):",
+   "replace": "        elif False:",
+   "why": "имя с не-ASCII буквой снова не разбирается: кириллическая граница файла не опознаётся, второй файл не начинается, и текст спеки достаётся судье внутри разрешённого соседа"
+  },
+  {
+   "id": "blind.unparsed-boundary-passes",
+   "file": "plugins/superstack/tools/blind_accept.py",
+   "find": "    if packet[\"unparsed\"]:",
+   "replace": "    if False:",
+   "why": "неопознанная граница перестаёт останавливать сборку: пакет объявляется готовым, хотя где кончается один файл и начинается другой — неизвестно, и вырезание пересказа нечем подтвердить"
+  },
+  {
+   "id": "blind.rename-hides-only-by-new-name",
+   "file": "plugins/superstack/tools/blind_accept.py",
+   "find": "        скрыть = is_retelling(было) or is_retelling(стало)",
+   "replace": "        скрыть = is_retelling(стало)",
+   "why": "спека, переехавшая под нейтральным именем, снова едет судье: переименование становится способом протащить пересказ мимо вырезания"
+  },
+  {
+   "id": "blind.phase-encodes-file-names",
+   "file": "plugins/superstack/skills/go/phases/6-приёмка.md",
+   "find": "git -c core.quotepath=false diff",
+   "replace": "git diff",
+   "why": "фаза снова собирает изменения с закодированными именами: на каждом прогоне с кириллическим именем разбор границ проверяется в самом хрупком месте вместо того, чтобы не встречать этой формы вовсе"
+  },
+  {
    "id": "design_pull.contrast-loses-the-step",
    "file": "plugins/superstack/tools/design_pull.py",
    "find": "сохрани холст и переотметь происхождение через --record",
@@ -3660,21 +3765,21 @@
   },
   {
    "id": "verify.series-key-ignores-signature",
-   "file": "plugins/superstack/tools/verify.py",
+   "file": "plugins/superstack/tools/verify_attempts.py",
    "find": "    if series.get(\"sig\") != signature:",
    "replace": "    if False:",
    "why": "смена поломки перестаёт сбрасывать серию: сборка, упавшая дважды, и следующий за ней красный линт считаются одной серией — система сдаётся на поломке, для которой это первый заход"
   },
   {
    "id": "verify.fingerprint-dedup-disabled",
-   "file": "plugins/superstack/tools/verify.py",
+   "file": "plugins/superstack/tools/verify_attempts.py",
    "find": "series.get(\"fp\") == fingerprint",
    "replace": "False",
    "why": "повтор на непочиненном дереве снова тратит попытку — один цикл починки съедает две-три, и потолок «сдаюсь» берётся раньше, чем человек успел что-то исправить"
   },
   {
    "id": "verify.fingerprint-cache-noise-unfiltered",
-   "file": "plugins/superstack/tools/verify.py",
+   "file": "plugins/superstack/tools/verify_attempts.py",
    "find": "        if any(part in _FINGERPRINT_SKIP for part in Path(name).parts):",
    "replace": "        if False:",
    "why": "кэш, который проверка создаёт первым же прогоном, читается вторым вызовом как правка дерева — дедуп не срабатывает ни в одном проекте без .gitignore на кэш"
@@ -3870,7 +3975,7 @@
   },
   {
    "id": "portable.progress-lock-needs-fcntl-everywhere",
-   "file": "plugins/superstack/tools/progress.py",
+   "file": "plugins/superstack/tools/atomic_store.py",
    "find": "    if os.name == \"nt\":\n        import msvcrt\n        fh.seek(0)\n        try:",
    "replace": "    if False:\n        import msvcrt\n        fh.seek(0)\n        try:",
    "why": "замок на файл хода стройки снова берётся единственным вызовом POSIX: на Windows инструмент, которым пишется КАЖДЫЙ шаг волны, падает на первом же шаге — и падает не в записи, а во всём ходе стройки сразу"
@@ -4042,6 +4147,734 @@
    "find": "| Что сравниваем | SUPERSTACK | Superpowers | Skills Matt Pocock |",
    "replace": "| Что сравниваем | Superpowers | Skills Matt Pocock |",
    "why": "витрина перестаёт сравнивать себя: из таблицы уходит наша колонка, и на месте ответа «чем это отличается» остаётся обзор чужих наборов — страница при этом выглядит целой, и человек уходит выбирать вслепую"
+  },
+  {
+   "id": "sync.unreachable-number-passes",
+   "file": "tools/sync_public.py",
+   "find": "чужие = чужие_числа_мутаций(t, nums[\"mutations\"])",
+   "replace": "чужие = []",
+   "why": "витрина снова отчитывается об успехе, имея внутри число, которого никто не мерил: подстановки считают свои совпадения и не смотрят, что осталось. Так на живой странице и разошлись шапка и таблица сравнения — 577 против 576, обе со ссылкой на файл, по которой это проверяется за один клик"
+  },
+  {
+   "id": "mutations.timeout-counts-as-caught",
+   "file": "tools/gauntlet.py",
+   "find": "            if code in НЕ_СОСТОЯЛСЯ:",
+   "replace": "            if False:",
+   "why": "таймаут и несостоявшийся запуск снова числятся пойманной поломкой: 124 и 127 неотличимы от покрасневшего набора, и ворота отвечают «все пойманы», не выполнив ни одного прогона"
+  },
+  {
+   "id": "mutations.no-green-baseline",
+   "file": "tools/gauntlet.py",
+   "find": "        причина = _baseline(корень)",
+   "replace": "        причина = None",
+   "why": "исходы читаются с набора, красного ДО первой подмены: он падал и без неё, поэтому «поймана» получают все мутации разом — самый дешёвый зелёный отчёт из возможных"
+  },
+  {
+   "id": "mutations.inconclusive-passes-as-a-pass",
+   "file": "tools/gauntlet.py",
+   "find": "    if неясные:",
+   "replace": "    if False:",
+   "why": "несостоявшиеся прогоны перестают гасить вердикт: ворота отдают чистый pass, и «планка взята» покупается сорванным таймаутом вместо проверки"
+  },
+  {
+   "id": "verify.reuse-blind-to-ignored-inputs",
+   "file": "plugins/superstack/tools/verify.py",
+   "find": "_INPUT_GLOBS = (\".env\", \".env.*\")",
+   "replace": "_INPUT_GLOBS = ()",
+   "why": "игнорируемые git входы выпадают из отпечатка переиспользования — смена значения в `.env.local` снова читается как «дерево не тронуто», Stop-хук молча закрывает ход результатом прошлого прогона, а свежий прогон в этом состоянии падает. Ровно тот отказ, который нашла внешняя проверка"
+  },
+  {
+   "id": "verify.reuse-ignores-declared-inputs",
+   "file": "plugins/superstack/tools/verify.py",
+   "find": "        шаблоны += объявлено",
+   "replace": "        pass",
+   "why": "объявленные проектом входы выпадают из отпечатка: проект, честно назвавший, от чего зависит его прогон, всё равно переиспользует зелёное поверх изменившегося входа"
+  },
+  {
+   "id": "verify.reuse-unknown-inputs-read-as-empty",
+   "file": "plugins/superstack/tools/verify.py",
+   "find": "    входы = _inputs_digest(project)\n    if входы is None:\n        return None",
+   "replace": "    входы = _inputs_digest(project) or \"\"",
+   "why": "неизвестный набор входов перестаёт гасить переиспользование: «не знаю» подаётся как «не менялось» — нераспознанное объявление входов и нечитаемый файл молча превращаются в утверждение о равенстве состояний"
+  },
+  {
+   "id": "verify.reuse-ignores-the-verifier",
+   "file": "plugins/superstack/tools/verify.py",
+   "find": "    кто = _verifier_identity()\n    if кто is None:\n        return None",
+   "replace": "    кто = \"\"",
+   "why": "обновление плагина и правка самой проверки перестают обесценивать прошлое зелёное: набор, прогнанный ДРУГИМ кодом, засчитывается за доказательство нового — после апдейта система молчит там, где обязана перепроверить"
+  },
+  {
+   "id": "verify.reuse-drops-the-check-commands",
+   "file": "plugins/superstack/tools/verify.py",
+   "find": "raw = \"\\x1e\".join([_REUSE_SCHEMA, дерево, _declared_commands(project),",
+   "replace": "raw = \"\\x1e\".join([_REUSE_SCHEMA, дерево, \"\",",
+   "why": "список и текст объявленных проверок выпадают из отпечатка: команда проверки сменилась, а прошлое зелёное всё ещё засчитывается — доказательством считается прогон другой команды"
+  },
+  {
+   "id": "verify.identity-signs-only-the-gate",
+   "file": "plugins/superstack/tools/verify.py",
+   "find": "_ЧАСТИ = (verify_attempts, verify_report)",
+   "replace": "_ЧАСТИ = ()",
+   "why": "подпись проверяющего снова покрывает только гейт: правка адаптера отчёта или потолка попыток перестаёт обесценивать прошлое зелёное — набор, прогнанный ДРУГИМ кодом, засчитывается за доказательство нового"
+  },
+  {
+   "id": "verify.identity-reads-only-the-gate",
+   "file": "plugins/superstack/tools/verify.py",
+   "find": "        for исходник in (я, *(Path(ч.__file__).resolve() for ч in _ЧАСТИ)):",
+   "replace": "        for исходник in (я,):",
+   "why": "список частей на месте, а читается только гейт: подпись выглядит полной и покрывает треть кода, которым считается вердикт — самая тихая форма отказа, потому что механизм виден глазами"
+  },
+  {
+   "id": "gate.reuse-falls-back-to-the-tree-fingerprint",
+   "file": "plugins/superstack/hooks/verify-gate.py",
+   "find": "getattr(модуль, \"_reuse_fingerprint\", None)",
+   "replace": "getattr(модуль, \"_tree_fingerprint\", None)",
+   "why": "хук молча откатывается на отпечаток одного дерева — тот, что уважает `.gitignore` и слеп к `.env.local`: молчание Stop-хука снова утверждает равенство состояний, зная о них не всё"
+  },
+  {
+   "id": "undo.whole-file-instead-of-fields",
+   "file": "plugins/superstack/tools/apply.py",
+   "find": "    if формат == UNDO_FORMAT:",
+   "replace": "    if False:",
+   "why": "откат снова возвращает файл ЦЕЛИКОМ поверх новой копии: всё, что человек правил после применения, исчезает вместе с правкой плагина — плагин отменяет не своё, а код при этом ноль"
+  },
+  {
+   "id": "undo.later-edit-overwritten",
+   "file": "plugins/superstack/tools/undo_fields.py",
+   "find": "    if not есть or текущее != ожидалось:",
+   "replace": "    if False:",
+   "why": "снято сравнение с тем, что оставил плагин: поле возвращается даже там, где человек переставил его сам, — его решение стирается молча"
+  },
+  {
+   "id": "backup.absence-is-not-recorded",
+   "file": "plugins/superstack/tools/apply.py",
+   "find": "    return {\"before_exists\": (CLAUDE / name).is_file()}",
+   "replace": "    return {\"before_exists\": True}",
+   "why": "отсутствие файла до применения снова не записывается: созданный плагином settings.json остаётся после отката, потому что убрать его нечем"
+  },
+  {
+   "id": "undo.created-file-takes-foreign-content-with-it",
+   "file": "plugins/superstack/tools/undo_fields.py",
+   "find": "    if осталось:",
+   "replace": "    if False:",
+   "why": "файл, созданный плагином, удаляется вместе с тем, что человек успел в него дописать: откат уносит чужое"
+  },
+  {
+   "id": "backup.dir-merges-on-collision",
+   "file": "plugins/superstack/tools/apply.py",
+   "find": "            (BACKUPS / имя).mkdir(exist_ok=False)",
+   "replace": "            (BACKUPS / имя).mkdir(exist_ok=True)",
+   "why": "каталог копии снова создаётся слиянием: два применения в одну секунду пишут в один каталог, исходное состояние теряется, а откат отчитывается успехом"
+  },
+  {
+   "id": "undo.manifest-name-list-ignored",
+   "file": "plugins/superstack/tools/apply.py",
+   "find": "    if not isinstance(имя, str) or имя not in WRITABLE:",
+   "replace": "    if False:",
+   "why": "снят список имён, которые откату разрешено трогать: подменённый манифест заставляет переписать файл человека, к которому инструмент не имеет отношения"
+  },
+  {
+   "id": "undo.manifest-path-not-resolved",
+   "file": "plugins/superstack/tools/apply.py",
+   "find": "    if not цель.is_relative_to(корень):",
+   "replace": "    if False:",
+   "why": "снята проверка пути после разбора: разрешённое имя, оказавшееся ссылкой наружу, выводит запись за каталог настроек"
+  },
+  {
+   "id": "undo.journal-keeps-the-secret",
+   "file": "plugins/superstack/tools/settings_copy.py",
+   "find": "            итог[ключ] = _redact_walk(итог[ключ], поле, места)",
+   "replace": "            итог[ключ] = итог[ключ]",
+   "why": "журнал полей снова хранит секрет открытым текстом: значение «было» уезжает в manifest.json рядом с очищенной копией — та же утечка, только удвоенная"
+  },
+  {
+   "id": "undo.redacted-value-written-over-a-live-one",
+   "file": "plugins/superstack/tools/undo_fields.py",
+   "find": "    if _секрет_вырезан(вернём):",
+   "replace": "    if False:",
+   "why": "метка вырезанного секрета снова записывается поверх живого значения: откат становится потерей данных ровно там, где обещает их вернуть"
+  },
+  {
+   "id": "undo.unknown-format-parsed-anyway",
+   "file": "plugins/superstack/tools/apply.py",
+   "find": "    if формат is not None and формат != UNDO_FORMAT:",
+   "replace": "    if False:",
+   "why": "копия неизвестного формата снова разбирается по догадке прежним способом: вместо честного отказа человек получает молча испорченную копию и откат, о котором нельзя сказать, что он вернул"
+  },
+  {
+   "id": "store.shared-temp-name",
+   "file": "plugins/superstack/tools/atomic_store.py",
+   "find": "    fd, имя = tempfile.mkstemp(dir=str(path.parent),\n                               prefix=path.name + \".\", suffix=\".tmp\")\n    os.close(fd)\n    return Path(имя)",
+   "replace": "    return path.with_suffix(path.suffix + \".tmp\")",
+   "why": "имя временного файла снова одно на всех: два процесса, пишущих одни настройки, отбирают друг у друга один и тот же файл — один падает «нет такого файла», одна из двух записей пропадает, и обе операции при этом завершаются успешно"
+  },
+  {
+   "id": "store.mode-widens-on-write",
+   "file": "plugins/superstack/tools/atomic_store.py",
+   "find": "    try:\n        return stat.S_IMODE(path.stat().st_mode)\n    except OSError:\n        return режим_нового",
+   "replace": "    return 0o644",
+   "why": "запись перестаёт наследовать режим цели: файл настроек с правами 0600 после первой же правки становится читаемым другим локальным пользователям машины, и человек об этом не узнаёт"
+  },
+  {
+   "id": "store.lock-refusal-is-silent",
+   "file": "plugins/superstack/tools/atomic_store.py",
+   "find": "                _сказать_без_замка(f\"ждали {предел:g} с, файл держит \"\n                                   f\"кто-то другой: {e}\")\n                return False",
+   "replace": "                return False",
+   "why": "работа без замка перестаёт называться вслух: правка соседнего процесса пропадает молча, и заметить это можно только глазами — ровно тот отказ, ради которого замок и заводился"
+  },
+  {
+   "id": "store.refusal-pretends-the-lock-was-taken",
+   "file": "plugins/superstack/tools/atomic_store.py",
+   "find": "                return False\n            time.sleep(_ШАГ_ОЖИДАНИЯ)",
+   "replace": "                return True\n            time.sleep(_ШАГ_ОЖИДАНИЯ)",
+   "why": "истёкшее ожидание объявляется взятым замком: снимается чужой замок по выходе, и запись идёт наперегонки с соседом, считая себя защищённой"
+  },
+  {
+   "id": "basekit.settings-written-without-a-lock",
+   "file": "plugins/superstack/tools/apply.py",
+   "find": "    with atomic_store.Lock(path):\n        data = json.loads(path.read_text(encoding=\"utf-8-sig\")) if path.is_file() else {}\n        before = data.get(key)",
+   "replace": "    if True:\n        data = json.loads(path.read_text(encoding=\"utf-8-sig\")) if path.is_file() else {}\n        before = data.get(key)",
+   "why": "правка настроек снова идёт без замка на цикл «прочитал, изменил, записал»: Stop-хук и планка ходят одновременно, оба читают старое состояние и пишут файл целиком — записавший вторым затирает чужую настройку, и оба выходят нулём"
+  },
+  {
+   "id": "checkpoint.git-paths-read-off-the-printed-line",
+   "file": "plugins/superstack/tools/checkpoint.py",
+   "find": "\"status\", \"--porcelain\", \"-z\", \"-uall\", \"--\", \".\"",
+   "replace": "\"status\", \"--porcelain\", \"-uall\", \"--\", \".\"",
+   "why": "пути снова разбираются по печатной строке, а не по разделителям NUL: имя с кириллицей или пробелом git печатает в кавычках и восьмеричными последовательностями, такой путь с диска не читается — файл окружения рядом с ним молча выпадает из проверки на ключи"
+  },
+  {
+   "id": "checkpoint.git-paths-joined-to-the-subfolder",
+   "file": "plugins/superstack/tools/checkpoint.py",
+   "find": "        if not путь.startswith(приставка):\n            continue\n        пути.append(путь[len(приставка):])",
+   "replace": "        пути.append(путь)",
+   "why": "пути от корня хранилища снова присоединяются к папке снимка: снимок из подпапки ищет product/product/.env, файла не находит и отчитывается «ключей нет», забрав ключ в снимок навсегда"
+  },
+  {
+   "id": "checkpoint.snapshot-commits-the-whole-index",
+   "file": "plugins/superstack/tools/checkpoint.py",
+   "find": "    p = _git(root, \"commit\", \"-q\", \"--only\", \"-m\", ПРЕФИКС + этап, \"--\", \".\")",
+   "replace": "    p = _git(root, \"commit\", \"-q\", \"-m\", ПРЕФИКС + этап)",
+   "why": "снимок снова фиксирует весь индекс, а не свою область: то, что человек подготовил к своему коммиту рядом с папкой продукта, уезжает в чужую историю, а его индекс остаётся пустым"
+  },
+  {
+   "id": "checkpoint.a-tracked-file-excuses-a-new-key",
+   "file": "plugins/superstack/tools/checkpoint.py",
+   "find": "    новый_ключ = [н for н in находки if н[\"уже_в_снимках\"] and н[\"новых\"]]",
+   "replace": "    новый_ключ = []",
+   "why": "решение про ключ снова принимается по факту отслеживания ФАЙЛА, а не по ЗНАЧЕНИЮ: ключ, впервые дописанный в давно отслеживаемый .env, уезжает в снимок навсегда, и человеку говорят, что такие ключи попадали в снимки и раньше"
+  },
+  {
+   "id": "collect.config-encoding-splits-in-two",
+   "file": "plugins/superstack/tools/probe/collect.py",
+   "find": "CONFIG_ENCODING = \"utf-8-sig\"",
+   "replace": "CONFIG_ENCODING = \"utf-8\"",
+   "why": "сборщик фактов снова читает конфиг не тем чтением, что копирование: JSON с BOM для него не разбирается, список секретов выходит пустым — и «находок нет» опять становится разрешением сохранить файл, в котором секрет есть"
+  },
+  {
+   "id": "apply.backup-trusts-the-old-findings",
+   "file": "plugins/superstack/tools/settings_copy.py",
+   "find": "    return свои + [h for h in _свежие_находки(данные)\n                   if h.get(\"location\") not in места]",
+   "replace": "    return свои",
+   "why": "копия снова очищается по списку находок, собранному раньше и, возможно, другим чтением: пустой список означает «сканер ничего не увидел», и секрет уезжает в копию невырезанным"
+  },
+  {
+   "id": "apply.copy-is-saved-without-a-fresh-look",
+   "file": "plugins/superstack/tools/apply.py",
+   "find": "        остатки = _остатки_в_тексте(текст)",
+   "replace": "        остатки = []",
+   "why": "текст копии больше не проверяется перед сохранением: обход по структуре не читает имена полей, и секрет, оказавшийся в имени, уезжает в копию открытым"
+  },
+  {
+   "id": "apply.unparsed-settings-are-copied-raw",
+   "file": "plugins/superstack/tools/apply.py",
+   "find": "    if непроверенные:\n        raise SystemExit(_отказ_непроверенное(непроверенные))",
+   "replace": "    непроверенные = []",
+   "why": "неудача разбора снова читается как утверждение о содержимом: файл, о котором не известно ничего, молча выпадает из копии, человеку про непроверенное не сказано — и он считает копию полной, а откат по ней вернёт не то, что было"
+  },
+  {
+   "id": "apply.unreadable-bytes-crash-instead-of-refusal",
+   "file": "plugins/superstack/tools/settings_copy.py",
+   "find": "    except UnicodeDecodeError as e:",
+   "replace": "    except json.JSONDecodeError as e:",
+   "why": "байты, не складывающиеся в текст, снова доходят до вызывающего трейсбеком: настройки в UTF-16 роняют инструмент вместо честного «не проверено», и человек не узнаёт ни причины, ни того, что копии нет"
+  },
+  {
+   "id": "probe.config-dir-ignored",
+   "file": "plugins/superstack/tools/probe/collect.py",
+   "find": "    raw = (os.environ.get(\"CLAUDE_CONFIG_DIR\") or \"\").strip()",
+   "replace": "    raw = \"\"",
+   "why": "переменная профиля снова не читается: на машине с отдельным каталогом настроек осмотр докладывает про ЧУЖОЙ профиль и называет его настройками человека"
+  },
+  {
+   "id": "probe.config-dir-not-named",
+   "file": "plugins/superstack/tools/probe/collect.py",
+   "find": "    put(\"cc.config_dir\", str(CLAUDE), \"collect.probe_claude\",",
+   "replace": "    put(\"cc.config_dir\", str(HOME / \".claude\"), \"collect.probe_claude\",",
+   "why": "доклад называет домашний каталог вместо прочитанного: человек не может понять, о каком профиле речь, а неверное имя убедительнее отсутствующего"
+  },
+  {
+   "id": "probe.global-config-off-profile",
+   "file": "plugins/superstack/tools/probe/collect.py",
+   "find": "    рядом = CLAUDE.parent / \".claude.json\"",
+   "replace": "    рядом = HOME / \".claude.json\"",
+   "why": "общий конфиг снова берётся у домашнего профиля: MCP-серверы и состояние проектов приезжают из соседнего каталога, а доклад выдаёт их за настройки активного"
+  },
+  {
+   "id": "probe.mcp-project-scopes-blind",
+   "file": "plugins/superstack/tools/probe/collect.py",
+   "find": "        (\"local\", общий, _mcp_local),\n        (\"project\", проект / \".mcp.json\", _mcp_top),",
+   "replace": "        (\"local\", общий, _mcp_top),",
+   "why": "области проекта снова невидимы: сервер, добавленный для этого проекта, и .mcp.json команды не попадают в список, а MCP-сервер — это произвольное исполнение кода"
+  },
+  {
+   "id": "probe.mcp-unread-scope-passes-as-empty",
+   "file": "plugins/superstack/tools/probe/collect.py",
+   "find": "            unreadable.append({\"scope\": метка, \"path\": str(путь),\n                               \"reason\": \"файл области не разобран как объект\"})",
+   "replace": "            covered.append(метка)",
+   "why": "неразобранная область снова числится прочитанной и пустой: «серверов нет» становится неотличимо от «не смотрел», а именно эту подмену продукт ищет у других"
+  },
+  {
+   "id": "suite.real-profile-leaks-into-the-run",
+   "file": "tests/conftest.py",
+   "find": "    os.environ.pop(ПРОФИЛЬ, None)",
+   "replace": "    pass",
+   "why": "указатель на профиль снова переживает вход в набор: проверки, подменяющие HOME, уводит в НАСТОЯЩИЙ профиль человека, и зелёное становится свойством машины, а не кода"
+  },
+  {
+   "id": "suite.profile-guard-declared-but-not-called",
+   "file": "tests/conftest.py",
+   "find": "    _отвязать_профиль()\n    if os.environ.get(\"SUPERSTACK_MUTATION_RUN\") == \"1\":",
+   "replace": "    if os.environ.get(\"SUPERSTACK_MUTATION_RUN\") == \"1\":",
+   "why": "сторож остался в файле, но со входа в набор снят: код на месте, механизма нет — ровно тот случай, когда «построено» доказывается наличием строки, а не поведением"
+  },
+  {
+   "id": "shard.split-hands-everyone-everything",
+   "file": "tools/gauntlet.py",
+   "find": "    return [m for k, m in enumerate(порядок) if k % of == index - 1]",
+   "replace": "    return порядок",
+   "why": "разбиение перестаёт делить: каждая доля берёт весь набор, шестнадцать заданий делают одну и ту же работу и все шестнадцать не укладываются в предел — ровно тот отказ, ради которого набор и резался"
+  },
+  {
+   "id": "shard.bad-spec-becomes-one-of-one",
+   "file": "tools/gauntlet.py",
+   "find": "    if not m:\n        raise ValueError(f\"доля пишется как i/n, а не «{текст}»\")",
+   "replace": "    if not m:\n        return (1, 1)",
+   "why": "опечатка в номере доли молча превращается в полный прогон под именем доли: задание уходит в тот же таймаут и отчитывается как одна из шестнадцати"
+  },
+  {
+   "id": "shard.subset-passes-as-the-whole-bar",
+   "file": "tools/gauntlet.py",
+   "find": "    if доля is not None:\n        v[\"shard\"] = {\"index\": доля[0], \"of\": доля[1]}",
+   "replace": "    if False:\n        v[\"shard\"] = {\"index\": доля[0], \"of\": доля[1]}",
+   "why": "доля перестаёт помечать себя выборкой: одна шестнадцатая набора отчитывается как взятая планка, и её код возврата неотличим от полного прогона"
+  },
+  {
+   "id": "shard.registry-total-is-the-shards-own-size",
+   "file": "tools/gauntlet.py",
+   "find": "    v[\"registry_total\"] = total",
+   "replace": "    v[\"registry_total\"] = len(muts)",
+   "why": "доля называет числом набора свой собственный размер, и сумма выполненных сходится с ним при любом числе пропавших долей"
+  },
+  {
+   "id": "progress.written-only-at-the-end",
+   "file": "tools/gauntlet.py",
+   "find": "        _write_progress(снимок(m[\"id\"]))",
+   "replace": "        pass",
+   "why": "снятое по таймауту задание снова не оставляет ничего: ни числа проверенных, ни имени поломки, на которой встало"
+  },
+  {
+   "id": "progress.written-in-place-not-swapped",
+   "file": "tools/gauntlet.py",
+   "find": "        tmp.replace(PROGRESS)",
+   "replace": "        PROGRESS.write_text(json.dumps(состояние, ensure_ascii=False), encoding=\"utf-8\")",
+   "why": "промежуточный отчёт снова пишется поверх: обрыв в момент записи оставляет обрезанный JSON, который сведение прочитать не сможет"
+  },
+  {
+   "id": "merge.sum-not-compared",
+   "file": "tools/gauntlet.py",
+   "find": "    if выполнено != реестр:",
+   "replace": "    if False:",
+   "why": "сведение перестаёт сверять сумму выполненных с числом зарегистрированных: пятнадцать долей из шестнадцати складываются в зелёный итог"
+  },
+  {
+   "id": "merge.torn-shard-reads-as-passing",
+   "file": "tools/gauntlet.py",
+   "find": "    if оборванные:",
+   "replace": "    if False:",
+   "why": "оборванная доля перестаёт ронять сведение и называться по имени: снятое по таймауту задание читается как «остальные прошли»"
+  },
+  {
+   "id": "merge.missing-shard-is-summed-away",
+   "file": "tools/gauntlet.py",
+   "find": "    пропали = [i for i in range(1, из + 1) if i not in номера]",
+   "replace": "    пропали = []",
+   "why": "пропавшая доля перестаёт называться номером: артефакт не доехал, и недостача видна только косвенно, через числа, которые никто не читает"
+  },
+  {
+   "id": "policy.unknown-in-a-required-gate-is-a-warning",
+   "file": "tools/gauntlet.py",
+   "find": "            (ошибки if g[\"gate\"] in обязательные else оговорки).append(",
+   "replace": "            (оговорки if g[\"gate\"] in обязательные else оговорки).append(",
+   "why": "«не смог проверить» у обязательных ворот снова становится предупреждением, и сборка заканчивается зелёной, честно написав, что проверить не смогла"
+  },
+  {
+   "id": "policy.a-new-gate-lands-in-the-soft-bin",
+   "file": "tools/gauntlet.py",
+   "find": "    if не_названы:",
+   "replace": "    if False:",
+   "why": "ворота, не названные в списке, перестают ронять политику: следующие ворота молча попадают в мягкую корзину, и список устаревает тише, чем портится"
+  },
+  {
+   "id": "policy.reconcile-demoted-out-of-the-required-list",
+   "file": "data/required-gates.json",
+   "find": "   \"gate\": \"сверка\",",
+   "replace": "   \"gate\": \"сверкаX\",",
+   "why": "сверка карты с планом уезжает из списка обязательных ворот: её «не смог» снова становится предупреждением — тем самым, которое читалось как «все ворота прошли»"
+  },
+  {
+   "id": "bar.reconcile-skips-the-plan-that-is-there",
+   "file": "tools/gauntlet.py",
+   "find": "    по_снимку = not p.is_file()",
+   "replace": "    по_снимку = True",
+   "why": "сверка перестаёт читать настоящий план даже там, где он лежит: правка плана после отметки проходит незамеченной, а снимок подтверждает сам себя"
+  },
+  {
+   "id": "stamp.snapshot-edited-apart-from-its-digest-passes",
+   "file": "tools/plan_stamp.py",
+   "find": "    if s.get(\"self\") != body_digest(s):",
+   "replace": "    if False:",
+   "why": "снимок плана перестаёт защищать сам себя: отпечаток можно переписать вручную, и сверка в клоне сводится к «в файле написано, что сходится»"
+  },
+  {
+   "id": "snapshot.digest-drifts-from-the-stamp",
+   "file": "data/plan-snapshot.json",
+   "find": " \"plan_digest\": \"sha256:2dd04984c5b49bd0d90d4fe1ad69c1ed1c2e97a45a8dfacdc09f7cdb0ca82f71\",",
+   "replace": " \"plan_digest\": \"sha256:0000000000000000000000000000000000000000000000000000000000000000\",",
+   "why": "снимок начинает говорить о другом плане, чем отметка в карте: сверка в клоне подтверждает не тот план, с которым карту сверяли"
+  },
+  {
+   "id": "stamp.snapshot-not-written-with-the-stamp",
+   "file": "tools/plan_stamp.py",
+   "find": "    write_snapshot(p, путь_карты.parent / SNAPSHOT_NAME)",
+   "replace": "    pass",
+   "why": "отметка о сверке перестаёт класть снимок рядом с картой: в независимом клоне сверять снова нечем, и ворота отвечают «не смог»"
+  },
+  {
+   "id": "ci.shards-collapse-into-one-job",
+   "file": ".github/workflows/gates.yml",
+   "find": "        shard: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]",
+   "replace": "        shard: [1]",
+   "why": "матрица снова становится одним заданием на весь набор — ровно та форма, которая четыре ночи подряд снималась по таймауту, не дойдя до конца"
+  },
+  {
+   "id": "ci.cancelled-shard-uploads-nothing",
+   "file": ".github/workflows/gates.yml",
+   "find": "        if: always()",
+   "replace": "        if: success()",
+   "why": "отменённая доля перестаёт выгружать проверенное: два часа работы снова пропадают целиком, и сведению нечего читать"
+  },
+  {
+   "id": "ci.one-red-shard-cancels-the-rest",
+   "file": ".github/workflows/gates.yml",
+   "find": "      fail-fast: false",
+   "replace": "      fail-fast: true",
+   "why": "первая же красная доля снимает пятнадцать остальных, и сведение получает пятнадцать пропавших артефактов вместо результата"
+  },
+  {
+   "id": "ci.no-job-sums-the-shards",
+   "file": ".github/workflows/gates.yml",
+   "find": "        run: python3 tools/gauntlet.py --merge shards",
+   "replace": "        run: echo доли собраны",
+   "why": "вердикт по набору перестаёт кем-либо выноситься: шестнадцать зелёных долей читаются как проверенный набор, хотя ни одна из них этого не утверждает"
+  },
+  {
+   "id": "ci.unknown-is-a-warning-again",
+   "file": ".github/workflows/gates.yml",
+   "find": "          python3 tools/gauntlet.py --ci ворота.json",
+   "replace": "          echo ворота проверены",
+   "why": "итог сборки перестаёт считаться по списку обязательных ворот: «не смог проверить» снова уезжает в зелёный статус"
+  },
+  {
+   "id": "sync.attribution-window-is-the-whole-file",
+   "file": "tools/sync_public.py",
+   "find": "окно = text[max(0, m.start() - ОКНО):m.end() + ОКНО]",
+   "replace": "окно = text",
+   "why": "правило расползается с окна вокруг ссылки на весь файл: справочник источников фактов, где ссылки на CVE и документацию лежат в одном JSON рядом со словом «основан», начинает числиться признанием в заимствовании — и выкладка встаёт на том, что продукт как раз усиливает"
+  },
+  {
+   "id": "sync.attribution-is-a-name-list",
+   "file": "tools/sync_public.py",
+   "find": "if ЗАИМСТВОВАНИЕ.search(окно):",
+   "replace": "if \"fable-advisor\" in окно:",
+   "why": "проверка по форме подменяется перечнем известных имён — ровно тем способом, которым чистка уже отчиталась «ноль» на дереве, где чужая ссылка жила с версии 0.3.x: любое имя вне перечня проезжает молча"
+  },
+  {
+   "id": "probe.scope-order-weakest-first",
+   "file": "plugins/superstack/tools/probe/collect.py",
+   "find": "SCOPES_STRONGEST_FIRST = (\n    \"managed\", \"managed-linux\", \"project-local\", \"project\", \"user-local\", \"user\",\n)",
+   "replace": "SCOPES_STRONGEST_FIRST = (\n    \"user\", \"user-local\", \"project\", \"project-local\", \"managed-linux\", \"managed\",\n)",
+   "why": "направление приоритета перевёрнуто: управляемая политика становится самой слабой областью, и запрет администратора перекрывается пользовательским разрешением — ровно тот доклад «плагин включён» там, где он запрещён"
+  },
+  {
+   "id": "probe.plugin-decision-last-wins",
+   "file": "plugins/superstack/tools/probe/collect.py",
+   "find": "            принято = решения.get(name)",
+   "replace": "            принято = None",
+   "why": "возвращён исходный дефект `enabled.update(ep)`: решает не первая (самая приоритетная) область, а последняя (самая слабая), и перекрытых решений не остаётся вовсе"
+  },
+  {
+   "id": "probe.plugin-decider-anonymous",
+   "file": "plugins/superstack/tools/probe/collect.py",
+   "find": "\"decided_by\": label, \"overridden\": []}",
+   "replace": "\"decided_by\": \"?\", \"overridden\": []}",
+   "why": "из доклада убрано имя области, принявшей решение: администратор видит «включён», но не видит «кем», и проверить утверждение ему нечем"
+  },
+  {
+   "id": "probe.managed-mode-overwritten",
+   "file": "plugins/superstack/tools/probe/collect.py",
+   "find": "        if mode is not None and режим is None:",
+   "replace": "        if mode is not None:",
+   "why": "одиночное значение перестаёт закрепляться за самой приоритетной областью: режим прав из управляемой политики затирается пользовательским, и доклад называет режим, которого у хоста нет"
+  },
+  {
+   "id": "probe.unreadable-scope-silent",
+   "file": "plugins/superstack/tools/probe/collect.py",
+   "find": "        except Exception as e:\n            unreadable.append({\"scope\": label, \"path\": str(path), \"reason\": str(e)})\n            continue",
+   "replace": "        except Exception as e:\n            del e\n            continue",
+   "why": "непрочитанная область настроек пропадает молча: «не прочитал управляемую политику» становится неотличимо от «управляемой политики нет», и неполное измерение подаётся как полное"
+  },
+  {
+   "id": "probe.denied-scope-is-absent",
+   "file": "plugins/superstack/tools/probe/collect.py",
+   "find": "    except PermissionError:\n        return ЗАКРЫТО",
+   "replace": "    except PermissionError:\n        return НЕТ",
+   "why": "отказ в доступе к области снова выдаётся за её отсутствие: закрытый администратором каталог управляемой политики читается как «политики нет», и молчание опять склоняется в пользу разрешения"
+  },
+  {
+   "id": "probe.secret-scan-swallows-denied",
+   "file": "plugins/superstack/tools/probe/collect.py",
+   "find": "        if состояние == ЗАКРЫТО:\n            SECRET_SCAN_UNREADABLE.append(\n                {\"file\": label, \"path\": str(path), \"why\": НЕ_ПУСТИЛИ})\n            continue",
+   "replace": "        if состояние == ЗАКРЫТО:\n            continue",
+   "why": "закрытая правами цель снова выпадает из обхода МОЛЧА: доклад говорит «секретов не найдено» про файл, который ни разу не открывали"
+  },
+  {
+   "id": "probe.scan-files-counts-denied-as-seen",
+   "file": "plugins/superstack/tools/probe/collect.py",
+   "find": "put(\"sec.scan_files\", [м for м, с in состояния if с == ЕСТЬ],",
+   "replace": "put(\"sec.scan_files\", [м for м, с in состояния if с != НЕТ],",
+   "why": "закрытая правами область снова числится просмотренной: «не пустили» подано как «смотрели, и там чисто»"
+  },
+  {
+   "id": "probe.scan-denied-reported-empty",
+   "file": "plugins/superstack/tools/probe/collect.py",
+   "find": "put(\"sec.scan_denied\", [м for м, с in состояния if с == ЗАКРЫТО],",
+   "replace": "put(\"sec.scan_denied\", [],",
+   "why": "третье состояние исчезает из фактов: «не пустили» снова неотличимо от «нечего смотреть»"
+  },
+  {
+   "id": "doctor.config-dir-built-by-hand-again",
+   "file": "plugins/superstack/tools/doctor.py",
+   "find": "CLAUDE, CLAUDE_SOURCE = _collect_module().config_dir()",
+   "replace": "CLAUDE, CLAUDE_SOURCE = HOME / \".claude\", \"домашний каталог\"",
+   "why": "доктор снова собирает каталог настроек литералом: на машине с назначенным профилем весь доклад — разрешения, хуки, скиллы — про СОСЕДНИЙ каталог, и об этом не сказано ни строкой"
+  },
+  {
+   "id": "doctor.global-config-taken-from-home",
+   "file": "plugins/superstack/tools/doctor.py",
+   "find": "    return _collect().global_config_path()",
+   "replace": "    return HOME / \".claude.json\"",
+   "why": "общий конфиг снова берётся у домашнего профиля: имя каталога в докладе из одного места, MCP-серверы — из другого, и расхождение молчит"
+  },
+  {
+   "id": "doctor.profile-source-is-guessed",
+   "file": "plugins/superstack/tools/doctor.py",
+   "find": "\"config_dir_source\": CLAUDE_SOURCE,",
+   "replace": "\"config_dir_source\": \"домашний каталог\",",
+   "why": "причина выбора каталога названа неверно: человек не может отличить доклад о своём профиле от доклада о чужом, а неверная причина убедительнее отсутствующей"
+  },
+  {
+   "id": "what.config-dir-built-by-hand-again",
+   "file": "plugins/superstack/tools/what.py",
+   "find": "CLAUDE, CLAUDE_SOURCE = _проба().config_dir()",
+   "replace": "CLAUDE, CLAUDE_SOURCE = HOME / \".claude\", \"домашний каталог\"",
+   "why": "ответ на «где я» заводит второй разбор переменной профиля: два списка оговорок расходятся молча, и первым расходится тот, который никто не правит"
+  },
+  {
+   "id": "what.profile-source-is-guessed",
+   "file": "plugins/superstack/tools/what.py",
+   "find": "итог[\"config_dir_source\"] = CLAUDE_SOURCE",
+   "replace": "итог[\"config_dir_source\"] = \"домашний каталог\"",
+   "why": "ответ называет причину, по которой каталог НЕ выбирался: состояние выглядит проверяемым и указывает не туда"
+  },
+  {
+   "id": "what.brake-follows-the-assigned-profile",
+   "file": "plugins/superstack/tools/what.py",
+   "find": "STATE = HOME / \".claude\" / \"superstack\"",
+   "replace": "STATE = CLAUDE / \"superstack\"",
+   "why": "флаг паузы ищется в назначенном профиле, а кладут его по домашнему адресу: остановленная система получает ответ «работа идёт»"
+  },
+  {
+   "id": "apply.config-dir-built-by-hand-again",
+   "file": "plugins/superstack/tools/apply.py",
+   "find": "CLAUDE, CLAUDE_SOURCE = _проба().config_dir()",
+   "replace": "CLAUDE, CLAUDE_SOURCE = HOME / \".claude\", \"домашний каталог\"",
+   "why": "единственный пишущий инструмент правит домашний каталог по диагнозу, собранному про назначенный профиль, и выходит нулём"
+  },
+  {
+   "id": "apply.backup-lands-in-another-profile",
+   "file": "plugins/superstack/tools/apply.py",
+   "find": "BACKUPS = CLAUDE / \"superstack\" / \"backups\"",
+   "replace": "BACKUPS = HOME / \".claude\" / \"superstack\" / \"backups\"",
+   "why": "копия ложится не в тот профиль, который правится, и откат ищет её не там — потеря данных с успешным кодом возврата"
+  },
+  {
+   "id": "apply.brake-follows-the-assigned-profile",
+   "file": "plugins/superstack/tools/apply.py",
+   "find": "STATE = HOME / \".claude\" / \"superstack\"",
+   "replace": "STATE = CLAUDE / \"superstack\"",
+   "why": "тормоз пишущего инструмента ищется в назначенном профиле, а кладут его в домашний: остановленная система продолжает править настройки"
+  },
+  {
+   "id": "apply.profile-is-named-from-memory",
+   "file": "plugins/superstack/tools/apply.py",
+   "find": "    return f\"Профиль настроек: {CLAUDE}   путь взят: {CLAUDE_SOURCE}\"",
+   "replace": "    return \"Профиль настроек: ~/.claude\"",
+   "why": "инструмент, который ПИШЕТ, называет каталог по памяти, а не тот, в который пойдёт правка: человек соглашается на изменение не того файла"
+  },
+  {
+   "id": "store.second-way-of-writing-returns",
+   "file": "plugins/superstack/hooks/precompact.py",
+   "find": "    try:\n        _общая_запись().скопировать(src, куда)\n    except OSError:\n        return \"copy-failed\"",
+   "replace": "    врем = куда.with_suffix(куда.suffix + \".tmp\")\n    try:\n        врем.write_bytes(src.read_bytes())\n        os.replace(врем, куда)\n    except OSError:\n        return \"copy-failed\"",
+   "why": "в поставку возвращается ВТОРОЙ способ записи: временный сосед собирается руками, копия разговора кладётся мимо общего модуля и получает права по umask. Проверка по перечню имён инструментов этого места и не видела — хук в находку не попал; ловить обязана проверка по форме"
+  },
+  {
+   "id": "watchdog.state-written-past-the-shared-store",
+   "file": "plugins/superstack/tools/watchdog.py",
+   "find": "    with atomic_store.Lock(путь):\n        atomic_store.записать(путь, текст)",
+   "replace": "    tmp = путь.with_suffix(путь.suffix + \".tmp\")\n    tmp.write_text(текст, encoding=\"utf-8\")\n    tmp.replace(путь)",
+   "why": "сторож снова кладёт своё состояние собственной копией записи: имя временного соседа общее на всех, режим по umask вместо приватного и никакого замка — а он по замыслу живёт РЯДОМ с другими процессами"
+  },
+  {
+   "id": "panel.snapshot-written-without-the-lock",
+   "file": "plugins/superstack/tools/live_panel.py",
+   "find": "    with atomic_store.Lock(p):\n        # Снимок едет с фактами: файл, открытый без сервера, обязан показывать",
+   "replace": "    if True:\n        # Снимок едет с фактами: файл, открытый без сервера, обязан показывать",
+   "why": "снят замок с цикла «прочитал страницу, вписал снимок, записал»: пересборка страницы, случившаяся между чтением и записью, затирается прочитанной ДО неё — панель остаётся на прежней версии и выглядит свежей, оба вызова возвращают успех"
+  },
+  {
+   "id": "learn.confirmation-counted-without-the-lock",
+   "file": "plugins/superstack/tools/learn.py",
+   "find": "        with atomic_store.Lock(path):\n            old = json.loads(path.read_text(encoding=\"utf-8\"))",
+   "replace": "        if True:\n            old = json.loads(path.read_text(encoding=\"utf-8\"))",
+   "why": "снят замок с цикла «прочитал счётчик, прибавил, записал»: два подагента с одной находкой читают одно число и пишут одно и то же «плюс один» — одно подтверждение исчезает молча, а счётчик подтверждений решает маршрут находки"
+  },
+  {
+   "id": "guard.write-scan-sees-nothing",
+   "file": "tests/test_single_writer.py",
+   "find": "    return sorted(PKG.rglob(\"*.py\"))",
+   "replace": "    return [PKG / \"tools\" / \"atomic_store.py\"]",
+   "why": "проверка «второго способа записи нет» перестаёт видеть дерево: на пустом обзоре она отвечает «нарушений нет» — самый дешёвый способ получить зелёное, не посмотрев никуда"
+  },
+  {
+   "id": "route.tier-ignores-task",
+   "file": "plugins/superstack/tools/model_route.py",
+   "find": "    if дорого:\n        return {\"tier\": ДОРОГОЙ, \"signals\": дорого,",
+   "replace": "    if False:\n        return {\"tier\": ДОРОГОЙ, \"signals\": дорого,",
+   "why": "признаки дорогого перестают влиять на выбор: переписывание схемы данных и повторный заход уезжают тем же тиром, что правка на две строки — то есть маршрутизация возвращается к жёсткой раскладке под новым именем"
+  },
+  {
+   "id": "route.adr-blind",
+   "file": "plugins/superstack/tools/model_route.py",
+   "find": "    правят = handoff.governing_adrs(решения, зона)",
+   "replace": "    правят = []",
+   "why": "решение, правящее зоной задачи, перестаёт удорожать её: работа внутри принятой архитектуры идёт той же моделью, что переименование, а ошибка там отменяет решение, а не строчку"
+  },
+  {
+   "id": "route.retry-not-counted",
+   "file": "plugins/superstack/tools/model_route.py",
+   "find": "    return число + 1, f\"счётчик проверки: подряд идущих провалов {число}\"",
+   "replace": "    return 1, f\"счётчик проверки: подряд идущих провалов {число}\"",
+   "why": "повторный заход выглядит первым: провалившаяся задача уходит на второй круг той же моделью той же дорогой и приходит туда же"
+  },
+  {
+   "id": "route.data-zone-blind",
+   "file": "plugins/superstack/tools/model_route.py",
+   "find": "    данные = data_rollback.touches_data(зона)",
+   "replace": "    данные = []",
+   "why": "зона потери данных перестаёт отличаться от кода: миграция в одном файле проходит как механическая правка, а у данных отката нет ни у кого"
+  },
+  {
+   "id": "route.mechanical-anything",
+   "file": "plugins/superstack/tools/model_route.py",
+   "find": "    if len(зона) != 1 or зона[0].rstrip().endswith(\"/\"):",
+   "replace": "    if False:",
+   "why": "механической объявляется любая задача — каталог целиком и работа с требованиями уезжают на дешёвый тир: экономия ровно там, где она стоит переделки"
+  },
+  {
+   "id": "route.reason-not-recorded",
+   "file": "plugins/superstack/tools/model_route.py",
+   "find": "        progress.save(путь, состояние, когда)",
+   "replace": "        pass",
+   "why": "выбор тира нигде не записан: проверить потом, окупился ли дорогой тир, нечем — остаётся только верить на слово"
+  },
+  {
+   "id": "route.delivery-always-ok",
+   "file": "plugins/superstack/tools/model_route.py",
+   "find": "    if маршрутизация is False:",
+   "replace": "    if False:",
+   "why": "ниже порога версии хоста инструмент молчит и докладывает успех: дорогая задача тихо исполняется моделью сессии, а отчёт утверждает обратное"
+  },
+  {
+   "id": "payoff.signal-groups-collapse",
+   "file": "plugins/superstack/tools/tier_payoff.py",
+   "find": "    свои = [з for з in записи if признак in _признаки(з)]",
+   "replace": "    свои = list(записи)",
+   "why": "все признаки получают одни и те же числа: окупившийся и неокупившийся становятся неразличимы, и ответ на единственный вопрос инструмента — за что мы платим дороже — превращается в случайный"
+  },
+  {
+   "id": "payoff.threshold-drops",
+   "file": "plugins/superstack/tools/tier_payoff.py",
+   "find": "ПОРОГ_ЗАПИСЕЙ = 10",
+   "replace": "ПОРОГ_ЗАПИСЕЙ = 2",
+   "why": "вывод объявляется по двум записям: догадка выдаётся за измерение ровно там, где мерить нечем, и владелец выключает признак по шуму"
+  },
+  {
+   "id": "payoff.tool-decides-instead-of-the-owner",
+   "file": "plugins/superstack/tools/tier_payoff.py",
+   "find": "            \"решает\": ВЛАДЕЛЕЦ}",
+   "replace": "            \"решает\": \"признак выключен инструментом\"}",
+   "why": "измеритель объявляет признак выключенным: решение, которое принадлежит владельцу, принимает скрипт, и следующий выбор меняется без его ведома"
+  },
+  {
+   "id": "payoff.spend-from-nowhere",
+   "file": "plugins/superstack/tools/tier_payoff.py",
+   "find": "    замер = measure_run.measure(проект)",
+   "replace": "    замер = {\"status\": \"pass\", \"sessions\": [], \"total\": {}}",
+   "why": "цена перестаёт быть измеренной и становится собственной выдумкой инструмента — вторым источником расхода, который разойдётся с первым ровно тогда, когда нужен точный ответ"
+  },
+  {
+   "id": "payoff.no-logs-read-as-zero",
+   "file": "plugins/superstack/tools/tier_payoff.py",
+   "find": "        return _без_цен(f\"{РАСХОД_НЕ_ИЗМЕРЕН}: {замер['detail']}\")",
+   "replace": "        return {\"измерен\": True, \"почему\": \"расход ноль\", \"цены\": {}, \"без_цены\": 0, \"разнесено\": 0}",
+   "why": "отсутствие журнала сессий докладывается нулевым расходом: «нечего мерить» превращается в «ничего не потратили», и на этом нуле строится вывод об окупаемости"
+  },
+  {
+   "id": "payoff.every-attempt-looks-settled",
+   "file": "plugins/superstack/tools/tier_payoff.py",
+   "find": "        if з[\"attempt\"] < предел[з[\"task\"]]:",
+   "replace": "        if False:",
+   "why": "перезаходов не остаётся ни одного: любой дорогой признак выглядит окупившимся, и дорогой тир получает вечное оправдание"
+  },
+  {
+   "id": "sync.chopping-stays-flat",
+   "file": "tools/sync_public.py",
+   "find": "sorted(tests_dir.rglob(\"*.py\"))",
+   "replace": "sorted(tests_dir.glob(\"*.py\"))",
+   "why": "обход при разбиении литералов снова плоский, а осмотр остаётся рекурсивным: вложенный каталог тестов не разбивается, выкладка встаёт на литерале, который сама же обязана была разбить, и человек чинит это руками каждый релиз"
   }
  ]
 }

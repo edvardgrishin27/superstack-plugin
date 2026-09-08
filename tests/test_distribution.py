@@ -545,13 +545,18 @@ class TestVerifyGateHook(unittest.TestCase):
 
     # --- песочница ---------------------------------------------------------
 
-    #: Отпечаток дерева в подставной проверке. Контракт тот же, что у
-    #: настоящего `verify._tree_fingerprint`: строка, которая меняется вместе
-    #: с содержимым каталога проекта. Своя реализация — намеренно: тест
-    #: описывает КОНТРАКТ между хуком и проверкой, а не то, что покажет git
-    #: во временном каталоге на конкретной машине.
+    #: Отпечаток в подставной проверке. Контракт тот же, что у настоящего
+    #: `verify._reuse_fingerprint`: строка, которая меняется вместе с тем,
+    #: от чего прогон зависит. Своя реализация — намеренно: тест описывает
+    #: КОНТРАКТ между хуком и проверкой, а не то, что покажет git во
+    #: временном каталоге на конкретной машине.
+    #:
+    #: Имя тут несущее. Хук спрашивает ИМЕННО `_reuse_fingerprint` и не
+    #: откатывается на `_tree_fingerprint`: тот знает только дерево глазами
+    #: git и слеп к `.env.local`, от которого прогон зависит. Подставка с
+    #: прежним именем описывала бы контракт, которого больше нет.
     FINGERPRINT_SRC = (
-        "def _tree_fingerprint(project):\n"
+        "def _reuse_fingerprint(project):\n"
         "    import hashlib, os\n"
         "    from pathlib import Path\n"
         "    h = hashlib.sha256()\n"
@@ -945,6 +950,9 @@ class TestVerifyGateHook(unittest.TestCase):
         модуль = hook.загрузить_verify(real)
         self.assertIsNotNone(модуль, f"настоящий {real.name} не загрузился — "
                                      "отпечаток дерева хуку взять неоткуда")
+        self.assertTrue(callable(getattr(модуль, "_reuse_fingerprint", None)),
+                        "загруженный verify.py не отдаёт отпечаток, по которому "
+                        "решают, переиспользовать ли зелёное")
         self.assertTrue(callable(getattr(модуль, "_tree_fingerprint", None)),
                         "загруженный verify.py не отдаёт отпечаток дерева")
 
@@ -1403,9 +1411,28 @@ class TestSecondOpinionAgent(unittest.TestCase):
         rules = json.loads((at("rules", "discipline.rules.json")).read_text("utf-8"))
         self.assertIn("ass.second-opinion-degraded", [r["id"] for r in rules["rules"]])
 
-    def test_credits_the_source(self):
-        self.assertIn("fable-advisor", self.text)
-        self.assertIn("MIT", self.text)
+    def test_does_not_say_where_the_pattern_came_from(self):
+        """Обратное прежнему утверждению — и это исправление, а не смена вкуса.
+
+        Здесь стояла проверка, ТРЕБОВАВШАЯ назвать чужой репозиторий и его
+        лицензию. Она держала в поставке строку «Паттерн взят из <ссылка>
+        (MIT, автор)», и та уехала в публичное дерево вместе с версией 0.3.x.
+        Владелец запретил такие упоминания; тест, требовавший обратного,
+        делал запрет невыполнимым — пока он был зелёным, снести строку
+        значило уронить набор.
+
+        Форму проверки держит `sync_public.заимствования`: слово о
+        заимствовании рядом со ссылкой на чужой репозиторий. Здесь — только
+        этот файл, потому что именно в нём такая строка и жила.
+        """
+        sys.path.insert(0, str(REPO / "tools"))
+        import importlib.util
+        spec = importlib.util.spec_from_file_location(
+            "sp_attr", REPO / "tools" / "sync_public.py")
+        sp = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(sp)
+        self.assertEqual(sp.заимствования(self.text), [],
+                         "в поставляемом агенте сказано, откуда взят приём")
 
 
 if __name__ == "__main__":

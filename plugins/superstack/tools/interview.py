@@ -42,6 +42,12 @@ import os
 import sys
 from pathlib import Path
 
+# Запись — общим модулем: уникальный временный сосед, атомарная замена и режим
+# доступа, который от записи не расширяется. Каталог скрипта при импорте из
+# теста в sys.path не попадает, поэтому добавляется явно — как у соседей.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import atomic_store  # noqa: E402
+
 ФАЙЛ = ".superstack/interview.json"
 
 УЛАЖЕНО = "улажено"
@@ -67,12 +73,11 @@ def load(root: Path) -> tuple:
 
 
 def save(root: Path, d: dict) -> None:
-    p = _путь(root)
-    p.parent.mkdir(parents=True, exist_ok=True)
-    tmp = p.with_suffix(".tmp")
-    tmp.write_text(json.dumps(d, ensure_ascii=False, indent=1) + "\n",
-                   encoding="utf-8")
-    os.replace(tmp, p)
+    """Запись общим модулем. Отступ и перевод строки в конце — как были:
+    дерево интервью читает человек, и переформатировать файл заодно с
+    починкой записи значит выдать шум за правку."""
+    atomic_store.записать(
+        _путь(root), json.dumps(d, ensure_ascii=False, indent=1) + "\n")
 
 
 def _улажен(узел: dict) -> bool:

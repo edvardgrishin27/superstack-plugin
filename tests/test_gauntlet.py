@@ -233,7 +233,9 @@ class TestMutationGateReallyRunsTheSuite(FakePlugin):
         self.assertEqual(r["status"], "pass", r)
         self.assertEqual(r.get("вне_дерева"), ["corpus.only"], r)
         self.assertIn("не проверялись", r["detail"])
-        self.assertIn("все 1 мутаций пойманы", r["detail"])
+        # Четыре числа вместо одного громкого: «все пойманы» не различало
+        # выполненный прогон и несостоявшийся.
+        self.assertIn("выполнено 1, поймано 1", r["detail"])
 
 
 class TestNamedMutationsAreASubsetNotTheBar(FakePlugin):

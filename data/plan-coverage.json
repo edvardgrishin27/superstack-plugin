@@ -41,6 +41,213 @@
    }
   },
   {
+   "id": "L1.scope-precedence",
+   "layer": "L1 конституция",
+   "mechanism": "приоритет областей настроек применяется так, как его применяет хост: направление названо данными, а не следует из побочного свойства dict.update",
+   "evidence": {
+    "file": "plugins/superstack/tools/probe/collect.py",
+    "contains": "SCOPES_STRONGEST_FIRST = ("
+   }
+  },
+  {
+   "id": "L1.managed-wins",
+   "layer": "L1 конституция",
+   "mechanism": "управляемая политика сильнее пользовательской: про плагин решает ПЕРВАЯ назвавшая его область, а не последняя",
+   "evidence": {
+    "file": "plugins/superstack/tools/probe/collect.py",
+    "contains": "def plugin_decisions"
+   }
+  },
+  {
+   "id": "L1.plugin-decider-named",
+   "layer": "L1 конституция",
+   "mechanism": "в фактах названа область, решившая включённость плагина, и перечислены перекрытые ею решения",
+   "evidence": {
+    "file": "plugins/superstack/tools/probe/collect.py",
+    "contains": "put(\"cc.plugins.by_scope\""
+   }
+  },
+  {
+   "id": "L1.managed-permissions",
+   "layer": "L1 конституция",
+   "mechanism": "права из управляемой политики участвуют в фактах: разделы permissions собираются по всем областям, а не по одной пользовательской",
+   "evidence": {
+    "file": "plugins/superstack/tools/probe/collect.py",
+    "contains": "put(\"cc.permissions.by_scope\""
+   }
+  },
+  {
+   "id": "L1.settings-scope-unread",
+   "layer": "L1 конституция",
+   "mechanism": "существующая, но непрочитанная область настроек названа поимённо, а не сведена к пустоте",
+   "evidence": {
+    "file": "plugins/superstack/tools/probe/collect.py",
+    "contains": "put(\"cc.settings_scopes_unreadable\""
+   }
+  },
+  {
+   "id": "L1.scope-denied-is-not-absent",
+   "layer": "L1 конституция",
+   "mechanism": "область, в доступе к которой отказано, не объявляется отсутствующей: закрытый каталог управляемой политики отличается от её отсутствия",
+   "evidence": {
+    "file": "plugins/superstack/tools/probe/collect.py",
+    "contains": "def _scope_state"
+   }
+  },
+  {
+   "id": "L1.secret-scan-denied-named",
+   "layer": "L1 конституция",
+   "mechanism": "цель обхода секретов, закрытая правами, названа непрочитанной с причиной «не пустили», а не выпадает из обхода молча",
+   "evidence": {
+    "file": "plugins/superstack/tools/probe/collect.py",
+    "contains": "\"why\": НЕ_ПУСТИЛИ"
+   }
+  },
+  {
+   "id": "L1.scan-files-denied-apart",
+   "layer": "L1 конституция",
+   "mechanism": "список просмотренных файлов настроек не смешивает «нечего смотреть» и «не пустили»: закрытая правами область названа отдельным фактом",
+   "evidence": {
+    "file": "plugins/superstack/tools/probe/collect.py",
+    "contains": "put(\"sec.scan_denied\""
+   }
+  },
+  {
+   "id": "L1.active-config-dir",
+   "layer": "L1 конституция",
+   "mechanism": "активный профиль настроек определяется так же, как его определяет хост: CLAUDE_CONFIG_DIR уважается, а не подменяется домашним каталогом",
+   "evidence": {
+    "file": "plugins/superstack/tools/probe/collect.py",
+    "contains": "os.environ.get(\"CLAUDE_CONFIG_DIR\")"
+   }
+  },
+  {
+   "id": "L1.config-dir-named",
+   "layer": "L1 конституция",
+   "mechanism": "путь профиля, из которого фактически читали, назван в фактах: человек видит, о каких настройках доклад",
+   "evidence": {
+    "file": "plugins/superstack/tools/probe/collect.py",
+    "contains": "put(\"cc.config_dir\""
+   }
+  },
+  {
+   "id": "L1.doctor-reads-the-active-profile",
+   "layer": "L1 конституция",
+   "mechanism": "доктор берёт каталог настроек у единственного резолвера, а не собирает его литералом: на машине с назначенным профилем весь доклад — разрешения, хуки, скиллы — про ТОТ каталог, который читает хост",
+   "evidence": {
+    "file": "plugins/superstack/tools/doctor.py",
+    "contains": "CLAUDE, CLAUDE_SOURCE = _collect_module().config_dir()"
+   }
+  },
+  {
+   "id": "L1.doctor-global-config-follows-the-profile",
+   "layer": "L1 конституция",
+   "mechanism": "адрес общего конфига хоста доктор берёт у того же резолвера: имя каталога и MCP-серверы приезжают из одного профиля, а не из двух разных",
+   "evidence": {
+    "file": "plugins/superstack/tools/doctor.py",
+    "contains": "return _collect().global_config_path()"
+   }
+  },
+  {
+   "id": "L1.doctor-names-the-profile-it-read",
+   "layer": "L1 конституция",
+   "mechanism": "прочитанный профиль и источник его пути названы человеку в докладе доктора: «в твоём профиле пусто» и «в чужом профиле пусто» — разные утверждения",
+   "evidence": {
+    "file": "plugins/superstack/tools/doctor.py",
+    "contains": "\"config_dir_source\": CLAUDE_SOURCE,"
+   }
+  },
+  {
+   "id": "L1.what-reads-the-active-profile",
+   "layer": "L1 конституция",
+   "mechanism": "ответ на «где я» берёт каталог настроек у того же резолвера, что и сборщик фактов: второй разбор переменной профиля разошёлся бы с первым молча",
+   "evidence": {
+    "file": "plugins/superstack/tools/what.py",
+    "contains": "CLAUDE, CLAUDE_SOURCE = _проба().config_dir()"
+   }
+  },
+  {
+   "id": "L1.what-names-the-profile-in-every-answer",
+   "layer": "L1 конституция",
+   "mechanism": "профиль и источник его пути стоят в КАЖДОМ ответе на «где я», а не только в одной ветке: состояние без имени профиля нечем перепроверить",
+   "evidence": {
+    "file": "plugins/superstack/tools/what.py",
+    "contains": "итог[\"config_dir_source\"] = CLAUDE_SOURCE"
+   }
+  },
+  {
+   "id": "L1.what-brake-is-read-where-it-is-written",
+   "layer": "L1 конституция",
+   "mechanism": "флаг паузы ищется по домашнему адресу — там, куда его кладёт сам тормоз, — а не в назначенном профиле: тормоз, который ищут не там, не «не найден», а не работает",
+   "evidence": {
+    "file": "plugins/superstack/tools/what.py",
+    "contains": "STATE = HOME / \".claude\" / \"superstack\""
+   }
+  },
+  {
+   "id": "L1.apply-writes-into-the-active-profile",
+   "layer": "L1 конституция",
+   "mechanism": "единственный инструмент, который ПИШЕТ настройки, правит тот каталог, про который собран диагноз: путь берётся у резолвера, а не у домашнего каталога",
+   "evidence": {
+    "file": "plugins/superstack/tools/apply.py",
+    "contains": "CLAUDE, CLAUDE_SOURCE = _проба().config_dir()"
+   }
+  },
+  {
+   "id": "L1.backup-lives-in-the-profile-it-copies",
+   "layer": "L1 конституция",
+   "mechanism": "копия и карантин лежат в том же профиле, который правится: копия в одном профиле и правка в другом — потеря данных с успешным кодом возврата",
+   "evidence": {
+    "file": "plugins/superstack/tools/apply.py",
+    "contains": "BACKUPS = CLAUDE / \"superstack\" / \"backups\""
+   }
+  },
+  {
+   "id": "L1.apply-brake-is-read-where-it-is-written",
+   "layer": "L1 конституция",
+   "mechanism": "тормоз пишущего инструмента читается по домашнему адресу, куда его кладёт tools/pause.py, и за назначенным профилем не едет",
+   "evidence": {
+    "file": "plugins/superstack/tools/apply.py",
+    "contains": "STATE = HOME / \".claude\" / \"superstack\""
+   }
+  },
+  {
+   "id": "L1.apply-names-the-profile-before-it-writes",
+   "layer": "L1 конституция",
+   "mechanism": "профиль и источник его пути названы человеку ДО первого изменения и рядом с копией: инструмент, который пишет, обязан сказать куда",
+   "evidence": {
+    "file": "plugins/superstack/tools/apply.py",
+    "contains": "def профиль_строкой"
+   }
+  },
+  {
+   "id": "L1.global-config-follows-profile",
+   "layer": "L1 конституция",
+   "mechanism": "общий конфиг хоста ищется рядом с активным профилем, а не только в домашнем каталоге",
+   "evidence": {
+    "file": "plugins/superstack/tools/probe/collect.py",
+    "contains": "def global_config_path"
+   }
+  },
+  {
+   "id": "L1.mcp-scopes",
+   "layer": "L1 конституция",
+   "mechanism": "области MCP сводятся все три: пользовательская, область этого проекта внутри общего конфига и .mcp.json команды",
+   "evidence": {
+    "file": "plugins/superstack/tools/probe/collect.py",
+    "contains": "def mcp_scopes"
+   }
+  },
+  {
+   "id": "L1.mcp-scope-unread",
+   "layer": "L1 конституция",
+   "mechanism": "недостижимая область MCP названа поимённо непрочитанной, а не сведена к пустоте",
+   "evidence": {
+    "file": "plugins/superstack/tools/probe/collect.py",
+    "contains": "put(\"mcp.scopes_unreadable\""
+   }
+  },
+  {
    "id": "L1.default-mode",
    "layer": "L1 конституция",
    "mechanism": "правило: режим прав задан явно, а не унаследован от вендора",
@@ -144,8 +351,26 @@
    "layer": "L5 гарантии",
    "mechanism": "отсутствие тестов — не зелёный: иначе гейт мотивирует удалять тесты",
    "evidence": {
-    "file": "plugins/superstack/tools/verify.py",
+    "file": "plugins/superstack/tools/verify_report.py",
     "contains": "EMPTY_MARKERS"
+   }
+  },
+  {
+   "id": "L5.runner-report-outweighs-text",
+   "layer": "L5 гарантии",
+   "mechanism": "вердикт о наборе читается по отчёту, который печатает сам прогонщик, а не по подстроке в чужом тексте: набор, о падениях которого прогонщик сообщил, остаётся провалом при любых словах в теле теста",
+   "evidence": {
+    "file": "plugins/superstack/tools/verify_report.py",
+    "contains": "def _read_the_run"
+   }
+  },
+  {
+   "id": "L5.unreadable-report-is-not-green",
+   "layer": "L5 гарантии",
+   "mechanism": "«отчёт прогонщика не разобран» — отдельное состояние: не пусто и не зелено, вердикт гаснет, а не выдаётся за доказательство",
+   "evidence": {
+    "file": "plugins/superstack/tools/verify_report.py",
+    "contains": "REPORT_UNCLEAR = \"unclear\""
    }
   },
   {
@@ -200,6 +425,15 @@
    "evidence": {
     "file": "tests/mutations.json",
     "contains": "\"mutations\""
+   }
+  },
+  {
+   "id": "L5.suite-detached-from-real-profile",
+   "layer": "L5 гарантии",
+   "mechanism": "набор отвязан от настоящего профиля человека: указатель на него снимается на входе в прогон, иначе подмена HOME перестаёт что-либо гарантировать",
+   "evidence": {
+    "file": "tests/conftest.py",
+    "contains": "def _отвязать_профиль"
    }
   },
   {
@@ -333,7 +567,7 @@
    "layer": "установщик",
    "mechanism": "секрет не копируется в бэкап: иначе починка удваивает утечку",
    "evidence": {
-    "file": "plugins/superstack/tools/apply.py",
+    "file": "plugins/superstack/tools/settings_copy.py",
     "contains": "def redact"
    }
   },
@@ -468,7 +702,7 @@
    "layer": "L4 исполнение",
    "mechanism": "лимит попыток с явной сдачей: цикл ревью-фикс за ночь сжигает подписку",
    "evidence": {
-    "file": "plugins/superstack/tools/verify.py",
+    "file": "plugins/superstack/tools/verify_attempts.py",
     "contains": "MAX_ATTEMPTS"
    }
   },
@@ -650,6 +884,24 @@
    "evidence": {
     "file": "plugins/superstack/tools/gates.py",
     "contains": "def drift"
+   }
+  },
+  {
+   "id": "L5.gate-g4-blind-complete",
+   "layer": "L5 гарантии",
+   "mechanism": "требование, объявленное готовым, обязано иметь вердикт независимой проверки: неоценённое — расхождение, а не тихий пропуск",
+   "evidence": {
+    "file": "plugins/superstack/tools/gates.py",
+    "contains": "if r[\"status\"] != mf.DONE:"
+   }
+  },
+  {
+   "id": "L5.gate-g4-blind-unparsed",
+   "layer": "L5 гарантии",
+   "mechanism": "неразобранный результат приёмки (запись без id, повтор id, вердикт вне набора, не список) гасит гейт в «не проверено», а не выбрасывается молча",
+   "evidence": {
+    "file": "plugins/superstack/tools/gates.py",
+    "contains": "def blind_unparsed"
    }
   },
   {
@@ -941,6 +1193,69 @@
    }
   },
   {
+   "id": "L5.project-run-that-did-not-happen-has-its-own-code",
+   "layer": "L5 гарантии",
+   "mechanism": "прогон тестов человека, не уложившийся в отведённое время, и команда тестов, которая не запустилась, отвечают РАЗНЫМИ кодами (124 и 127) — человеку называется та причина, которая была, а не одна на обе аварии",
+   "evidence": {
+    "file": "plugins/superstack/tools/prove_tests.py",
+    "contains": "return 124, f\"не завершилось за {TIMEOUT} с\""
+   }
+  },
+  {
+   "id": "L5.project-verdict-is-three-way",
+   "layer": "L5 гарантии",
+   "mechanism": "исход поломки в тестах человека трёхзначен: поймана, выжила и НЕ СОСТОЯЛСЯ ПРОГОН — несостоявшийся прогон перестаёт числиться пойманной поломкой",
+   "evidence": {
+    "file": "plugins/superstack/tools/prove_tests.py",
+    "contains": "исход = \"неизвестно\""
+   }
+  },
+  {
+   "id": "L5.project-inconclusive-is-not-a-pass",
+   "layer": "L5 гарантии",
+   "mechanism": "при ненулевом числе несостоявшихся прогонов инструмент отдаёт «измерить не смог», а не чистый успех: «не проверяли» не равно «тесты держат»",
+   "evidence": {
+    "file": "plugins/superstack/tools/prove_tests.py",
+    "contains": "if неясные:"
+   }
+  },
+  {
+   "id": "L5.project-green-baseline",
+   "layer": "L5 гарантии",
+   "mechanism": "набор проекта гоняется как есть ДО первой подмены: красный или несостоявшийся базовый прогон делает все исходы бессмысленными и называется причиной, а не «всё поймано»",
+   "evidence": {
+    "file": "plugins/superstack/tools/prove_tests.py",
+    "contains": "def _baseline"
+   }
+  },
+  {
+   "id": "L5.project-four-numbers",
+   "layer": "L5 гарантии",
+   "mechanism": "человеку называются четыре числа — зарегистрировано, выполнено, поймано, неизвестно — вместо одного громкого",
+   "evidence": {
+    "file": "plugins/superstack/tools/prove_tests.py",
+    "contains": "f\"зарегистрировано {len(muts)}, выполнено {выполнено}, \""
+   }
+  },
+  {
+   "id": "L5.project-stale-bytecode-cannot-fake-a-survivor",
+   "layer": "L5 гарантии",
+   "mechanism": "кэш байткода в дереве проекта сносится ПЕРЕД КАЖДЫМ прогоном, а не один раз на запуск: подмена того же размера в ту же секунду неотличима для инвалидации, и без чистки прогон шёл бы по старому .pyc — поломка объявлялась бы ВЫЖИВШЕЙ, ни разу не исполнившись, то есть чужие тесты обвинялись бы в том, чего не было",
+   "evidence": {
+    "file": "plugins/superstack/tools/prove_tests.py",
+    "contains": "purge_bytecode(root)"
+   }
+  },
+  {
+   "id": "L5.project-runs-write-no-bytecode",
+   "layer": "L5 гарантии",
+   "mechanism": "прогоны тестов проекта идут в окружении, где байткод не пишется вовсе: то, чего не записали, не устареет под следующей подменой и не останется в дереве человека после нас",
+   "evidence": {
+    "file": "plugins/superstack/tools/prove_tests.py",
+    "contains": "\"PYTHONDONTWRITEBYTECODE\": \"1\""
+   }
+  },
+  {
    "id": "L3.basis-vs-reason",
    "layer": "L3 проектирование",
    "mechanism": "основание требования и причина статуса — разные поля; смена статуса не стирает смысл строки",
@@ -1210,10 +1525,10 @@
   {
    "id": "BUILD.state-lock",
    "layer": "L4 исполнение",
-   "mechanism": "замок на файл состояния держится всю операцию «прочитал, изменил, записал»: волна из двух помощников — два процесса, и без него второй затирает отметку первого молча, с кодом возврата 0",
+   "mechanism": "замок держится всю операцию «прочитал, изменил, записал» и живёт ОДИН на все инструменты, которые пишут одни и те же файлы: волна из двух помощников — два процесса, и без замка второй затирает правку первого молча, с кодом возврата 0",
    "evidence": {
-    "file": "plugins/superstack/tools/progress.py",
-    "contains": "class _Lock:"
+    "file": "plugins/superstack/tools/atomic_store.py",
+    "contains": "class Lock:"
    }
   },
   {
@@ -1491,7 +1806,7 @@
    "layer": "L5 гарантии",
    "mechanism": "хук PreToolUse останавливает запись кода: нет падающего теста — нет правки",
    "evidence": {
-    "file": "plugins/superstack/tools/apply.py",
+    "file": "plugins/superstack/tools/base_kit.py",
     "contains": "base.tdd-gate"
    }
   },
@@ -1988,6 +2303,33 @@
    "evidence": {
     "file": "tools/sync_public.py",
     "contains": "ВЕРСИЯ_В_ВИТРИНЕ = ("
+   }
+  },
+  {
+   "id": "DIST.every-showcase-number-is-measured",
+   "layer": "дистрибуция",
+   "mechanism": "выкладка спрашивает не «сколько чисел я переписал», а «какое число осталось непереписанным»: любое число о мутациях, до которого подстановки не дотянулись, останавливает публикацию. Строку сравнения с чужими инструментами не переписывал никто — и опубликованная страница утверждала 577 в шапке и 576 в продающей таблице, со ссылкой на файл, где можно проверить",
+   "evidence": {
+    "file": "tools/sync_public.py",
+    "contains": "чужие_числа_мутаций(t, nums[\"mutations\"])"
+   }
+  },
+  {
+   "id": "DIST.no-attribution-ships",
+   "layer": "дистрибуция",
+   "mechanism": "в публичное дерево не уезжает утверждение о том, откуда взят приём, и ищется это по ФОРМЕ — слово о заимствовании рядом со ссылкой на чужой репозиторий, — а не по перечню имён. Перечень отвечает только про то, что вспомнили: он уже дал ноль находок на дереве, где такая строка жила с версии 0.3.x. Источники ФАКТОВ (CVE, документация хоста, чужой багрепорт) под правило не попадают: они обосновывают проверку, а не выдают происхождение приёма",
+   "evidence": {
+    "file": "tools/sync_public.py",
+    "contains": "for фраза in заимствования(text):"
+   }
+  },
+  {
+   "id": "DIST.chopping-reaches-nested-tests",
+   "layer": "дистрибуция",
+   "mechanism": "разбиение длинных литералов и осмотр перед выкладкой ходят по ОДНОЙ области — рекурсивно по всему дереву тестов. Обход был плоским, а осмотр рекурсивным; пока тесты лежали одной папкой, разница ничего не значила, а в день появления tests/external/ разбиение перестало до него доходить и выкладка встала на литерале, который сама же должна была разбить",
+   "evidence": {
+    "file": "tools/sync_public.py",
+    "contains": "sorted(tests_dir.rglob(\"*.py\"))"
    }
   },
   {
@@ -2612,6 +2954,42 @@
    }
   },
   {
+   "id": "L5.blind-name-in-any-form",
+   "layer": "L5 гарантии",
+   "mechanism": "имя файла в изменениях разбирается во всех формах, которыми его печатает git — в кавычках, восьмеричными escape, с пробелом и кавычкой внутри: иначе кириллическое имя не опознаётся, и текст спеки приезжает судье под именем соседнего файла",
+   "evidence": {
+    "file": "plugins/superstack/tools/blind_accept.py",
+    "contains": "def unquote_name"
+   }
+  },
+  {
+   "id": "L5.blind-unparsed-boundary-blocks",
+   "layer": "L5 гарантии",
+   "mechanism": "неопознанная граница файла гасит сборку пакета: где кончается один файл, неизвестно — значит, вырезание пересказа нечем подтвердить, а молчаливое склеивание выглядит как успех",
+   "evidence": {
+    "file": "plugins/superstack/tools/blind_accept.py",
+    "contains": "if packet[\"unparsed\"]:"
+   }
+  },
+  {
+   "id": "L5.blind-rename-checks-both-sides",
+   "layer": "L5 гарантии",
+   "mechanism": "переименование проверяется по обеим сторонам заголовка: спека, переехавшая под нейтральным именем, остаётся пересказом просьбы",
+   "evidence": {
+    "file": "plugins/superstack/tools/blind_accept.py",
+    "contains": "is_retelling(было) or is_retelling(стало)"
+   }
+  },
+  {
+   "id": "L5.blind-diff-names-as-is",
+   "layer": "L5 гарантии",
+   "mechanism": "фаза приёмки собирает изменения с отключённым кодированием имён — имя файла приходит как есть, а не восьмеричными escape",
+   "evidence": {
+    "file": "plugins/superstack/skills/go/phases/6-приёмка.md",
+    "contains": "core.quotepath=false"
+   }
+  },
+  {
    "id": "UX.design-contrast-names-the-fix",
    "layer": "интерфейс",
    "mechanism": "отказ по контрасту объясняет, что это читаемость, и называет шаг — править в холсте, а не в коде, иначе упрёшься во второй отказ",
@@ -2634,7 +3012,7 @@
    "layer": "L4 исполнение",
    "mechanism": "серия попыток считается по паре (проект, признак поломки): сменилась поломка — счёт начинается заново, а не наследует чужую серию",
    "evidence": {
-    "file": "plugins/superstack/tools/verify.py",
+    "file": "plugins/superstack/tools/verify_attempts.py",
     "contains": "if series.get(\"sig\") != signature:"
    }
   },
@@ -2643,7 +3021,7 @@
    "layer": "L4 исполнение",
    "mechanism": "повтор на неизменившемся дереве не тратит попытку: один и тот же красный прогон спрашивают трое — фаза, планка и гейт закрытия хода",
    "evidence": {
-    "file": "plugins/superstack/tools/verify.py",
+    "file": "plugins/superstack/tools/verify_attempts.py",
     "contains": "def _tree_fingerprint(project: Path)"
    }
   },
@@ -2652,7 +3030,7 @@
    "layer": "L4 исполнение",
    "mechanism": "отпечаток дерева пропускает кэши, которые проверка создаёт сама: иначе первый же прогон менял бы отпечаток и дедуп не срабатывал бы никогда",
    "evidence": {
-    "file": "plugins/superstack/tools/verify.py",
+    "file": "plugins/superstack/tools/verify_attempts.py",
     "contains": "_FINGERPRINT_SKIP = {"
    }
   },
@@ -2870,7 +3248,7 @@
    "layer": "дистрибуция",
    "mechanism": "замок на файл хода стройки берётся вызовом той платформы, где он взят: там, где POSIX-запирания нет, работает запирание области файла, а не падение инструмента, которым пишется каждый шаг волны; замка не досталось — сказано вслух один раз, а не молча",
    "evidence": {
-    "file": "plugins/superstack/tools/progress.py",
+    "file": "plugins/superstack/tools/atomic_store.py",
     "contains": "msvcrt.locking(fh.fileno(), msvcrt.LK_LOCK, _ОБЛАСТЬ_ЗАМКА)"
    }
   },
@@ -3150,7 +3528,7 @@
    "mechanism": "сборка панели перекрывает саму страницу, а не только снимок в ней: иначе панель, начатая прежней версией, остаётся на прежней версии навсегда и выглядит свежей",
    "evidence": {
     "file": "plugins/superstack/tools/live_panel.py",
-    "contains": "_write_atomically(p, _with_snapshot(\n        _page(), with_facts(read_state(run_dir), run_dir)))"
+    "contains": "_page(), with_facts(read_state(run_dir), run_dir)))"
    }
   },
   {
@@ -3187,6 +3565,619 @@
    "evidence": {
     "file": "README.md",
     "contains": "<img src=\"assets/panel-ru.jpg\""
+   }
+  },
+  {
+   "id": "BAR.mutation-verdict-is-three-way",
+   "layer": "планка",
+   "mechanism": "исход поломки трёхзначен: поймана, выжила и НЕ СОСТОЯЛСЯ ПРОГОН — таймаут и незапустившийся процесс перестают числиться пойманной поломкой",
+   "evidence": {
+    "file": "tools/gauntlet.py",
+    "contains": "исход = \"inconclusive\""
+   }
+  },
+  {
+   "id": "BAR.inconclusive-is-not-a-pass",
+   "layer": "планка",
+   "mechanism": "ворота мутаций при ненулевом числе несостоявшихся прогонов отдают «не смог проверить», а не чистый pass",
+   "evidence": {
+    "file": "tools/gauntlet.py",
+    "contains": "if неясные:"
+   }
+  },
+  {
+   "id": "BAR.mutations-need-a-green-baseline",
+   "layer": "планка",
+   "mechanism": "перед первой поломкой набор обязан быть зелёным: на красном базовом прогоне все исходы бессмысленны и объявляются неизвестными с названной причиной",
+   "evidence": {
+    "file": "tools/gauntlet.py",
+    "contains": "def _baseline"
+   }
+  },
+  {
+   "id": "BAR.four-numbers-not-one",
+   "layer": "планка",
+   "mechanism": "ворота мутаций называют четыре числа — зарегистрировано, выполнено, поймано, неизвестно — вместо одного громкого «все пойманы»",
+   "evidence": {
+    "file": "tools/gauntlet.py",
+    "contains": "поймано {поймано}, неизвестно {len(неясные)}"
+   }
+  },
+  {
+   "id": "L5.green-reuse-knows-more-than-the-tree",
+   "layer": "L5 гарантии",
+   "mechanism": "переиспользование зелёного считается ОТДЕЛЬНЫМ отпечатком, знающим больше дерева: объявленные проверки, версию проверяющего и объявленные входы — молчание Stop-хука это утверждение о равенстве двух состояний, а не догадка о том, что файлы не двигались",
+   "evidence": {
+    "file": "plugins/superstack/tools/verify.py",
+    "contains": "def _reuse_fingerprint(project: Path)"
+   }
+  },
+  {
+   "id": "L5.ignored-inputs-enter-the-fingerprint",
+   "layer": "L5 гарантии",
+   "mechanism": "файлы вида .env и .env.* попадают в отпечаток переиспользования, даже когда они в .gitignore: прогон от них зависит, а git о них молчит",
+   "evidence": {
+    "file": "plugins/superstack/tools/verify.py",
+    "contains": "_INPUT_GLOBS = (\".env\", \".env.*\")"
+   }
+  },
+  {
+   "id": "L5.project-declares-its-inputs",
+   "layer": "L5 гарантии",
+   "mechanism": "проект объявляет собственные входы файлом, и они входят в отпечаток наравне со своими по умолчанию",
+   "evidence": {
+    "file": "plugins/superstack/tools/verify.py",
+    "contains": "_INPUTS_DECL = \".superstack/verify-inputs.json\""
+   }
+  },
+  {
+   "id": "L5.inputs-enter-only-as-a-hash",
+   "layer": "L5 гарантии",
+   "mechanism": "содержимое входов попадает в отпечаток ТОЛЬКО хэшем: ни значения, ни фрагмента не выходит ни в отпечаток, ни в отчёт, ни в журнал — это секреты человека",
+   "evidence": {
+    "file": "plugins/superstack/tools/verify.py",
+    "contains": "цифра.update(кусок)"
+   }
+  },
+  {
+   "id": "L5.unknown-inputs-cancel-the-reuse",
+   "layer": "L5 гарантии",
+   "mechanism": "неизвестный набор входов гасит переиспользование зелёного явным правилом, а не совпадением: «не знаю» не имеет права читаться как «не менялось»",
+   "evidence": {
+    "file": "plugins/superstack/tools/verify.py",
+    "contains": "if входы is None:"
+   }
+  },
+  {
+   "id": "L5.verifier-version-invalidates-green",
+   "layer": "L5 гарантии",
+   "mechanism": "обновление плагина и правка самой проверки обесценивают прошлое зелёное: тот же набор, прогнанный другим кодом, — другое доказательство",
+   "evidence": {
+    "file": "plugins/superstack/tools/verify.py",
+    "contains": "def _verifier_identity()"
+   }
+  },
+  {
+   "id": "L5.verifier-identity-covers-every-part",
+   "layer": "L5 гарантии",
+   "mechanism": "подпись проверяющего покрывает каждый его файл, а не только гейт",
+   "evidence": {
+    "file": "plugins/superstack/tools/verify.py",
+    "contains": "_ЧАСТИ = (verify_attempts, verify_report)"
+   }
+  },
+  {
+   "id": "L5.check-commands-in-the-fingerprint",
+   "layer": "L5 гарантии",
+   "mechanism": "список и текст объявленных проверок входят в отпечаток: смена команды меняет утверждение о проекте, даже когда ни один отслеживаемый файл не тронут",
+   "evidence": {
+    "file": "plugins/superstack/tools/verify.py",
+    "contains": "def _declared_commands(project: Path)"
+   }
+  },
+  {
+   "id": "L5.gate-reuses-only-an-input-aware-green",
+   "layer": "L5 гарантии",
+   "mechanism": "Stop-хук молчит только по отпечатку, знающему входы: отката на отпечаток одного дерева нет — молчаливый откат вернул бы ровно тот отказ, ради которого отпечаток заведён",
+   "evidence": {
+    "file": "plugins/superstack/hooks/verify-gate.py",
+    "contains": "getattr(модуль, \"_reuse_fingerprint\", None)"
+   }
+  },
+  {
+   "id": "SAFE.undo-restores-own-fields",
+   "layer": "L5 гарантии",
+   "mechanism": "откат возвращает ПОЛЯ, записанные плагином, а не файл целиком: правка человека, сделанная после применения, переживает откат",
+   "evidence": {
+    "file": "plugins/superstack/tools/undo_fields.py",
+    "contains": "def _undo_journal"
+   }
+  },
+  {
+   "id": "SAFE.undo-yields-to-a-later-edit",
+   "layer": "L5 гарантии",
+   "mechanism": "поле возвращается, только если в нём всё ещё лежит записанное плагином: разошлось — чужое значение остаётся, и человеку названо, какое поле не откатили и почему",
+   "evidence": {
+    "file": "plugins/superstack/tools/undo_fields.py",
+    "contains": "def _restore_one_field"
+   }
+  },
+  {
+   "id": "SAFE.absence-is-a-state",
+   "layer": "установщик",
+   "mechanism": "отсутствие файла записывается в копию ДО первой записи: без этого созданный плагином файл нечем было убрать при откате",
+   "evidence": {
+    "file": "plugins/superstack/tools/apply.py",
+    "contains": "def _record_before_state"
+   }
+  },
+  {
+   "id": "SAFE.created-file-is-dropped-only-if-clean",
+   "layer": "L5 гарантии",
+   "mechanism": "файл, которого до применения не было, убирается только когда в нём не осталось чужого; осталось — файл остаётся, и это названо",
+   "evidence": {
+    "file": "plugins/superstack/tools/undo_fields.py",
+    "contains": "def _drop_created_file"
+   }
+  },
+  {
+   "id": "SAFE.backup-dir-is-exclusive",
+   "layer": "установщик",
+   "mechanism": "каталог копии создаётся эксклюзивно: два применения в одну секунду получают РАЗНЫЕ копии, а не пишут в один каталог поверх исходного состояния",
+   "evidence": {
+    "file": "plugins/superstack/tools/apply.py",
+    "contains": "def new_backup_dir"
+   }
+  },
+  {
+   "id": "SAFE.manifest-names-are-untrusted",
+   "layer": "L5 гарантии",
+   "mechanism": "имя файла из манифеста проверяется списком разрешённых и разбором пути: свой же JSON, написанный вчера, — внешние данные, и откат по нему не выходит за каталог настроек",
+   "evidence": {
+    "file": "plugins/superstack/tools/apply.py",
+    "contains": "def safe_target"
+   }
+  },
+  {
+   "id": "SAFE.journal-holds-no-secret",
+   "layer": "установщик",
+   "mechanism": "журнал полей вырезает секреты так же, как копия файла: иначе значение «было» удвоило бы утечку в manifest.json рядом с очищенной копией",
+   "evidence": {
+    "file": "plugins/superstack/tools/settings_copy.py",
+    "contains": "def _redact_journal"
+   }
+  },
+  {
+   "id": "SAFE.secret-not-restored-per-field",
+   "layer": "L5 гарантии",
+   "mechanism": "вырезанный секрет не восстанавливается НА УРОВНЕ ПОЛЯ: соседние поля того же файла при этом возвращаются, а живое значение не затирается меткой",
+   "evidence": {
+    "file": "plugins/superstack/tools/undo_fields.py",
+    "contains": "def _секрет_вырезан"
+   }
+  },
+  {
+   "id": "SAFE.unknown-copy-format-refuses",
+   "layer": "L5 гарантии",
+   "mechanism": "копия, записанная неизвестным форматом, не разбирается по догадке: откат отказывается и называет причину — молчаливая порча копии хуже отказа",
+   "evidence": {
+    "file": "plugins/superstack/tools/undo_fields.py",
+    "contains": "def _формат_копии"
+   }
+  },
+  {
+   "id": "SAFE.store-unique-temp",
+   "layer": "L5 гарантии",
+   "mechanism": "временный сосед целевого файла уникален для каждой записи: общее имя «.tmp» отбирали друг у друга два процесса, один падал «нет такого файла», и одна из двух записей пропадала — обе при этом завершались успешно",
+   "evidence": {
+    "file": "plugins/superstack/tools/atomic_store.py",
+    "contains": "tempfile.mkstemp(dir=str(path.parent),"
+   }
+  },
+  {
+   "id": "SAFE.store-keeps-the-file-mode",
+   "layer": "L5 гарантии",
+   "mechanism": "запись не расширяет прав: существовавший файл сохраняет свой режим, а новый файл настроек создаётся приватным, а не по umask — замена файла режима не наследует, и 0600 превращался в 0644",
+   "evidence": {
+    "file": "plugins/superstack/tools/atomic_store.py",
+    "contains": "return stat.S_IMODE(path.stat().st_mode)"
+   }
+  },
+  {
+   "id": "SAFE.store-lock-wait-is-bounded",
+   "layer": "L5 гарантии",
+   "mechanism": "у ожидания замка есть предел, и его превышение называется вслух: безусловное ожидание вешало запись навсегда — без ошибки, без вывода и без признака поломки",
+   "evidence": {
+    "file": "plugins/superstack/tools/atomic_store.py",
+    "contains": "if time.monotonic() >= срок:"
+   }
+  },
+  {
+   "id": "SAFE.settings-write-is-one-module",
+   "layer": "установщик",
+   "mechanism": "настройки человека пишутся общим модулем записи, а не своей копией в каждом инструменте: одинаковая ошибка, размноженная по файлам, чинится по одному файлу и возвращается в остальных",
+   "evidence": {
+    "file": "plugins/superstack/tools/apply.py",
+    "contains": "import atomic_store"
+   }
+  },
+  {
+   "id": "SAFE.one-way-to-write-in-the-package",
+   "layer": "L5 гарантии",
+   "mechanism": "в поставляемом пакете нет ВТОРОГО способа записи: временный сосед нигде не собирается вручную, файл кладётся на место только общим модулем — и проверяется это по ФОРМЕ кода (имя вида «.tmp», подмена файла, свой временный файл), а не по перечню имён инструментов: перечень отвечает только про то, что вспомнили, и следующего пропустит молча",
+   "evidence": {
+    "file": "tests/test_single_writer.py",
+    "contains": "def нарушения(файл: Path) -> list:"
+   },
+   "note": "Механизм ОДИН на весь пакет, а не по одному на инструмент: размноженная копипастом запись чинится по одному файлу и возвращается в остальных — ровно это и случилось, восемь копий пережили починку четырёх."
+  },
+  {
+   "id": "R.checkpoint-normalises-git-paths-once",
+   "layer": "прогон",
+   "mechanism": "пути из вывода git приводятся к папке снимка ОДИН раз и разбираются по разделителям NUL: status печатает их от корня хранилища, и снимок из подпапки искал product/product/.env — файла не находил, проверку на ключи молча пропускал и отчитывался «ключей нет»; печатная строка вдобавок приезжает в кавычках и восьмеричными последовательностями, как только в имени есть кириллица или пробел",
+   "evidence": {
+    "file": "plugins/superstack/tools/checkpoint.py",
+    "contains": "\"status\", \"--porcelain\", \"-z\", \"-uall\""
+   }
+  },
+  {
+   "id": "R.checkpoint-commit-stays-in-its-own-scope",
+   "layer": "прогон",
+   "mechanism": "снимок фиксирует только свою область, а не весь индекс: add ограничивался областью, а commit забирал индекс целиком — и уносил в снимок то, что человек подготовил к своему коммиту сам, оставляя его с пустым индексом",
+   "evidence": {
+    "file": "plugins/superstack/tools/checkpoint.py",
+    "contains": "\"commit\", \"-q\", \"--only\", \"-m\", ПРЕФИКС + этап"
+   }
+  },
+  {
+   "id": "R.checkpoint-stops-on-a-new-key-in-a-tracked-file",
+   "layer": "прогон",
+   "mechanism": "про ключ решается по ЗНАЧЕНИЮ, а не по факту отслеживания файла: ключ, впервые дописанный в давно отслеживаемый файл окружения, останавливает снимок — рабочий файл и прежние снимки не переписываются, выбор остаётся человеку",
+   "evidence": {
+    "file": "plugins/superstack/tools/checkpoint.py",
+    "contains": "новый_ключ = [н for н in находки if н[\"уже_в_снимках\"] and н[\"новых\"]]"
+   }
+  },
+  {
+   "id": "SAFE.one-decoding-for-config",
+   "layer": "L5 гарантии",
+   "mechanism": "сборщик фактов и копирование настроек читают файл ОДНИМ чтением: сборщик брал utf-8 и на JSON с BOM возвращал None — список секретов выходил ПУСТЫМ, а копирование читало utf-8-sig, видело то же содержимое целиком и вырезать в нём было «нечего», потому что находок «нет»; разошедшиеся кодировки — это два разных мнения о том, что лежит в файле, и решение принималось по более слепому из них",
+   "evidence": {
+    "file": "plugins/superstack/tools/probe/collect.py",
+    "contains": "CONFIG_ENCODING = \"utf-8-sig\""
+   }
+  },
+  {
+   "id": "SAFE.backup-scans-what-it-saves",
+   "layer": "L5 гарантии",
+   "mechanism": "копия очищается по СВЕЖЕМУ обходу того содержимого, которое сейчас ляжет в копию, а не по списку находок, собранному раньше и, возможно, другим чтением: пустой список означает «сканер ничего не увидел», а не «в файле ничего нет», и вывод из неудачи чужого разбора не имеет права решать, что вырезать",
+   "evidence": {
+    "file": "plugins/superstack/tools/settings_copy.py",
+    "contains": "for h in _свежие_находки(данные)"
+   }
+  },
+  {
+   "id": "SAFE.copy-text-is-checked-before-saving",
+   "layer": "L5 гарантии",
+   "mechanism": "перед сохранением проверяется САМ ТЕКСТ копии, а не только разобранная структура: обход по структуре не заглядывает в ИМЕНА полей, и секрет, оказавшийся в имени, уехал бы в копию открытым; текст готовится в памяти, каталог копии создаётся только после проверки, поэтому отказ не оставляет ни половины копии, ни пустого каталога, а причина называется без самого значения",
+   "evidence": {
+    "file": "plugins/superstack/tools/apply.py",
+    "contains": "остатки = _остатки_в_тексте(текст)"
+   }
+  },
+  {
+   "id": "SAFE.unparsed-is-not-copied-raw",
+   "layer": "L5 гарантии",
+   "mechanism": "файл настроек, который не разобрался или вовсе не сложился в текст (UTF-16 из редактора Windows), НЕ копируется сырым: неудача разбора ничего не сообщает о содержимом, поэтому оно получает отдельное состояние «не проверено» — копия не снимается вовсе, ничего не меняется, а человеку названы файл, причина и то, что в непроверенном могут лежать незакрытые значения; прежде такой файл уезжал в копию как есть и молча, а нечитаемый ронял инструмент трейсбеком",
+   "evidence": {
+    "file": "plugins/superstack/tools/apply.py",
+    "contains": "raise SystemExit(_отказ_непроверенное(непроверенные))"
+   }
+  },
+  {
+   "id": "BAR.mutations-are-split-into-shards",
+   "layer": "планка",
+   "mechanism": "набор поломок режется на доли `--shard i/n` круговой раздачей по отсортированным id: доли не пересекаются, вместе дают весь набор, и состав доли не зависит от порядка записей в файле. Полный прогон в CI не завершался ни разу — четыре ночных запуска подряд сняли по таймауту примерно на середине",
+   "evidence": {
+    "file": "tools/gauntlet.py",
+    "contains": "def shard_of(muts: list, index: int, of: int) -> list:"
+   }
+  },
+  {
+   "id": "BAR.a-bad-shard-spec-is-refused",
+   "layer": "планка",
+   "mechanism": "мусор в номере доли — отказ, а не молчаливая единственная доля: `--shard 1-16` иначе даёт «1 из 1», то есть полный прогон под именем доли, который уходит в тот же таймаут и отчитывается как одна из шестнадцати",
+   "evidence": {
+    "file": "tools/gauntlet.py",
+    "contains": "raise ValueError(f\"доля пишется как i/n, а не «{текст}»\")"
+   }
+  },
+  {
+   "id": "BAR.a-shard-is-a-subset-not-the-bar",
+   "layer": "планка",
+   "mechanism": "доля помечает себя выборкой и получает статус `partial`, а не `pass`: проверенная доля доказывает свою долю набора и ничего сверх неё",
+   "evidence": {
+    "file": "tools/gauntlet.py",
+    "contains": "v[\"shard\"] = {\"index\": доля[0], \"of\": доля[1]}"
+   }
+  },
+  {
+   "id": "BAR.a-shard-reports-the-whole-registry",
+   "layer": "планка",
+   "mechanism": "доля отчитывается числом ВСЕГО набора, а не своим: без него сумму выполненных не с чем сравнивать, и пятнадцать долей из шестнадцати складываются в зелёный итог",
+   "evidence": {
+    "file": "tools/gauntlet.py",
+    "contains": "v[\"registry_total\"] = total"
+   }
+  },
+  {
+   "id": "BAR.progress-is-written-before-every-mutation",
+   "layer": "планка",
+   "mechanism": "промежуточный отчёт пишется перед КАЖДОЙ поломкой и несёт имя той, что идёт прямо сейчас: снятое по таймауту задание обязано оставить проверенное и место, на котором встало, а не два часа пустоты",
+   "evidence": {
+    "file": "tools/gauntlet.py",
+    "contains": "_write_progress(снимок(m[\"id\"]))"
+   }
+  },
+  {
+   "id": "BAR.progress-is-swapped-whole-not-appended",
+   "layer": "планка",
+   "mechanism": "промежуточный отчёт кладётся подменой файла целиком: запись поверх оставила бы обрезанный JSON ровно в тот момент, ради которого он и пишется",
+   "evidence": {
+    "file": "tools/gauntlet.py",
+    "contains": "tmp.replace(PROGRESS)"
+   }
+  },
+  {
+   "id": "BAR.merged-green-needs-the-sum-to-match",
+   "layer": "планка",
+   "mechanism": "сведение долей зеленеет только когда сумма выполненных равна числу зарегистрированных: «все доли зелёные» и «набор проверен» — разные утверждения, и второе тут единственное нужное",
+   "evidence": {
+    "file": "tools/gauntlet.py",
+    "contains": "if выполнено != реестр:"
+   }
+  },
+  {
+   "id": "BAR.a-torn-shard-is-not-the-others-passing",
+   "layer": "планка",
+   "mechanism": "оборванная доля роняет сведение и называется вместе с поломкой, на которой встала: незаконченная доля читается как «остальные прошли» только если промолчать о ней",
+   "evidence": {
+    "file": "tools/gauntlet.py",
+    "contains": "if оборванные:"
+   }
+  },
+  {
+   "id": "BAR.a-missing-shard-is-named-not-summed-away",
+   "layer": "планка",
+   "mechanism": "пропавшая доля называется номером, а не растворяется в сумме: отсутствие артефакта — самый тихий способ недосчитать треть набора",
+   "evidence": {
+    "file": "tools/gauntlet.py",
+    "contains": "пропали = [i for i in range(1, из + 1) if i not in номера]"
+   }
+  },
+  {
+   "id": "BAR.unknown-in-a-required-gate-fails-the-build",
+   "layer": "планка",
+   "mechanism": "«не смог проверить» у ворот из списка обязательных — провал сборки, а не предупреждение; у остальных остаётся предупреждение. Четыре ночных прогона честно писали, что схему и сверку проверить не удалось, и заканчивались зелёным, потому что падали только на `fail`",
+   "evidence": {
+    "file": "tools/gauntlet.py",
+    "contains": "(ошибки if g[\"gate\"] in обязательные else оговорки).append("
+   }
+  },
+  {
+   "id": "BAR.an-unclassified-gate-is-not-forgiven",
+   "layer": "планка",
+   "mechanism": "ворота, не названные ни обязательными, ни справочными, роняют политику: иначе новые ворота молча попадают в мягкую корзину, и список устаревает тише, чем портится",
+   "evidence": {
+    "file": "tools/gauntlet.py",
+    "contains": "if не_названы:"
+   }
+  },
+  {
+   "id": "BAR.required-gates-are-a-file-not-a-habit",
+   "layer": "планка",
+   "mechanism": "список обязательных ворот с причиной у каждой записи лежит в файле рядом с картой, а не в голове проверяющего",
+   "evidence": {
+    "file": "data/required-gates.json",
+    "contains": "\"required\": ["
+   }
+  },
+  {
+   "id": "BAR.reconcile-falls-back-to-the-portable-snapshot",
+   "layer": "планка",
+   "mechanism": "сверка карты с планом идёт по переносимому снимку, когда самого плана в этом дереве нет: прежде она упиралась в личный файл в домашнем каталоге автора, отвечала в независимом клоне «не смог» — и этот ответ уезжал в зелёный итог сборки",
+   "evidence": {
+    "file": "tools/gauntlet.py",
+    "contains": "по_снимку = not p.is_file()"
+   }
+  },
+  {
+   "id": "BAR.a-snapshot-edited-apart-from-its-digest-is-refused",
+   "layer": "планка",
+   "mechanism": "снимок плана несёт отпечаток самого себя: правка снимка помимо этого отпечатка обнуляет сверку, иначе воспроизводимость сводится к «в файле написано, что сходится»",
+   "evidence": {
+    "file": "tools/plan_stamp.py",
+    "contains": "if s.get(\"self\") != body_digest(s):"
+   }
+  },
+  {
+   "id": "BAR.the-snapshot-carries-no-plan-text",
+   "layer": "планка",
+   "mechanism": "снимок плана обезличен: отпечатки и числа, ни строки текста и ни одного пути — файл уезжает в публичный репозиторий вместе с картой",
+   "evidence": {
+    "file": "data/plan-snapshot.json",
+    "contains": "\"plan_digest\""
+   }
+  },
+  {
+   "id": "STAMP.the-snapshot-is-refreshed-with-the-stamp",
+   "layer": "планка",
+   "mechanism": "отметка о сверке обновляет снимок тем же вызовом и кладёт его РЯДОМ С КАРТОЙ: снимок, который надо не забыть пересобрать руками, расходится с отметкой на первой же правке плана",
+   "evidence": {
+    "file": "tools/plan_stamp.py",
+    "contains": "write_snapshot(p, путь_карты.parent / SNAPSHOT_NAME)"
+   }
+  },
+  {
+   "id": "L5.mutations-run-as-a-matrix-of-shards",
+   "layer": "L5 гарантии",
+   "mechanism": "поломки идут матрицей независимых заданий по долям, а не одним заданием на весь набор: шестьсот поломок одним прогоном не укладываются в предел никогда, сколько его ни поднимай",
+   "evidence": {
+    "file": ".github/workflows/gates.yml",
+    "contains": "        shard: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]"
+   }
+  },
+  {
+   "id": "L5.a-cancelled-shard-still-leaves-its-result",
+   "layer": "L5 гарантии",
+   "mechanism": "доля выгружает проверенное даже когда задание отменено: шаг выгрузки идёт по `always()`, и отменённое задание оставляет то, что успело проверить",
+   "evidence": {
+    "file": ".github/workflows/gates.yml",
+    "contains": "        if: always()"
+   }
+  },
+  {
+   "id": "L5.the-shards-are-summed-by-a-separate-job",
+   "layer": "L5 гарантии",
+   "mechanism": "отдельное задание собирает доли и выносит вердикт: до него ни одно задание не имеет права называться проверкой набора",
+   "evidence": {
+    "file": ".github/workflows/gates.yml",
+    "contains": "        run: python3 tools/gauntlet.py --merge shards"
+   }
+  },
+  {
+   "id": "L5.unproven-is-not-a-warning-in-ci",
+   "layer": "L5 гарантии",
+   "mechanism": "итог сборки считает планка по списку обязательных ворот, а не встроенный в рабочий процесс разбор, падавший только на `fail`",
+   "evidence": {
+    "file": ".github/workflows/gates.yml",
+    "contains": "          python3 tools/gauntlet.py --ci ворота.json"
+   }
+  },
+  {
+   "id": "L5.a-red-shard-does-not-cancel-the-rest",
+   "layer": "L5 гарантии",
+   "mechanism": "красная доля не снимает остальные пятнадцать: без этого сведение получает пропавшие артефакты вместо результата, и первая же поломка прячет состояние всего набора",
+   "evidence": {
+    "file": ".github/workflows/gates.yml",
+    "contains": "      fail-fast: false"
+   }
+  },
+  {
+   "id": "L4.model-by-task",
+   "layer": "L4 исполнение",
+   "mechanism": "тир модели выбирается под ЗАДАЧУ кодом по названным признакам, а не под роль и не суждением модели",
+   "evidence": {
+    "file": "plugins/superstack/tools/model_route.py",
+    "contains": "def решить("
+   }
+  },
+  {
+   "id": "L4.model-adr-zone",
+   "layer": "L4 исполнение",
+   "mechanism": "задача, чью зону накрывает архитектурное решение, уходит на дорогой тир: ошибка здесь отменяет решение, а не строчку",
+   "evidence": {
+    "file": "plugins/superstack/tools/model_route.py",
+    "contains": "handoff.governing_adrs("
+   }
+  },
+  {
+   "id": "L4.model-retry",
+   "layer": "L4 исполнение",
+   "mechanism": "повторный заход после провала проверки уходит на дорогой тир; счётчик попыток берётся у самой проверки, второго не заводится",
+   "evidence": {
+    "file": "plugins/superstack/tools/model_route.py",
+    "contains": "verify._state_path()"
+   }
+  },
+  {
+   "id": "L4.model-data-zone",
+   "layer": "L4 исполнение",
+   "mechanism": "зона, где теряются данные человека, уходит на дорогой тир: у кода откат — git, у данных его нет ни у кого",
+   "evidence": {
+    "file": "plugins/superstack/tools/model_route.py",
+    "contains": "data_rollback.touches_data("
+   }
+  },
+  {
+   "id": "L4.model-mechanical",
+   "layer": "L4 исполнение",
+   "mechanism": "механическая правка — один файл без требований — уходит на дешёвый тир, а не на тот же, что переписывание схемы данных",
+   "evidence": {
+    "file": "plugins/superstack/tools/model_route.py",
+    "contains": "def механическая("
+   }
+  },
+  {
+   "id": "L4.model-reason-recorded",
+   "layer": "L4 исполнение",
+   "mechanism": "выбор тира и его причина ложатся в ход стройки: без записи нельзя проверить, окупился ли дорогой тир",
+   "evidence": {
+    "file": "plugins/superstack/tools/model_route.py",
+    "contains": "def вписать("
+   }
+  },
+  {
+   "id": "L4.model-delivery",
+   "layer": "L4 исполнение",
+   "mechanism": "ниже порога версии хоста и при запрете хоста выбор до исполнителя не доезжает — отказ вслух, а не тихая подмена дорогой задачи дешёвой",
+   "evidence": {
+    "file": "plugins/superstack/tools/model_route.py",
+    "contains": "def доставка("
+   }
+  },
+  {
+   "id": "L7.payoff-question",
+   "layer": "L7 эволюция",
+   "mechanism": "«окупился ли дорогой тир» отвечается числами: признаки выбора сводятся с исходами заходов и ценой прогона, а не с мнением того, кто тратил",
+   "evidence": {
+    "file": "plugins/superstack/tools/tier_payoff.py",
+    "contains": "def свести("
+   }
+  },
+  {
+   "id": "L7.payoff-threshold",
+   "layer": "L7 эволюция",
+   "mechanism": "ниже порога записей ответ «мерить нечем», а не осторожная догадка: порог назван числом и обоснован тем, насколько одна запись двигает долю",
+   "evidence": {
+    "file": "plugins/superstack/tools/tier_payoff.py",
+    "contains": "ПОРОГ_ЗАПИСЕЙ = 10"
+   }
+  },
+  {
+   "id": "L7.payoff-shows-not-disables",
+   "layer": "L7 эволюция",
+   "mechanism": "подозрительный признак показывается вместе с тем, кто по нему решает: выключить признак — решение владельца, а не измерителя",
+   "evidence": {
+    "file": "plugins/superstack/tools/tier_payoff.py",
+    "contains": "ВЛАДЕЛЕЦ = "
+   }
+  },
+  {
+   "id": "L7.payoff-one-spend-source",
+   "layer": "L7 эволюция",
+   "mechanism": "расход берётся у существующего измерителя прогона: второй источник разошёлся бы с первым ровно тогда, когда нужен точный ответ",
+   "evidence": {
+    "file": "plugins/superstack/tools/tier_payoff.py",
+    "contains": "measure_run.measure("
+   }
+  },
+  {
+   "id": "L7.payoff-spend-named-when-absent",
+   "layer": "L7 эволюция",
+   "mechanism": "журнала сессий нет — сказано «расход не измерен», а не подставлен ноль: отсутствие данных и нулевая трата — разные утверждения",
+   "evidence": {
+    "file": "plugins/superstack/tools/tier_payoff.py",
+    "contains": "РАСХОД_НЕ_ИЗМЕРЕН = \"расход не измерен\""
+   }
+  },
+  {
+   "id": "L7.payoff-one-attempt-counter",
+   "layer": "L7 эволюция",
+   "mechanism": "исход захода считается по журналу выбора и статусу задачи: третий счётчик заходов не заводится, спорить двум числам не о чем",
+   "evidence": {
+    "file": "plugins/superstack/tools/tier_payoff.py",
+    "contains": "def исходы("
    }
   }
  ],

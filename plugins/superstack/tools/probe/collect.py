@@ -12,12 +12,62 @@ import hashlib
 import json
 import os
 import re
+import stat
 import subprocess
 import sys
 from pathlib import Path
 
 HOME = Path.home()
-CLAUDE = HOME / ".claude"
+
+
+def config_dir() -> tuple[Path, str]:
+    """Каталог настроек, который читает ХОСТ, и то, откуда взят этот путь.
+
+    Claude Code уважает `CLAUDE_CONFIG_DIR`: при заданной переменной всё, что
+    документация зовёт `~/.claude`, живёт там. Сборщик читал домашний каталог
+    ВСЕГДА — и на машине с отдельным профилем докладывал про чужие настройки,
+    ни строкой не сказав, чьи они. Это ровно тот дефект, который продукт ищет
+    у других: утверждение шире измерения, да ещё и не о том объекте.
+
+    Возвращается пара, а не один путь: человек должен видеть, ПОЧЕМУ прочитан
+    именно этот каталог. «Настроек не найдено» в своём профиле и в чужом —
+    разные утверждения, и различает их только названный источник пути.
+
+    Пустая переменная — это её отсутствие, а не профиль с пустым именем: так
+    её читает и оболочка.
+    """
+    raw = (os.environ.get("CLAUDE_CONFIG_DIR") or "").strip()
+    if raw:
+        return Path(raw).expanduser(), "CLAUDE_CONFIG_DIR"
+    return HOME / ".claude", "домашний каталог"
+
+
+CLAUDE, CLAUDE_SOURCE = config_dir()
+
+
+def global_config_path() -> Path:
+    """Общий конфиг хоста: MCP-серверы, состояние проектов, сессия входа.
+
+    Адрес берётся ОТ ПРОФИЛЯ, а не от домашнего каталога. Документация зовёт
+    файл `~/.claude.json` и про переезд вслед за `CLAUDE_CONFIG_DIR` говорит
+    ровно одной оговоркой: он лежит в домашнем каталоге ЛИБО в каталоге, чей
+    `.claude` назначен переменной. Больше про это не сказано нигде, и
+    додумывать тут нечего — можно только не соврать.
+
+    Запасного адреса нет НАМЕРЕННО. Падение на `HOME/.claude.json` при
+    заданной переменной увело бы доклад в соседний профиль молча: `cc.config_dir`
+    назвал бы один каталог, а серверы приехали бы из другого — то самое
+    «прочитал не там», ради чего всё это и чинится. Нет файла по адресу
+    профиля — область просто не используется, и так про неё и сказано.
+
+    Оговорка названа вслух: документация здесь неоднозначна, поэтому путь, из
+    которого читали, едет в отчёт рядом с каждой областью — проверить можно
+    глазами, не веря нам на слово. Без заданной переменной адрес тот же, что
+    и всегда, и поведение в точности прежнее.
+    """
+    рядом = CLAUDE.parent / ".claude.json"
+    return рядом
+
 
 # Бюджет листинга скиллов — доля контекстного окна, отдаваемая под
 # name+description всех скиллов. Точное значение отдаёт /doctor;
@@ -54,9 +104,24 @@ def sh(cmd: list[str], timeout: int = 10) -> str | None:
         return None
 
 
+#: Одна кодировка на всех, кто читает конфигурацию человека.
+#:
+#: Сборщик фактов читал `utf-8`, а копирование настроек — `utf-8-sig`. JSON с
+#: BOM сборщику не разбирался: список секретов выходил ПУСТЫМ, и «находок нет»
+#: становилось разрешением сохранить файл целиком. Копированию тот же BOM не
+#: мешал — оно видело содержимое, которого не видел сканер, и решение о том,
+#: что вырезать, принималось по более СЛЕПОМУ из двух чтений.
+#:
+#: Разошедшиеся кодировки — это два разных мнения о том, что лежит в файле.
+#: Поэтому мнение здесь ровно одно, и оно названо: BOM снимается при чтении,
+#: потому что редакторы Windows ставят его молча, а JSON от этого перестаёт
+#: разбираться, не перестав быть настройками.
+CONFIG_ENCODING = "utf-8-sig"
+
+
 def read_json(path: Path):
     try:
-        return json.loads(path.read_text(encoding="utf-8"))
+        return json.loads(path.read_text(encoding=CONFIG_ENCODING))
     except Exception:
         return None
 
@@ -87,36 +152,105 @@ def project_dir() -> Path:
     return Path(os.environ.get("SUPERSTACK_PROJECT_DIR") or Path.cwd())
 
 
+#: Области настроек в порядке приоритета ХОСТА: самая сильная первой.
+#:
+#: Направление сверено с документацией хоста, а не с памятью. Уровни там
+#: перечислены «highest precedence first»: управляемая политика организации,
+#: аргументы командной строки, локальные настройки проекта, общие настройки
+#: проекта, пользовательские настройки. Ключ, заданный выше, перекрывает тот
+#: же ключ ниже, и про управляемую сказано отдельно: её не перекрывает ничто
+#: из того, что человек задаёт себе сам.
+#:
+#: ЗАЧЕМ ЭТО ОТДЕЛЬНЫМ ИМЕНЕМ. Тот же порядок стоял и раньше — в литерале
+#: списка, — а победитель выбирался через `dict.update`, у которого выигрывает
+#: ПОСЛЕДНИЙ записавший. Список и правило победы смотрели в разные стороны, и
+#: выигрывала самая СЛАБАЯ область: локальный файл проекта перекрывал политику
+#: организации. Управляемый запрет плагина при пользовательском разрешении
+#: давал в докладе «включён» — администратор запретил, а инструмент сказал
+#: «работает». Для доклада это худший исход из возможных: ложь в пользу
+#: разрешения, и опровергнуть её человеку нечем.
+#:
+#: Поэтому направление здесь названо ДАННЫМИ, а не подразумевается порядком
+#: строк: список файлов собирается по этому кортежу, а победитель выбирается
+#: правилом «решает ПЕРВАЯ область, назвавшая ключ». Оба места ссылаются на
+#: одно имя и разъехаться молча уже не могут.
+#:
+#: Две оговорки названы вслух, а не замолчаны.
+#: Аргументы командной строки хоста пробе недоступны — их в списке нет.
+#: `~/.claude/settings.local.json` документированный список уровней не
+#: называет вовсе; он стоит вплотную к пользовательской области, которую и
+#: переопределяет, и большего мы про него не утверждаем.
+SCOPES_STRONGEST_FIRST = (
+    "managed", "managed-linux", "project-local", "project", "user-local", "user",
+)
+
+#: Что известно про файл области настроек. «Закрыто» — не разновидность «нет».
+ЕСТЬ, НЕТ, ЗАКРЫТО = "есть", "нет", "закрыто"
+
+
+def _scope_state(path: Path) -> str:
+    """Есть файл области, нет его, или в доступе отказано.
+
+    `Path.is_file()` проглатывает ошибку доступа и возвращает False: на
+    закрытом каталоге «не пустил» становится неотличимо от «файла нет». Для
+    управляемой политики это не редкий сбой, а замысел — администратор
+    закрывает каталог. Объявить такую область отсутствующей значит соврать
+    про политику, и соврать снова в пользу разрешения.
+    """
+    try:
+        режим = os.stat(path).st_mode
+    except PermissionError:
+        return ЗАКРЫТО
+    except OSError:
+        return НЕТ
+    return ЕСТЬ if stat.S_ISREG(режим) else НЕТ
+
+
 def _settings_files() -> list[tuple[str, Path]]:
-    """Все файлы настроек, откуда Claude Code берёт хуки, в порядке приоритета."""
+    """Файлы настроек, откуда Claude Code берёт хуки, права и плагины.
+
+    Порядок — от САМОЙ ПРИОРИТЕТНОЙ области к самой слабой, и он часть
+    поведения, а не оформление: по нему выбирается победитель. Берётся из
+    `SCOPES_STRONGEST_FIRST`, где это направление и объяснено.
+    """
     cwd = project_dir()
-    return [
-        ("managed", Path("/Library/Application Support/ClaudeCode/managed-settings.json")),
-        ("managed-linux", Path("/etc/claude-code/managed-settings.json")),
-        ("user", CLAUDE / "settings.json"),
-        ("user-local", CLAUDE / "settings.local.json"),
-        ("project", cwd / ".claude" / "settings.json"),
-        ("project-local", cwd / ".claude" / "settings.local.json"),
-    ]
+    места = {
+        "managed": Path("/Library/Application Support/ClaudeCode/managed-settings.json"),
+        "managed-linux": Path("/etc/claude-code/managed-settings.json"),
+        "project-local": cwd / ".claude" / "settings.local.json",
+        "project": cwd / ".claude" / "settings.json",
+        "user-local": CLAUDE / "settings.local.json",
+        "user": CLAUDE / "settings.json",
+    }
+    return [(имя, места[имя]) for имя in SCOPES_STRONGEST_FIRST]
 
 
 def read_settings_scoped() -> tuple[list[tuple[str, dict]], list[str], list[dict]]:
-    """Прочитать все файлы настроек.
+    """Прочитать все файлы настроек — от САМОЙ ПРИОРИТЕТНОЙ области к слабой.
 
     Возвращает (пары скоуп-содержимое, охваченные скоупы, нечитаемые скоупы).
+    Порядок пар — часть контракта, а не побочный эффект: по нему выбирают
+    победителя те, кто зовёт эту функцию.
 
     Отсутствующий файл — это не проблема: скоуп просто не используется.
     А вот существующий и битый — это НЕПРОЧИТАННЫЙ скоуп, и молчать о нём
-    нельзя: измерение по остальным скоупам в этом случае неполно.
+    нельзя: измерение по остальным скоупам в этом случае неполно. Закрытый
+    в доступе — то же самое и по той же причине: «не пустил» обязано
+    отличаться от «там пусто».
     """
     loaded: list[tuple[str, dict]] = []
     covered: list[str] = []
     unreadable: list[dict] = []
     for label, path in _settings_files():
-        if not path.is_file():
+        состояние = _scope_state(path)
+        if состояние == НЕТ:
+            continue
+        if состояние == ЗАКРЫТО:
+            unreadable.append({"scope": label, "path": str(path),
+                               "reason": "в доступе отказано — область НЕ прочитана"})
             continue
         try:
-            data = json.loads(path.read_text(encoding="utf-8-sig"))
+            data = json.loads(path.read_text(encoding=CONFIG_ENCODING))
         except Exception as e:
             unreadable.append({"scope": label, "path": str(path), "reason": str(e)})
             continue
@@ -129,30 +263,67 @@ def read_settings_scoped() -> tuple[list[tuple[str, dict]], list[str], list[dict
     return loaded, covered, unreadable
 
 
+def plugin_decisions() -> tuple[list[dict], list[dict]]:
+    """Кто решил про каждый плагин — и чьё решение этим перекрыто.
+
+    Здесь жил дефект, ради которого написано всё выше. Включённость
+    собиралась одной строкой:
+
+        enabled.update(ep)
+
+    У `update` побеждает ПОСЛЕДНИЙ записавший, а области идут от сильной к
+    слабой — значит побеждала самая слабая. Управляемый запрет перекрывался
+    пользовательским разрешением, и доклад говорил «плагин включён» ровно
+    там, где администратор его запретил.
+
+    Правило победы теперь названо словом, а не унаследовано от структуры
+    данных: РЕШАЕТ ПЕРВАЯ ОБЛАСТЬ, назвавшая плагин. Перекрытые решения не
+    выбрасываются — администратору важно знать не только «включён», но и
+    «кем» и «поверх чего»: без имени области утверждение нечем проверить.
+
+    Возвращает (решения по плагинам, непрочитанные области). Второе едет
+    вместе с первым не для полноты: решение, принятое при непрочитанной
+    управляемой области, может быть неверным, и знать об этом обязан тот,
+    кто им пользуется.
+    """
+    loaded, _covered, unreadable = read_settings_scoped()
+    решения: dict[str, dict] = {}
+    for label, data in loaded:
+        ep = data.get("enabledPlugins")
+        if not isinstance(ep, dict):
+            continue
+        for name, on in ep.items():
+            принято = решения.get(name)
+            if принято is None:
+                решения[name] = {"plugin": name, "enabled": on is True,
+                                 "decided_by": label, "overridden": []}
+                continue
+            # Область слабее той, что уже решила: её слово перекрыто — и
+            # названо, а не потеряно.
+            принято["overridden"].append({"scope": label, "enabled": on is True})
+    return [решения[имя] for имя in sorted(решения)], unreadable
+
+
 def enabled_plugins() -> tuple[list[dict], list[dict]]:
     """Включённые плагины и каталоги их установки.
 
-    Включённость собирается по ВСЕМ файлам настроек: проектный файл включает
-    плагин наравне с пользовательским. Путь берётся ТОЛЬКО из
-    installed_plugins.json — это единственный авторитетный источник. Каталог
-    plugins/marketplaces/ содержит весь каталог маркетплейса целиком, а не то,
-    что установлено: счёт по нему завысил бы число скиллов в разы. Ошибка
-    «померил не там» опаснее, чем «не померил» — она даёт число, которому верят.
+    Включённость собирается по ВСЕМ файлам настроек и по приоритету хоста:
+    решает самая сильная область, назвавшая плагин, — см. plugin_decisions.
+    Путь берётся ТОЛЬКО из installed_plugins.json — это единственный
+    авторитетный источник. Каталог plugins/marketplaces/ содержит весь каталог
+    маркетплейса целиком, а не то, что установлено: счёт по нему завысил бы
+    число скиллов в разы. Ошибка «померил не там» опаснее, чем «не померил» —
+    она даёт число, которому верят.
     """
-    enabled: dict[str, bool] = {}
-    for _label, data in read_settings_scoped()[0]:
-        ep = data.get("enabledPlugins")
-        if isinstance(ep, dict):
-            enabled.update(ep)
-
     installed = (read_json(CLAUDE / "plugins" / "installed_plugins.json") or {})
     table = installed.get("plugins", {}) if isinstance(installed, dict) else {}
 
     active: list[dict] = []
     problems: list[dict] = []
-    for key, on in sorted(enabled.items()):
-        if on is not True:
+    for решение in plugin_decisions()[0]:
+        if not решение["enabled"]:
             continue
+        key = решение["plugin"]
         entries = table.get(key) or []
         if not entries:
             problems.append({"plugin": key, "reason": "включён, но не установлен"})
@@ -223,6 +394,12 @@ def probe_claude() -> None:
     Поэтому отсутствие файла — это ЗНАЧЕНИЕ («настроек нет»), а не выход из
     пробы. Правило про пустую машину должно иметь на чём сработать.
     """
+    # Профиль называется ПЕРВЫМ и всегда. Все факты ниже — про него, и без
+    # его имени человек не может проверить ни один из них: «настроек нет»
+    # верно про один каталог и ложно про соседний.
+    put("cc.config_dir", str(CLAUDE), "collect.probe_claude",
+        f"активный профиль настроек; путь взят из: {CLAUDE_SOURCE}")
+
     settings_path = CLAUDE / "settings.json"
     exists = settings_path.is_file()
     settings = read_json(settings_path)
@@ -235,14 +412,67 @@ def probe_claude() -> None:
         # cc.settings_present, и она видна правилам.
         settings = {}
 
-    perms = settings.get("permissions", {})
-    if not isinstance(perms, dict):
-        perms = {}
-    allow = perms.get("allow", [])
-    put("cc.default_mode", perms.get("defaultMode"), "collect.probe_claude",
-        "permissions.defaultMode")
-    put("cc.allow_count", len(allow) if isinstance(allow, list) else 0,
-        "collect.probe_claude")
+    # Права читались ТОЛЬКО из пользовательского файла: управляемый раздел
+    # `permissions` в факты не попадал вовсе. То есть политика организации
+    # была невидима ровно там, где она сильнее всего, а молчание про неё
+    # читалось как «там пусто» — то же правило, что уже действует для
+    # скоупов и областей MCP, здесь просто не работало.
+    #
+    # Скалярный ключ и список ведут себя по-разному, и это не наша выдумка, а
+    # правило хоста: одиночное значение он берёт из САМОЙ ПРИОРИТЕТНОЙ
+    # области, которая его назвала, а списки прав СКЛАДЫВАЕТ по файлам, чтобы
+    # каждый файл мог добавить своё, не отняв чужого.
+    области, _охвачены, области_непрочитаны = read_settings_scoped()
+    режим = None
+    режим_решил = None
+    разрешено: list = []
+    видели: set = set()
+    права_по_областям: list[dict] = []
+    for label, data in области:
+        perms = data.get("permissions")
+        if not isinstance(perms, dict):
+            continue
+        allow = perms.get("allow")
+        allow = allow if isinstance(allow, list) else []
+        deny = perms.get("deny")
+        deny = deny if isinstance(deny, list) else []
+        mode = perms.get("defaultMode")
+        права_по_областям.append({"scope": label, "defaultMode": mode,
+                                  "allow": len(allow), "deny": len(deny)})
+        if mode is not None and режим is None:
+            режим, режим_решил = mode, label
+        for правило in allow:
+            # Одно и то же правило в двух областях — одно правило. Считать
+            # его дважды значило бы завысить измерение на ровном месте.
+            отпечаток = json.dumps(правило, ensure_ascii=False, sort_keys=True)
+            if отпечаток in видели:
+                continue
+            видели.add(отпечаток)
+            разрешено.append(правило)
+
+    put("cc.default_mode", режим, "collect.probe_claude",
+        f"permissions.defaultMode; решила область: {режим_решил}" if режим_решил
+        else "permissions.defaultMode: ни одна область его не задала",
+        provenance=AMBIGUOUS if области_непрочитаны else EXTRACTED)
+    put("cc.allow_count", len(разрешено), "collect.probe_claude",
+        "permissions.allow, объединение по всем прочитанным областям: "
+        "хост складывает списки прав, а не выбирает один",
+        provenance=AMBIGUOUS if области_непрочитаны else EXTRACTED)
+    put("cc.permissions.by_scope", права_по_областям, "collect.probe_claude",
+        "какая область что задала — включая управляемую политику; "
+        "области идут от самой приоритетной к самой слабой",
+        provenance=AMBIGUOUS if области_непрочитаны else EXTRACTED)
+
+    # Кто решил про каждый плагин. «Включён» без «кем» администратору
+    # бесполезен: он не может ни проверить утверждение, ни понять, чья
+    # настройка сработала поверх его политики.
+    put("cc.plugins.by_scope", plugin_decisions()[0], "collect.probe_claude",
+        "область, принявшая решение о включённости, и перекрытые ею решения",
+        provenance=AMBIGUOUS if области_непрочитаны else EXTRACTED)
+    put("cc.settings_scopes_unreadable", области_непрочитаны,
+        "collect.probe_claude",
+        "файл области настроек существует, но не прочитан — область НЕ измерена")
+
     put("cc.statusline", bool(settings.get("statusLine")), "collect.probe_claude")
 
     # Конституция — то, что читается КАЖДОЙ сессией целиком. Её объём это не
@@ -271,9 +501,22 @@ def probe_claude() -> None:
         "сигнатуры совпадений; значения НИКОГДА не сохраняются",
         provenance=INFERRED)  # эвристика по форме ключа и значения
     put("sec.scan_unreadable", list(SECRET_SCAN_UNREADABLE), "collect.probe_claude",
-        "конфиги, которые существуют, но не разобраны — там НЕ искали")
-    put("sec.scan_files", [label for label, path in _settings_files() if path.is_file()],
-        "collect.probe_claude", "какие файлы настроек реально просмотрены")
+        "файлы, где поиск не состоялся или оборван на полпути: "
+        "«не найдено» про них не значит ничего")
+    # Список «какие файлы реально просмотрены» строился тем же `is_file()` и
+    # был слеп тем же способом: «нечего смотреть» и «не пустили» одинаково
+    # означали отсутствие метки в списке, и различить их человек не мог ничем.
+    # Состояний три, и в фактах их теперь тоже три: метка в sec.scan_files —
+    # смотрели, в sec.scan_denied — не пустили, ни там ни там — нечего смотреть.
+    состояния = [(метка, _scope_state(путь)) for метка, путь in _settings_files()]
+    put("sec.scan_files", [м for м, с in состояния if с == ЕСТЬ],
+        "collect.probe_claude",
+        "файлы настроек, ОТКРЫТЫЕ сканеру; закрытые названы в sec.scan_denied, "
+        "остальных нет вовсе")
+    put("sec.scan_denied", [м for м, с in состояния if с == ЗАКРЫТО],
+        "collect.probe_claude",
+        "файл настроек есть, но в доступе отказано — там НЕ искали, "
+        "и молчание сканера про него ничего не значит")
 
 
 # --------------------------------------------------------------------------
@@ -639,6 +882,13 @@ def _walk_env(obj, path: str, out: list) -> None:
 SECRET_SCAN_UNREADABLE: list = []
 SKILL_READ_ERRORS: list = []
 
+#: Причина, по которой цель обхода осталась непрочитанной, когда в доступе
+#: отказано. Названа словом и отдельно от «файл есть, но не разобран»: битый
+#: JSON чинит владелец файла, а закрытые права открывает администратор, и
+#: человек, читающий доклад, обязан видеть, к кому из них идти. Слитые в одну,
+#: эти причины отправляют чинить не то.
+НЕ_ПУСТИЛИ = "в доступе отказано — файл ЕСТЬ, в нём НЕ искали"
+
 # Потолки на текстовый обход: проба обязана оставаться дешёвой. Файлы сверх
 # лимита не «пропускаются молча» — они попадают в SECRET_SCAN_UNREADABLE, то
 # есть в тот же список, что и нечитаемое, и гасят доверие к отчёту.
@@ -739,12 +989,31 @@ def scan_secrets_everywhere() -> list:
     # Список мест берётся из общего реестра скоупов, а не заводится здесь
     # заново: два независимых списка расходятся, и расходятся молча.
     targets = [(path, label) for label, path in _settings_files()]
+    общий = global_config_path()
     targets += [
-        (HOME / ".claude.json", "~/.claude.json"),
+        # Метка — то, что человек увидит в находке. Привычное «~/.claude.json»
+        # верно только для домашнего профиля; для отдельного она назвала бы
+        # не тот файл, в котором нашли ключ.
+        (общий, "~/.claude.json" if общий == HOME / ".claude.json" else str(общий)),
         (project_dir() / ".mcp.json", "проект/.mcp.json"),
     ]
     for path, label in targets:
-        if not path.is_file():
+        # Здесь стоял `path.is_file()`, и он проглатывал отказ в доступе:
+        # существующий, но закрытый правами файл выпадал из обхода наравне с
+        # несуществующим — молча, без единой строки в списке непрочитанного.
+        # Для управляемой политики организации и для чужого профиля это не
+        # редкий сбой, а обычное дело, и цена вся в докладе: «секретов не
+        # найдено» про файл, который ни разу не открывали.
+        #
+        # Различитель берётся тот же, каким читаются области настроек. Второго
+        # здесь не заводится: два независимых признака одного и того же
+        # расходятся, и расходятся молча.
+        состояние = _scope_state(path)
+        if состояние == НЕТ:
+            continue
+        if состояние == ЗАКРЫТО:
+            SECRET_SCAN_UNREADABLE.append(
+                {"file": label, "path": str(path), "why": НЕ_ПУСТИЛИ})
             continue
         data = read_json(path)
         if data is None:
@@ -1026,10 +1295,96 @@ def probe_memory() -> None:
 # --------------------------------------------------------------------------
 # mcp
 # --------------------------------------------------------------------------
+def _mcp_top(данные: dict, _проект: Path) -> dict:
+    """Верхний `mcpServers` файла — пользовательская область и файл команды."""
+    блок = данные.get("mcpServers")
+    return блок if isinstance(блок, dict) else {}
+
+
+def _mcp_local(данные: dict, проект: Path) -> dict:
+    """Область ЭТОГО проекта внутри общего конфига.
+
+    Ключ — абсолютный путь проекта, каким его записал хост. Один каталог
+    бывает достижим под двумя именами (символическая ссылка: `/tmp` и
+    `/private/tmp` на маке — один и тот же каталог), и запись найдётся только
+    под одним из них. Проверяются оба: иначе «область пуста» было бы сказано
+    про область, в которую не заглянули.
+    """
+    проекты = данные.get("projects")
+    if not isinstance(проекты, dict):
+        return {}
+    имена = []
+    try:
+        имена.append(str(проект.resolve()))
+    except OSError:
+        pass
+    имена.append(str(проект))
+    for имя in имена:
+        узел = проекты.get(имя)
+        if isinstance(узел, dict):
+            return _mcp_top(узел, проект)
+    return {}
+
+
+def mcp_scopes() -> tuple[list[tuple[str, Path, dict]], list[str], list[dict]]:
+    """Все области, откуда хост берёт MCP-серверы.
+
+    Читался ОДИН верхний `mcpServers` общего конфига. Сервер, добавленный для
+    этого проекта, и сервер из `.mcp.json` команды в список не попадали —
+    а MCP-сервер это произвольное исполнение кода, и молчать о нём нельзя.
+    Недосчёт тут опаснее пересчёта: «сервер один» при трёх настроенных
+    читается как измерение и закрывает вопрос.
+
+    То же правило, что и у файлов настроек, и по той же причине. Отсутствующий
+    файл — не проблема: область просто не используется. Существующий и
+    неразобранный — НЕПРОЧИТАННАЯ область, и она называется поимённо: «не
+    прочитал» обязано отличаться от «там пусто».
+
+    Возвращает (тройки область-файл-серверы, прочитанные области,
+    непрочитанные). Файл едет вместе с областью, а не подразумевается: две
+    области живут в ОДНОМ файле, и без его имени человек не может проверить
+    ни одну из них — а проверяемость и есть всё, что этот доклад продаёт.
+    """
+    проект = project_dir()
+    общий = global_config_path()
+    источники = [
+        ("user", общий, _mcp_top),
+        ("local", общий, _mcp_local),
+        ("project", проект / ".mcp.json", _mcp_top),
+    ]
+    loaded: list[tuple[str, Path, dict]] = []
+    covered: list[str] = []
+    unreadable: list[dict] = []
+    for метка, путь, достать in источники:
+        if not путь.is_file():
+            continue
+        данные = read_json(путь)
+        if not isinstance(данные, dict):
+            unreadable.append({"scope": метка, "path": str(путь),
+                               "reason": "файл области не разобран как объект"})
+            continue
+        covered.append(метка)
+        loaded.append((метка, путь, достать(данные, проект)))
+    return loaded, covered, unreadable
+
+
 def probe_mcp() -> None:
-    cfg = read_json(HOME / ".claude.json") or {}
-    servers = cfg.get("mcpServers", {})
-    put("mcp.declared", list(servers.keys()), "collect.probe_mcp")
+    scoped, covered, unreadable = mcp_scopes()
+    servers: dict[str, dict] = {}
+    by_scope: list[dict] = []
+    for метка, путь, блок in scoped:
+        by_scope.append({"scope": метка, "path": str(путь),
+                         "servers": sorted(блок)})
+        for name, srv in блок.items():
+            servers.setdefault(name, srv)
+    put("mcp.declared", sorted(servers), "collect.probe_mcp",
+        "объединение всех прочитанных областей")
+    put("mcp.by_scope", by_scope, "collect.probe_mcp",
+        "какой сервер из какой области и из какого файла")
+    put("mcp.scopes_covered", covered, "collect.probe_mcp",
+        "области, которые удалось прочитать")
+    put("mcp.scopes_unreadable", unreadable, "collect.probe_mcp",
+        "файл области существует, но не разобран — область НЕ измерена")
     # MCP-сервер = произвольное исполнение кода. Помечаем те, что стартуют
     # из локального пути вне менеджера пакетов.
     # Абсолютный путь сам по себе не улика. В GUI-приложениях на маке PATH
@@ -1039,17 +1394,22 @@ def probe_mcp() -> None:
     # Улика — исполняемый файл ВНЕ менеджера пакетов.
     _RUNNERS = {"npx", "npm", "node", "uvx", "uv", "pnpm", "yarn", "bunx", "deno",
                 "python", "python3", "pipx", "docker"}
+    # Перебираются ВСЕ области, а не объединение. Одно и то же имя может быть
+    # объявлено в двух областях по-разному, и объединение показало бы только
+    # одно из объявлений — то есть могло бы спрятать ровно подозрительное.
     local = []
-    for name, srv in servers.items():
-        if not isinstance(srv, dict):
-            continue
-        cmd = str(srv.get("command", ""))
-        if not cmd.startswith("/"):
-            continue
-        if Path(cmd).name in _RUNNERS:
-            continue
-        local.append(name)
-    put("mcp.local_binaries", local, "collect.probe_mcp",
+    for _метка, _путь, блок in scoped:
+        for name, srv in блок.items():
+            if not isinstance(srv, dict):
+                continue
+            cmd = str(srv.get("command", ""))
+            if not cmd.startswith("/"):
+                continue
+            if Path(cmd).name in _RUNNERS:
+                continue
+            if name not in local:
+                local.append(name)
+    put("mcp.local_binaries", sorted(local), "collect.probe_mcp",
         "command указывает на абсолютный путь",
         provenance=INFERRED)  # признак по форме пути, не проверка апстрима
 

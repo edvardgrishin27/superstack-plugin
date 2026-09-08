@@ -66,6 +66,9 @@ from render_html import CSS as SYSTEM_CSS, BRAND  # noqa: E402
 import plain_ru  # noqa: E402
 import derive_phase  # noqa: E402
 import autonomy  # noqa: E402
+# Запись страницы — общим модулем: замок на весь цикл, уникальный временный
+# сосед и режим доступа, который от записи не расширяется.
+import atomic_store  # noqa: E402
 # Числа считает ход стройки, а не разметка. Ввоз односторонний: `progress.py`
 # зовёт панель только изнутри функции записи, поэтому кольца при загрузке нет.
 import progress  # noqa: E402
@@ -1255,16 +1258,17 @@ def _without_snapshot(blob: bytes) -> bytes:
 
 
 def _write_atomically(p: Path, text: str) -> None:
-    """Запись целиком или никак.
+    """Запись целиком или никак — общим модулем.
 
     Панель переписывается на каждой записи состояния, и её же в этот момент
     может читать браузер или сервер. Обрезанный файл — это страница без
     закрывающего тега, то есть пустой экран без единого признака поломки.
+
+    Замок здесь НЕ берётся, и это намеренно: цикл, который надо запереть,
+    длиннее одной записи — он начинается чтением страницы у зовущего. Замок
+    берут они, а взятый ещё и тут, он ждал бы сам себя до предела ожидания.
     """
-    p.parent.mkdir(parents=True, exist_ok=True)
-    tmp = p.with_suffix(p.suffix + ".tmp")
-    tmp.write_text(text, encoding="utf-8")
-    os.replace(tmp, p)
+    atomic_store.записать(p, text)
 
 
 def read_state(run_dir: Path) -> dict:
@@ -1287,18 +1291,23 @@ def embed_state(run_dir: Path, state: dict) -> Path:
     молча пропал бы, а первую запись состояния делают раньше первой сборки.
     """
     p = run_dir / PANEL
-    # Снимок едет с фактами: файл, открытый без сервера, обязан показывать те
-    # же числа, что и живая страница. Иначе панель без сервера показывала бы
-    # пустые места там, где у соседа по вкладке проценты и ведомость.
-    state = with_facts(state, run_dir)
-    try:
-        html = p.read_text("utf-8") if p.is_file() else _page()
-        html = _with_snapshot(html, state)
-    except ValueError:
-        # Страница собрана прежней версией, без границ снимка. Пересобираем:
-        # оставить её как есть значило бы тихо не вписывать снимок вовсе.
-        html = _with_snapshot(_page(), state)
-    _write_atomically(p, html)
+    # Замок держится на ВЕСЬ цикл «прочитал страницу, вписал снимок, записал».
+    # Дыра не в записи, а МЕЖДУ: пересборка страницы, случившаяся в этом
+    # промежутке, затирается той страницей, которую мы прочитали ДО неё, —
+    # панель остаётся на прежней версии и при этом выглядит свежей.
+    with atomic_store.Lock(p):
+        # Снимок едет с фактами: файл, открытый без сервера, обязан показывать
+        # те же числа, что и живая страница. Иначе панель без сервера
+        # показывала бы пустые места там, где у соседа по вкладке проценты.
+        state = with_facts(state, run_dir)
+        try:
+            html = p.read_text("utf-8") if p.is_file() else _page()
+            html = _with_snapshot(html, state)
+        except ValueError:
+            # Страница собрана прежней версией, без границ снимка. Пересобираем:
+            # оставить её как есть значило бы тихо не вписывать снимок вовсе.
+            html = _with_snapshot(_page(), state)
+        _write_atomically(p, html)
     return p
 
 
@@ -1343,8 +1352,11 @@ def write_panel(run_dir: Path) -> Path:
     лежит файл, который выглядит свежим и не является им.
     """
     p = run_dir / PANEL
-    _write_atomically(p, _with_snapshot(
-        _page(), with_facts(read_state(run_dir), run_dir)))
+    # Тот же замок, что и у вписывания снимка: иначе пересборка и вписывание
+    # ходят по одной странице врозь, и запертым оказывается только один из них.
+    with atomic_store.Lock(p):
+        _write_atomically(p, _with_snapshot(
+            _page(), with_facts(read_state(run_dir), run_dir)))
     return p
 
 

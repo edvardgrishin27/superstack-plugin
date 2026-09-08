@@ -415,3 +415,170 @@ class TestStaleFilesLeaveThePublicTree(unittest.TestCase):
             self.assertTrue((pub / "README.md").is_file(), "снесено нужное")
             self.assertTrue((pub / ".git").is_dir(), "снесена история")
             self.assertTrue((pub / "LICENSE").is_file(), "снесена лицензия")
+
+
+class TestNoUnmeasuredNumberSurvivesThePublish(unittest.TestCase):
+    """Подстановки отвечают «сколько заменил». Вопрос был другой.
+
+    Строку сравнения с чужими инструментами не переписывала ни одна
+    подстановка, а число в ней стоит рядом со ссылкой на файл, по которой
+    читатель это и проверяет. Опубликованная страница утверждала 577 в шапке и
+    576 семнадцатью экранами ниже — оба раза уверенно.
+
+    Поэтому витрина отвечает теперь на второй вопрос: КАКОЕ число осталось не
+    равным измеренному. Осталось хоть одно — публикация стоит.
+    """
+
+    ЧИСЛА = {"mutations": 545, "mechanisms": 302}
+    ВЕРСИЯ = ("[![версия](https://img.shields.io/badge/version-0.9.9-1f6feb)](x)\n"
+              "Версия 0.9.9. Все ворота зелёные.\n")
+    СВОДКА = "752 теста · 132 мутации, все ловятся · 59 механизмов.\n"
+
+    def _pub(self, текст: str) -> Path:
+        d = Path(tempfile.mkdtemp())
+        self.addCleanup(lambda: __import__("shutil").rmtree(d, ignore_errors=True))
+        (d / "README.md").write_text(текст, encoding="utf-8")
+        return d
+
+    def test_the_comparison_row_is_rewritten_by_measurement(self):
+        """Ровно та строка, из-за которой всё и разошлось."""
+        строка = ("| Поломки, обязанные ронять набор | **да**, 576 "
+                  "зарегистрированных (`tests/mutations.json`) | нет | нет |\n")
+        pub = self._pub(self.ВЕРСИЯ + self.СВОДКА + строка)
+
+        self.assertTrue(sp.refresh_readme(pub, self.ЧИСЛА, 1621))
+
+        self.assertIn("**да**, 545 зарегистрированных (`tests/mutations.json`)",
+                      (pub / "README.md").read_text("utf-8"),
+                      "число в продающей таблице осталось прошлым")
+
+    def test_a_number_no_substitution_reaches_stops_the_publish(self):
+        """Завтра кто-нибудь добавит витрине ещё одну строку с числом.
+
+        Подстановка про неё не знает и молча не сработает — счётчик замен
+        этого не увидит, потому что другие строки совпали.
+        """
+        pub = self._pub(self.ВЕРСИЯ + self.СВОДКА
+                        + "Поломок у нас **да**, 111 зарегистрированных.\n")
+        было = (pub / "README.md").read_text("utf-8")
+
+        self.assertFalse(
+            sp.refresh_readme(pub, self.ЧИСЛА, 1621),
+            "витрина отчиталась об успехе, имея внутри неизмеренное число")
+        self.assertEqual((pub / "README.md").read_text("utf-8"), было,
+                         "витрина переписана наполовину")
+
+    def test_a_showcase_that_agrees_with_itself_still_passes(self):
+        """Обратный контроль: проверка, никогда не зеленеющая, бесполезна."""
+        pub = self._pub(self.ВЕРСИЯ + self.СВОДКА
+                        + "[![мутации](https://img.shields.io/badge/mutations-1-x)](y)\n")
+        self.assertTrue(sp.refresh_readme(pub, self.ЧИСЛА, 1621))
+
+
+class TestNothingSaysWhereThePatternCameFrom(unittest.TestCase):
+    """Откуда взят приём — не выкладывается, и ищется это по ФОРМЕ.
+
+    Перечень имён отвечает только про то, что вспомнили. Один раз он уже дал
+    ноль находок на дереве, где строка «Паттерн взят из <чужой репозиторий>
+    (MIT, автор)» жила с версии 0.3.x: имени того репозитория в перечне
+    просто не было.
+
+    Ловится связка из двух половин — слово о заимствовании И ссылка на чужой
+    аккаунт. По отдельности каждая половина безобидна, и обе встречаются в
+    поставке законно.
+    """
+
+    def _pub(self, файлы: dict) -> Path:
+        d = Path(tempfile.mkdtemp())
+        self.addCleanup(lambda: __import__("shutil").rmtree(d, ignore_errors=True))
+        for имя, текст in файлы.items():
+            (d / имя).parent.mkdir(parents=True, exist_ok=True)
+            (d / имя).write_text(текст, encoding="utf-8")
+        return d
+
+    #: Фикстуры собираются ИЗ КУСКОВ, а не пишутся строкой.
+    #:
+    #: Строка целиком в исходнике — сама по себе нарушение, и сторож на неё
+    #: срабатывает справедливо: выкладка встала ровно на этом файле. Тот же
+    #: приём уже применяется к фикстурам-секретам, и по той же причине —
+    #: проверка не должна ронять проверяющего.
+    ВЗЯТО, ПЕРЕНЯТО = "вз" + "ят из", "adap" + "ted from"
+    ЧУЖОЙ = "https://git" + "hub.com/someone/advisor"
+
+    def test_the_sentence_that_actually_shipped_is_caught(self):
+        pub = self._pub({"agent.md": f"# Судья\n\nПаттерн {self.ВЗЯТО} "
+                                     f"[советчик]({self.ЧУЖОЙ})\n"
+                                     "(MIT, Автор): роль советчика.\n"})
+        self.assertEqual([x["file"] for x in sp.audit(pub)["attribution"]], ["agent.md"])
+
+    def test_english_wording_is_caught_too(self):
+        pub = self._pub({"a.md": f"The role is {self.ПЕРЕНЯТО}\n"
+                                 f"{self.ЧУЖОЙ} — read-only judge.\n"})
+        self.assertTrue(sp.audit(pub)["attribution"])
+
+    def test_a_source_of_facts_is_not_attribution(self):
+        """Обратный контроль, и он тут главный.
+
+        Ссылка на CVE, advisory, документацию хоста или чужой багрепорт
+        обосновывает ПРОВЕРКУ, а не выдаёт происхождение приёма. Вычистить их
+        значило бы ослабить продукт ради буквы правила.
+        """
+        pub = self._pub({"data/checks.json": '[\n'
+                         ' "CVE-2025-30066 — утечка секретов: '
+                         'https://git' + 'hub.com/advisories/ghsa-mrrh-fwg8-r2c3",\n'
+                         ' "issue #14457 — usage data lost: '
+                         + "https://git" + 'hub.com/someone/thing/issues/14457"\n]\n'})
+        self.assertEqual(sp.audit(pub)["attribution"], [])
+
+    def test_the_word_alone_is_not_attribution(self):
+        """«Взято из манифеста», «основан на измерении» — обычная речь."""
+        pub = self._pub({"a.md": "Число взято из манифеста, а не набрано руками.\n"})
+        self.assertEqual(sp.audit(pub)["attribution"], [])
+
+    def test_the_shipped_tree_is_clean_right_now(self):
+        """Живая проверка того самого дерева, которое уезжает людям."""
+        self.assertEqual(sp.audit(REPO / "plugins")["attribution"], [])
+
+
+class TestChoppingGoesWhereTheAuditLooks(unittest.TestCase):
+    """Область у починки и у проверки — одна.
+
+    Разбиение литералов ходило плоским обходом, осмотр — рекурсивным. Пока
+    тесты лежали одной папкой, разница ничего не значила. В день, когда рядом
+    появился `tests/external/`, разбиение перестало до него доходить, осмотр
+    честно нашёл там литерал и остановил выкладку — на строке, которую сам же
+    конвейер обязан был разбить.
+    """
+
+    ДЛИННЫЙ = "A" * 30
+
+    def _pub(self) -> Path:
+        d = Path(tempfile.mkdtemp())
+        self.addCleanup(lambda: __import__("shutil").rmtree(d, ignore_errors=True))
+        (d / "tests" / "external").mkdir(parents=True)
+        (d / "tests" / "test_top.py").write_text(
+            f'ВЕРХ = "{self.ДЛИННЫЙ}"\n', encoding="utf-8")
+        (d / "tests" / "external" / "test_deep.py").write_text(
+            f'ГЛУБЖЕ = "{self.ДЛИННЫЙ}"\n', encoding="utf-8")
+        return d
+
+    def test_a_nested_test_file_is_chopped_too(self):
+        pub = self._pub()
+        self.assertEqual(sp.split_literals(pub / "tests"), 2, "вложенное не разбито")
+        глубже = (pub / "tests" / "external" / "test_deep.py").read_text("utf-8")
+        self.assertNotIn(self.ДЛИННЫЙ, глубже)
+
+    def test_the_audit_agrees_with_the_chopping(self):
+        """Обратная сторона того же: после разбиения осмотру не на что ругаться."""
+        pub = self._pub()
+        sp.split_literals(pub / "tests")
+        self.assertEqual(sp.audit(pub)["long_literals"], [])
+
+    def test_the_value_survives_the_chopping(self):
+        """Разбиение меняет исходник, а не значение."""
+        pub = self._pub()
+        sp.split_literals(pub / "tests")
+        пространство: dict = {}
+        exec((pub / "tests" / "external" / "test_deep.py").read_text("utf-8"),
+             пространство)
+        self.assertEqual(пространство["ГЛУБЖЕ"], self.ДЛИННЫЙ)

@@ -61,6 +61,12 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
+# Запись — общим модулем: замок на весь цикл, уникальный временный сосед и
+# режим доступа, который от записи не расширяется. Каталог скрипта при импорте
+# из теста в sys.path не попадает, поэтому добавляется явно — как у соседей.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import atomic_store  # noqa: E402
+
 HERE = Path(__file__).resolve().parent.parent
 SHARED = HERE / "data" / "knowledge" / "learned"
 LOCAL = Path.home() / ".claude" / "superstack" / "learned"
@@ -295,11 +301,17 @@ def cmd_add(a) -> int:
 
     if path.exists():
         # Повторная встреча — не дубль, а подтверждение. Это сильнее новой записи.
-        old = json.loads(path.read_text(encoding="utf-8"))
-        old["confirmations"] = old.get("confirmations", 1) + 1
-        old["last_seen"] = entry["created"]
-        old["destination"] = route(a.kind, paths_list, old["confirmations"])
-        write_atomic(path, old)
+        #
+        # Замок держится на ВЕСЬ цикл «прочитал, прибавил, записал». Находка
+        # прилетает и из подагента, то есть из ДРУГОГО процесса: без замка оба
+        # читают одно и то же число подтверждений и записывают одно и то же
+        # «плюс один» — одно подтверждение пропадает молча, оба печатают успех.
+        with atomic_store.Lock(path):
+            old = json.loads(path.read_text(encoding="utf-8"))
+            old["confirmations"] = old.get("confirmations", 1) + 1
+            old["last_seen"] = entry["created"]
+            old["destination"] = route(a.kind, paths_list, old["confirmations"])
+            write_atomic(path, old)
         print(f"ПОДТВЕРЖДЕНО повторно ({old['confirmations']}×): {old['title']}")
         print(f"  {path}")
         print("  Повторная встреча — сильнейший сигнал, что находка настоящая.")
@@ -324,10 +336,17 @@ def cmd_add(a) -> int:
         similar = None
     if similar is not None:
         similar_path = entry_path(d, similar["id"])
-        similar["confirmations"] = similar.get("confirmations", 1) + 1
-        similar["last_seen"] = entry["created"]
-        similar["destination"] = route(a.kind, paths_list, similar["confirmations"])
-        write_atomic(similar_path, similar)
+        # Тот же цикл «прочитал, прибавил, записал», что и у точного совпадения
+        # выше, — и тот же замок на него целиком. Запись перечитывается ПОД
+        # замком: список находок прочитан много выше, и между тем чтением и
+        # этой записью помещается чужое подтверждение целиком.
+        with atomic_store.Lock(similar_path):
+            similar = json.loads(similar_path.read_text(encoding="utf-8"))
+            similar["confirmations"] = similar.get("confirmations", 1) + 1
+            similar["last_seen"] = entry["created"]
+            similar["destination"] = route(a.kind, paths_list,
+                                           similar["confirmations"])
+            write_atomic(similar_path, similar)
         print(f"СОЧТЕНО ПОВТОРОМ по схожести заголовка ({similar['confirmations']}×): "
               f"«{similar['title']}»")
         print(f"  новая формулировка: «{a.title}»")
@@ -398,17 +417,17 @@ def cmd_list(a) -> int:
 
 
 def write_atomic(path: Path, data: dict) -> None:
-    """Запись через временный файл и переименование.
+    """Запись общим модулем.
 
     Прямая запись поверх существующего файла оставляет окно, в котором на
     диске лежит обрезанный JSON: прерывание в этот момент уничтожает запись
     целиком. Для журнала находок это потеря именно того, ради чего он есть.
-    Переименование внутри одного каталога атомарно.
+
+    Своя копия этих четырёх строк здесь была, и в ней жили три дефекта разом:
+    общее на всех имя временного соседа, потеря режима доступа при замене и
+    отсутствие замка. Отступ прежний — журнал читает человек.
     """
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(path.suffix + ".tmp")
-    tmp.write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
-    os.replace(tmp, path)
+    atomic_store.записать_json(path, data, indent=1)
 
 
 def entry_path(store_dir: Path, entry_id: str) -> Path:

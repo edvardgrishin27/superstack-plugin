@@ -410,6 +410,10 @@ class ЗамокБезPOSIX(unittest.TestCase):
     Проверяется подстановкой: настоящая Windows тут не нужна и её тут не было.
     `fcntl` на время проверки делается недоступным — ровно то, чем он и
     является на Windows, — а вызов запирания подменяется на считающий.
+
+    Подстановка идёт в общий модуль записи: замок переехал туда вместе с этой
+    веткой, и подменять имя `os` в панели хода стройки значило бы подменять
+    его там, где запирания больше нет, — то есть проверять пустоту.
     """
 
     class _ОС:
@@ -425,9 +429,10 @@ class ЗамокБезPOSIX(unittest.TestCase):
         подделка = types.SimpleNamespace(
             LK_LOCK=1, LK_UNLCK=0,
             locking=lambda fd, режим, длина: зовы.append(режим))
-        было_os, было_msvcrt = pr.os, sys.modules.get("msvcrt")
+        хранилище = pr.atomic_store
+        было_os, было_msvcrt = хранилище.os, sys.modules.get("msvcrt")
         было_fcntl, было_ли_fcntl = sys.modules.get("fcntl"), "fcntl" in sys.modules
-        pr.os = self._ОС()
+        хранилище.os = self._ОС()
         sys.modules["msvcrt"] = подделка
         # None в этом месте — то же, что отсутствие модуля: импорт падает.
         sys.modules["fcntl"] = None
@@ -436,7 +441,7 @@ class ЗамокБезPOSIX(unittest.TestCase):
                 with pr._Lock(Path(d) / "состояние.json"):
                     pass
         finally:
-            pr.os = было_os
+            хранилище.os = было_os
             if было_msvcrt is None:
                 sys.modules.pop("msvcrt", None)
             else:

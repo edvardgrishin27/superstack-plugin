@@ -33,11 +33,66 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 HOME = Path.home()
-CLAUDE = HOME / ".claude"
 HERE = Path(__file__).resolve().parent.parent
 LEDGER = HERE / "data" / "supersession.json"
 
 STALE_DAYS = 180
+
+_COLLECT_MOD = None
+
+
+def _collect_module():
+    """Сборщик фактов как библиотека. Ищется по РАСКЛАДКЕ, а не по манифесту.
+
+    Пробы ищутся по раскладке потому, что движок Claude Code 2.1.42 отвергает
+    поле `dependencies` как неизвестный ключ, из-за чего ни один пакет не
+    проходил валидацию. Поле убрано — вместе с ним исчезла бы и эта проводка,
+    молча: доктор нашёл бы свой несуществующий `probe/collect.py` и упал на
+    импорте.
+
+    Не нашёлся — это ОТКАЗ вслух, а не тихий переход на домашний каталог.
+    Запасной путь здесь означал бы второй резолвер профиля, и включался бы он
+    ровно тогда, когда о нём никто не помнит.
+    """
+    global _COLLECT_MOD
+    if _COLLECT_MOD is None:
+        import importlib.util
+        _here = Path(__file__).resolve().parent
+        _plugins = _here.parent.parent
+        path = _here / "probe" / "collect.py"
+        if not path.is_file():
+            for _base in (_plugins, _plugins.parent):
+                if not _base.is_dir():
+                    continue
+                _hits = sorted(_base.glob("*/tools/probe/collect.py")) or \
+                        sorted(_base.glob("*/*/tools/probe/collect.py"))
+                if _hits:
+                    path = _hits[0]
+                    break
+        if not path.is_file():
+            raise SystemExit(
+                f"ОТКАЗ: сборщик фактов не найден ({path}) — спросить, какой "
+                f"каталог настроек читает хост, не у кого. Доклад о настройках, "
+                f"в которые не заглядывали, хуже отсутствующего доклада.")
+        spec = importlib.util.spec_from_file_location("ss_collect_lib", path)
+        _COLLECT_MOD = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(_COLLECT_MOD)
+    return _COLLECT_MOD
+
+
+#: Каталог настроек, который читает ХОСТ, и то, откуда взят этот путь.
+#:
+#: Оба берутся у сборщика фактов: резолвер в системе ОДИН. Доктор собирал путь
+#: литералом `Path.home() / ".claude"`, и на машине с назначенным профилем весь
+#: доклад — разрешения, хуки, скиллы, MCP — был про СОСЕДНИЙ каталог, ни строкой
+#: об этом не сказав. Второй список оговорок разошёлся бы с первым молча: правят
+#: обычно тот, который на виду.
+#:
+#: Пара, а не один путь: человек обязан видеть, ПОЧЕМУ прочитан именно этот
+#: каталог. «В твоём профиле пусто» и «в чужом профиле пусто» — разные
+#: утверждения, и различает их только названный источник.
+CLAUDE, CLAUDE_SOURCE = _collect_module().config_dir()
+
 CACHE = CLAUDE / "superstack" / "cache" / "upstream.json"
 
 OFFLINE = "--offline" in sys.argv
@@ -217,7 +272,7 @@ def axis_supersession(active: str | None = None,
             if (CLAUDE / "skills").is_dir() else set()
         commands = {f.stem for f in (CLAUDE / "commands").glob("*.md")} \
             if (CLAUDE / "commands").is_dir() else set()
-        mcp = set((read_json(HOME / ".claude.json") or {}).get("mcpServers", {}))
+        mcp = set((read_json(global_config()) or {}).get("mcpServers", {}))
     else:
         skills = set(inventory.get("skills", []))
         commands = set(inventory.get("commands", []))
@@ -285,45 +340,39 @@ def axis_supersession(active: str | None = None,
     return out
 
 
-_COLLECT_MOD = None
-
-
 def _collect():
-    """Сборщик фактов как библиотека: одна логика — один ответ.
+    """Сборщик фактов с СИНХРОНИЗИРОВАННЫМ корнем: одна логика — один ответ.
 
     Корень пути синхронизируется при каждом обращении. Иначе доктор читал бы
     манифест из своего CLAUDE, а подключённые хуки — из константы, которую
     сборщик связал при импорте: два разных корня внутри одной функции.
     На обычном прогоне они совпадают, и дефект остаётся латентным — ровно
     до первой попытки проверить эту функцию.
+
+    С резолвером это не спорит, а достраивает его. Оба конца берут путь у
+    одной и той же `config_dir()`, поэтому на боевом прогоне подмена ничего не
+    меняет. Работает она там, где корень задан СНАРУЖИ — проверка, чужой
+    профиль, поданный вручную состав машины: без неё доктор говорил бы об
+    одном каталоге, а читал бы другой. Источник пути едет вместе с путём:
+    подменить каталог и оставить прежнюю причину значит соврать человеку
+    именно в том поле, ради которого причина и заведена.
     """
-    global _COLLECT_MOD
-    if _COLLECT_MOD is None:
-        import importlib.util
-        import json as _json
-        _here = Path(__file__).resolve().parent
-        _plugins = _here.parent.parent
-        # Пробы ищутся по РАСКЛАДКЕ, а не по полю `dependencies`: движок
-        # Claude Code 2.1.42 отвергает это поле как неизвестный ключ, из-за
-        # чего ни один пакет не проходил валидацию. Поле убрано — вместе с ним
-        # исчезла бы и эта проводка, молча: doctor нашёл бы свой несуществующий
-        # `probe/collect.py` и упал на импорте.
-        path = _here / "probe" / "collect.py"
-        if not path.is_file():
-            for _base in (_plugins, _plugins.parent):
-                if not _base.is_dir():
-                    continue
-                _hits = sorted(_base.glob("*/tools/probe/collect.py")) or \
-                        sorted(_base.glob("*/*/tools/probe/collect.py"))
-                if _hits:
-                    path = _hits[0]
-                    break
-        spec = importlib.util.spec_from_file_location("ss_collect_lib", path)
-        _COLLECT_MOD = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(_COLLECT_MOD)
-    _COLLECT_MOD.CLAUDE = CLAUDE
-    _COLLECT_MOD.HOME = HOME
-    return _COLLECT_MOD
+    мод = _collect_module()
+    мод.CLAUDE = CLAUDE
+    мод.CLAUDE_SOURCE = CLAUDE_SOURCE
+    мод.HOME = HOME
+    return мод
+
+
+def global_config() -> Path:
+    """Адрес общего конфига хоста — у того же резолвера, что и каталог настроек.
+
+    Документация зовёт файл `~/.claude.json`, но его адрес привязан к ПРОФИЛЮ:
+    назначенный профиль уносит файл к себе. Свой литерал здесь означал бы, что
+    имя каталога доктор берёт из одного места, а MCP-серверы — из другого, и
+    расхождение это молчит: список серверов выглядит измеренным.
+    """
+    return _collect().global_config_path()
 
 
 # ---------------------------------------------------------------- ОСЬ C
@@ -414,6 +463,13 @@ def axis_self(built_for: str | None = None, installed: str | None = None) -> dic
 def render(report: dict) -> str:
     L = "─" * 72
     out = [L, "ДОКТОР: что обновить, что убрать, что уже есть в Claude Code", L, ""]
+
+    # Первым делом — ЧЬИ настройки осмотрены. Всё, что ниже, сказано про этот
+    # каталог и ни про какой другой; без его имени «у тебя пусто» и «в чужом
+    # профиле пусто» читаются одинаково, а означают разное. Рядом стоит
+    # причина, по которой прочитан именно он: имя без причины нечем проверить.
+    out += [f"Профиль настроек: {report.get('config_dir') or '?'}",
+            f"  путь взят: {report.get('config_dir_source') or '?'}", ""]
 
     s = report["self"]
     if s.get("version_unknown"):
@@ -724,6 +780,8 @@ def main() -> None:
     halt_if_paused()
     ver, how = active_version()
     report = {
+        "config_dir": str(CLAUDE),
+        "config_dir_source": CLAUDE_SOURCE,
         "active_version": ver,
         "active_version_source": how,
         "upstream": axis_upstream(),

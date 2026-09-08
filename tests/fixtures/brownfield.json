@@ -172,6 +172,7 @@
  "rt.versions_installed": {
   "npm": "2.1.42"
  },
+ "sec.scan_denied": [],
  "sec.scan_files": [
   "user",
   "user-local"
@@ -187,5 +188,12 @@
    "why": "пароль прямо в команде"
   }
  ],
- "cc.constitution_lines": 320
+ "cc.constitution_lines": 320,
+ "cc.config_dir": null,
+ "mcp.by_scope": [],
+ "mcp.scopes_covered": [],
+ "mcp.scopes_unreadable": [],
+ "cc.plugins.by_scope": [],
+ "cc.permissions.by_scope": [],
+ "cc.settings_scopes_unreadable": []
 }

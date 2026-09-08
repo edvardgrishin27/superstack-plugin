@@ -54,6 +54,12 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
+# Замок и запись — общие для всех инструментов, которые пишут одни и те же
+# файлы. Каталог скрипта при импорте из теста в sys.path не попадает, поэтому
+# добавляется явно — как у соседей.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import atomic_store  # noqa: E402
+
 # --------------------------------------------------------------------------
 # расположение — тот же слой, что и apply.py (HOME/.claude/superstack/...),
 # но БЕЗ импорта apply.py: параллельная правка соседнего файла не должна
@@ -111,15 +117,19 @@ def _write(new_state: str, evidence: dict) -> dict:
     """Единственное место, которое кладёт state.json на диск. Публичные
     функции ниже — единственные вызыватели; прямого экспорта `_write` из
     CLI нет ровно затем, чтобы «поставить состояние X одной командой» было
-    физически невозможно."""
-    cur = read()
-    record = {"from": cur["state"], "to": new_state, "at": _now(), "evidence": evidence}
-    history = [*cur.get("history", []), record]
-    data = {"state": new_state, "history": history}
-    STATE_DIR.mkdir(parents=True, exist_ok=True)
-    tmp = STATE_FILE.with_suffix(".json.tmp")
-    tmp.write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
-    tmp.replace(STATE_FILE)  # атомарная замена: половина записи не читается никем
+    физически невозможно.
+
+    Замок держится на ВЕСЬ цикл: история дописывается к прочитанной, и второй
+    процесс, прочитавший то же самое между нашими чтением и записью, вернул бы
+    файл к прежнему виду — переход исчез бы молча, с нулём у обоих."""
+    with atomic_store.Lock(STATE_FILE):
+        cur = read()
+        record = {"from": cur["state"], "to": new_state, "at": _now(), "evidence": evidence}
+        history = [*cur.get("history", []), record]
+        data = {"state": new_state, "history": history}
+        # Запись — общим модулем: атомарная замена, уникальный временный сосед
+        # и режим доступа, который от записи не расширяется.
+        atomic_store.записать_json(STATE_FILE, data, indent=1)
     return data
 
 

@@ -394,7 +394,7 @@
       "notify_sent": "REPORT SENT",
       "notify_failed": "COULD NOT DELIVER",
       "notify_nowhere": "NOWHERE TO SEND",
-      "oops_not_undone": "DID NOT roll «{id}» back: not one file came back — the secrets are cut out of the copy, and restoring would overwrite a live value with a label. The copy: {backup} — put the fields you need back by hand.",
+      "oops_not_undone": "DID NOT roll «{id}» back: not one field came back — either the copy has the secrets cut out where they were, and restoring would overwrite a live value with a label, or they changed after the change was applied, and what is not mine I leave alone. Which of the two, and for which field, is in the line above. The copy: {backup} — put the fields you need back by hand.",
       "next_prefix": "next:"
     },
     "jargon": {
@@ -480,7 +480,7 @@
       "notify_sent": "ОТЧЁТ УШЁЛ",
       "notify_failed": "ДОСТАВИТЬ НЕ УДАЛОСЬ",
       "notify_nowhere": "ОТПРАВЛЯТЬ НЕКУДА",
-      "oops_not_undone": "НЕ откатил «{id}»: ни один файл не вернулся — в копии вырезаны секреты, и возврат затёр бы живое значение меткой. Копия: {backup} — нужные поля верни руками.",
+      "oops_not_undone": "НЕ откатил «{id}»: не вернулось ни одного поля — либо в копии на их месте вырезаны секреты и возврат затёр бы живое значение меткой, либо они изменились после применения, и чужое я не трогаю. Что именно и по какому полю — строкой выше. Копия: {backup} — нужные поля верни руками.",
       "next_prefix": "дальше:"
     }
   }
