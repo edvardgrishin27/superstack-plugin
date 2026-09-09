@@ -234,7 +234,7 @@
    "layer": "L1 конституция",
    "mechanism": "области MCP сводятся все три: пользовательская, область этого проекта внутри общего конфига и .mcp.json команды",
    "evidence": {
-    "file": "plugins/superstack/tools/probe/collect.py",
+    "file": "plugins/superstack/tools/probe/probe_install.py",
     "contains": "def mcp_scopes"
    }
   },
@@ -243,7 +243,7 @@
    "layer": "L1 конституция",
    "mechanism": "недостижимая область MCP названа поимённо непрочитанной, а не сведена к пустоте",
    "evidence": {
-    "file": "plugins/superstack/tools/probe/collect.py",
+    "file": "plugins/superstack/tools/probe/probe_install.py",
     "contains": "put(\"mcp.scopes_unreadable\""
    }
   },
@@ -414,7 +414,7 @@
    "layer": "L5 гарантии",
    "mechanism": "секреты ищутся и в конфигах, и в инструкциях, которые агент исполняет",
    "evidence": {
-    "file": "plugins/superstack/tools/probe/collect.py",
+    "file": "plugins/superstack/tools/probe/probe_secrets.py",
     "contains": "def _text_assets"
    }
   },
@@ -542,6 +542,24 @@
    "evidence": {
     "file": "tools/gauntlet.py",
     "contains": "def gate_hermetic"
+   }
+  },
+  {
+   "id": "BAR.hermetic-holds-the-tree-while-it-measures",
+   "layer": "планка",
+   "mechanism": "ворота герметичности держат замок дерева на ОБА прогона: второй харнесс отказывается мерить вслух, вместо того чтобы портить измерение молча",
+   "evidence": {
+    "file": "tools/gauntlet.py",
+    "contains": "беда_замка = acquire_lock()"
+   }
+  },
+  {
+   "id": "BAR.hermetic-does-not-blame-home-for-a-race",
+   "layer": "планка",
+   "mechanism": "ворота герметичности не выдают гонку двух харнессов за замок дерева за зависимость набора от HOME: чужой живой держатель — это «не смог измерить», а не «набор зависит от HOME». Ворота, которые краснеют от шума, перестают читать",
+   "evidence": {
+    "file": "tools/gauntlet.py",
+    "contains": "def _занято_чужим"
    }
   },
   {
@@ -965,6 +983,24 @@
    "evidence": {
     "file": "tools/gauntlet.py",
     "contains": "def acquire_lock"
+   }
+  },
+  {
+   "id": "BAR.lock-refusal-is-marked-not-worded",
+   "layer": "планка",
+   "mechanism": "отказ по занятому дереву помечен ПОЛЕМ lock, а не только прозой: вызывающий (в том числе тест) отличает «дерево держит чужой прогон» от «механизм сломан», не разбирая формулировку",
+   "evidence": {
+    "file": "tools/gauntlet.py",
+    "contains": "def _пометка_замка"
+   }
+  },
+  {
+   "id": "L7.lock-names-the-holder",
+   "layer": "L7 эволюция",
+   "mechanism": "замок называет не номер, а прогон: рядом с пидом в файле замка лежит, ЧЕЙ это прогон, и отказ показывает виновника — по одному числу установить его не удалось ни разу, к моменту чтения отчёта процесса уже нет в ps",
+   "evidence": {
+    "file": "tools/gauntlet.py",
+    "contains": "def _чей_прогон"
    }
   },
   {
@@ -3500,7 +3536,7 @@
    "layer": "интерфейс",
    "mechanism": "все числа панели считает ход стройки по четырём файлам на диске — части работы, требования человека, последняя проверка и снимки; разметке остаётся только показать готовое, вписать число «по смыслу» ей нечем",
    "evidence": {
-    "file": "plugins/superstack/tools/progress.py",
+    "file": "plugins/superstack/tools/panel_facts.py",
     "contains": "def панель_факты(data: dict, run_dir: Path, phases: tuple) -> dict:"
    }
   },
@@ -3509,7 +3545,7 @@
    "layer": "интерфейс",
    "mechanism": "покрытие просьбы и левая колонка ведомости читаются из файла требований, а не из поля, которое заполняют отдельной командой: пропущенная команда молча оставляла вчерашние числа",
    "evidence": {
-    "file": "plugins/superstack/tools/progress.py",
+    "file": "plugins/superstack/tools/panel_facts.py",
     "contains": "def требования(run_dir: Path) -> list:"
    }
   },
@@ -3529,6 +3565,24 @@
    "evidence": {
     "file": "plugins/superstack/tools/live_panel.py",
     "contains": "_page(), with_facts(read_state(run_dir), run_dir)))"
+   }
+  },
+  {
+   "id": "UX.panel-markup-is-a-file-not-code",
+   "layer": "интерфейс",
+   "mechanism": "разметка панели — данные отдельным файлом пакета, а не строка внутри инструмента: она не ветвится и не считает, и держать её в одном файле с логикой значило смешивать два занятия; путь к ней считается от самого инструмента, поэтому страница находится и в установленной копии, и из любого текущего каталога",
+   "evidence": {
+    "file": "plugins/superstack/tools/live_panel.py",
+    "contains": "PAGE = Path(__file__).resolve().parent.parent / \"data\" / \"panel-page.html\""
+   }
+  },
+  {
+   "id": "UX.panel-markup-absence-is-a-refusal",
+   "layer": "интерфейс",
+   "mechanism": "пропажа файла разметки — отказ с названным путём, а не пустая страница: собранная без разметки панель выглядит как «ничего не происходит», то есть ровно как то, против чего она построена",
+   "evidence": {
+    "file": "plugins/superstack/tools/live_panel.py",
+    "contains": "f\"нет разметки панели: {PAGE} ({e}) — она едет в поставке рядом \""
    }
   },
   {

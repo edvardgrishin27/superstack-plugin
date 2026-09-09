@@ -838,7 +838,7 @@
   },
   {
    "id": "probe.mask-placeholder-blind",
-   "file": "plugins/superstack/tools/probe/collect.py",
+   "file": "plugins/superstack/tools/probe/probe_secrets.py",
    "find": "    body = re.sub(r\"^(?:sk-ant-|sk-|ghp_|github_pat_|xox[baprs]-|AKIA)\", \"\", v)\n    return bool(_MASK_RUN.search(body))",
    "replace": "    return False",
    "why": "маска из повторяющегося символа снова читается как живой ключ: канонический образец из документации даёт critical/BLOCK и вытесняет настоящий токен из отчёта"
@@ -1266,7 +1266,7 @@
   {
    "id": "lock.never-taken",
    "file": "tools/gauntlet.py",
-   "find": "    try:\n        p.write_text(f\"{os.getpid()}\\n\", encoding=\"utf-8\")\n    except OSError as e:\n        return f\"замок не поставлен ({e}) — мутировать вслепую нельзя\"",
+   "find": "    try:\n        p.write_text(f\"{os.getpid()} {_чей_прогон()}\\n\", encoding=\"utf-8\")\n    except OSError as e:\n        return f\"замок не поставлен ({e}) — мутировать вслепую нельзя\"",
    "replace": "    try:\n        pass\n    except OSError as e:\n        return f\"замок не поставлен ({e}) — мутировать вслепую нельзя\"",
    "why": "замок не ставится — два харнесса мутируют одно дерево и портят измерения друг друга молча, каждый относя чужую поломку на свой счёт"
   },
@@ -1283,6 +1283,34 @@
    "find": "        if pid and pid != os.getpid() and _alive(pid):\n            return {\"restored\": [], \"failed\": [], \"status\": \"unknown\",",
    "replace": "        if False:\n            return {\"restored\": [], \"failed\": [], \"status\": \"unknown\",",
    "why": "починка срывает идущую проверку: вырывает файл у неё из-под рук, и её измерение становится враньём — ровно то, что я сделал руками, разбирая эту сессию"
+  },
+  {
+   "id": "lock.holder-is-a-number-without-a-name",
+   "file": "tools/gauntlet.py",
+   "find": "        p.write_text(f\"{os.getpid()} {_чей_прогон()}\\n\", encoding=\"utf-8\")",
+   "replace": "        p.write_text(f\"{os.getpid()}\\n\", encoding=\"utf-8\")",
+   "why": "замок снова называет только номер: чей прогон держит дерево — не установить, отказ показывает число, за которым уже некого спросить"
+  },
+  {
+   "id": "lock.refusal-is-words-without-a-mark",
+   "file": "tools/gauntlet.py",
+   "find": "        return {\"status\": \"unknown\", \"detail\": чужой[\"беда\"],\n                \"lock\": _пометка_замка(чужой)}",
+   "replace": "        return {\"status\": \"unknown\", \"detail\": чужой[\"беда\"],\n                \"занято\": _пометка_замка(чужой)}",
+   "why": "признак «дерево держит чужой прогон» исчезает из вердикта: вызывающий снова обязан отличать занятое дерево от сломанного механизма по формулировке, а формулировки меняются"
+  },
+  {
+   "id": "hermetic.race-read-as-a-home-dependency",
+   "file": "tools/gauntlet.py",
+   "find": "    занято = _занято_чужим(\"два харнесса на одном дереве меряют друг друга, \"\n                           \"а не код\")\n    if занято:\n        return занято",
+   "replace": "    занято = None\n    if занято:\n        return занято",
+   "why": "гонка двух харнессов за замок дерева снова выдаётся за зависимость набора от HOME: ворота краснеют от шума, и красное перестаёт что-либо значить"
+  },
+  {
+   "id": "hermetic.measures-without-holding-the-tree",
+   "file": "tools/gauntlet.py",
+   "find": "    беда_замка = acquire_lock()\n    if беда_замка:\n        return {\"status\": \"unknown\", \"detail\": беда_замка}",
+   "replace": "    беда_замка = None\n    if беда_замка:\n        return {\"status\": \"unknown\", \"detail\": беда_замка}",
+   "why": "ворота герметичности меряют молча: вторая планка спокойно уходит в тот же набор, и обе портят измерения друг другу — ровно то, ради чего замок заведён"
   },
   {
    "id": "adr.rejected-optional",
@@ -2168,21 +2196,21 @@
   },
   {
    "id": "panel.dollar-after-first-lang-call",
-   "file": "plugins/superstack/tools/live_panel.py",
+   "file": "plugins/superstack/data/panel-page.html",
    "find": "const $ = (id) => document.getElementById(id);\n// Языков два, и ОБА вшиты в файл. Догружать второй словарь панели неоткуда:\n// она обязана работать открытой с диска, где соседние файлы читать нельзя.\nlet LANG = firstLang();",
    "replace": "let LANG = firstLang();\n// Языков два, и ОБА вшиты в файл. Догружать второй словарь панели неоткуда:\n// она обязана работать открытой с диска, где соседние файлы читать нельзя.\nconst $ = (id) => document.getElementById(id);",
    "why": "firstLang() зовёт snapshot(), а та немедленно читает $('snapshot') — если $ объявлен НИЖЕ этого вызова, он в момент вызова лежит в мёртвой зоне константы, и на чистом профиле браузера (пустой localStorage) страница падает раньше первой цифры: панель молча остаётся пустой"
   },
   {
    "id": "panel.you-bar-hides-real-debt",
-   "file": "plugins/superstack/tools/live_panel.py",
+   "file": "plugins/superstack/data/panel-page.html",
    "find": "  } else if (debt.total) {",
    "replace": "  } else if (false) {",
    "why": "не твой ход и есть незакрытый долг — полоса «от тебя» печатает «сейчас от тебя ничего не нужно» вместо списка заглушек: честная строка становится ложной именно тогда, когда долг реален"
   },
   {
    "id": "panel.bar-counts-claimed",
-   "file": "plugins/superstack/tools/live_panel.py",
+   "file": "plugins/superstack/data/panel-page.html",
    "find": "    tasks.length ? Math.round(100 * proven / tasks.length) + '%' : '0';",
    "replace": "    tasks.length ? Math.round(100 * (proven + claimed) / tasks.length) + '%' : '0';",
    "why": "полоса растёт от заявленного — «агент сказал готово» становится неотличимо от «гейт вернул ноль», и зелёная шкала даёт уверенность ровно там, где её быть не должно"
@@ -2196,7 +2224,7 @@
   },
   {
    "id": "panel.stale-wait-not-marked",
-   "file": "plugins/superstack/tools/live_panel.py",
+   "file": "plugins/superstack/data/panel-page.html",
    "find": "  $('since').className = 'since' + (ph.owner === 'человек' && ph.since &&",
    "replace": "  $('since').className = 'since' + (false &&",
    "why": "долгое ожидание на человеке перестаёт выделяться — «идёт» и «забыли» выглядят одинаково, и вечер уходит на взаимное ожидание"
@@ -2224,14 +2252,14 @@
   },
   {
    "id": "panel.drift-from-the-work-is-hidden",
-   "file": "plugins/superstack/tools/live_panel.py",
+   "file": "plugins/superstack/data/panel-page.html",
    "find": "  const off = running > 0 && ph.name && ph.name !== BUILD_PHASE;",
    "replace": "  const off = false;",
    "why": "панель перестаёт замечать, что разошлась с работой, и уверенно показывает устаревший этап — такой панели верят, поэтому молчащая хуже отсутствующей"
   },
   {
    "id": "panel.estimate-counts-unfinished-parts",
-   "file": "plugins/superstack/tools/live_panel.py",
+   "file": "plugins/superstack/data/panel-page.html",
    "find": "    .filter(t => t.started && t.finished)",
    "replace": "    .filter(t => t.started)",
    "why": "оценка «сколько ещё» считается по незаконченным частям, то есть по ничему: срок становится выдуманным, а выдуманному верят и по нему планируют день"
@@ -2707,14 +2735,14 @@
   },
   {
    "id": "mem.one-bad-store-erases-all",
-   "file": "plugins/superstack/tools/probe/collect.py",
+   "file": "plugins/superstack/tools/probe/probe_growth.py",
    "find": "            except OSError:\n                # Одна нечитаемая память",
    "replace": "            except OSError:\n                raise  # Одна нечитаемая память",
    "why": "одна нечитаемая память снова уносит все остальные: «не нашёл проблем с памятью» становится неотличимо от «не смотрел»"
   },
   {
    "id": "mem.topics-go-negative",
-   "file": "plugins/superstack/tools/probe/collect.py",
+   "file": "plugins/superstack/tools/probe/probe_growth.py",
    "find": "\"topic_files\": max(0, len(файлы) - 1),",
    "replace": "\"topic_files\": len(файлы) - 1,",
    "why": "пустая память снова печатает «тем: -1» — число, которого не бывает, поданное человеку с уверенным видом"
@@ -3786,14 +3814,14 @@
   },
   {
    "id": "panel.empty-tasks-read-as-all-done",
-   "file": "plugins/superstack/tools/live_panel.py",
+   "file": "plugins/superstack/data/panel-page.html",
    "find": "  if (!tasks.length) { $('eta').textContent = W.copy.no_tasks; return null; }",
    "replace": "  if (false) { $('eta').textContent = W.copy.no_tasks; return null; }",
    "why": "пустой список снова читается как «всё сделано»: работа ещё не разбита на части — это вся первая половина прогона, часы, — а панель показывает «все части закончены» с первой минуты"
   },
   {
    "id": "panel.run-owners-never-go-stale",
-   "file": "plugins/superstack/tools/live_panel.py",
+   "file": "plugins/superstack/data/panel-page.html",
    "find": "  if ((ph.owner === 'система' || ph.owner === 'исполнитель') && ph.since &&",
    "replace": "  if (false &&",
    "why": "застревание перестаёт замечаться у держателей «система» и «исполнитель» — упавшая сессия на этапе «Пишем код» выглядит живой бесконечно, и человек ждёт того, чего уже нет"
@@ -3828,7 +3856,7 @@
   },
   {
    "id": "panel.stale-run-text-reverts-to-human",
-   "file": "plugins/superstack/tools/live_panel.py",
+   "file": "plugins/superstack/data/panel-page.html",
    "find": ".since.stale-run::after { content: \"__STALE_RUN_SUFFIX__\"; color: var(--muted); }",
    "replace": ".since.stale-run::after { content: \"__WAIT_LONG__\"; color: var(--muted); }",
    "why": "адресный текст застревания у держателей «система» и «исполнитель» подменяется общим «ждём давно» — слово «ждём» не про тех, кого никто не ждёт, и человек не поймёт, что смотреть надо в разговор"
@@ -4129,14 +4157,14 @@
   },
   {
    "id": "panel.claimed-counts-as-proven",
-   "file": "plugins/superstack/tools/progress.py",
+   "file": "plugins/superstack/tools/panel_facts.py",
    "find": "    доказано = сколько[PROVEN]\n",
    "replace": "    доказано = сколько[PROVEN] + сколько[CLAIMED]\n",
    "why": "доля на панели начинает расти от слов помощника: часть, названную готовой, но не подтверждённую ни одним кодом возврата, главное число страницы засчитывает наравне с проверенной — и человек видит движение там, где его нет"
   },
   {
    "id": "panel.requirements-are-not-read-from-the-file",
-   "file": "plugins/superstack/tools/progress.py",
+   "file": "plugins/superstack/tools/panel_facts.py",
    "find": "    reqs = d.get(\"requirements\")\n",
    "replace": "    reqs = []\n",
    "why": "покрытие просьбы перестаёт читаться из файла требований: ведомость пустеет, а «сколько из твоей просьбы закрыто» показывает ноль из нуля — то есть отвечает «нечего показывать» там, где требования записаны"
@@ -4423,14 +4451,14 @@
   },
   {
    "id": "probe.mcp-project-scopes-blind",
-   "file": "plugins/superstack/tools/probe/collect.py",
+   "file": "plugins/superstack/tools/probe/probe_install.py",
    "find": "        (\"local\", общий, _mcp_local),\n        (\"project\", проект / \".mcp.json\", _mcp_top),",
    "replace": "        (\"local\", общий, _mcp_top),",
    "why": "области проекта снова невидимы: сервер, добавленный для этого проекта, и .mcp.json команды не попадают в список, а MCP-сервер — это произвольное исполнение кода"
   },
   {
    "id": "probe.mcp-unread-scope-passes-as-empty",
-   "file": "plugins/superstack/tools/probe/collect.py",
+   "file": "plugins/superstack/tools/probe/probe_install.py",
    "find": "            unreadable.append({\"scope\": метка, \"path\": str(путь),\n                               \"reason\": \"файл области не разобран как объект\"})",
    "replace": "            covered.append(метка)",
    "why": "неразобранная область снова числится прочитанной и пустой: «серверов нет» становится неотличимо от «не смотрел», а именно эту подмену продукт ищет у других"
@@ -4763,6 +4791,20 @@
    "find": "    with atomic_store.Lock(p):\n        # Снимок едет с фактами: файл, открытый без сервера, обязан показывать",
    "replace": "    if True:\n        # Снимок едет с фактами: файл, открытый без сервера, обязан показывать",
    "why": "снят замок с цикла «прочитал страницу, вписал снимок, записал»: пересборка страницы, случившаяся между чтением и записью, затирается прочитанной ДО неё — панель остаётся на прежней версии и выглядит свежей, оба вызова возвращают успех"
+  },
+  {
+   "id": "panel.markup-path-is-relative",
+   "file": "plugins/superstack/tools/live_panel.py",
+   "find": "PAGE = Path(__file__).resolve().parent.parent / \"data\" / \"panel-page.html\"",
+   "replace": "PAGE = Path(\"plugins/superstack/data/panel-page.html\")",
+   "why": "путь к разметке стал считаться от текущего каталога: панель собирается только у того, кто запускает из корня репозитория, а у установленной копии страница пуста"
+  },
+  {
+   "id": "panel.missing-markup-is-silent",
+   "file": "plugins/superstack/tools/live_panel.py",
+   "find": "    except OSError as e:\n        raise FileNotFoundError(\n            f\"нет разметки панели: {PAGE} ({e}) — она едет в поставке рядом \"\n            \"с инструментом, значит пакет установлен не целиком\") from e",
+   "replace": "    except OSError:\n        return \"\"",
+   "why": "пропажа файла разметки перестала быть отказом: панель отдаёт пустую страницу, и «ничего не происходит» неотличимо от «пакет установлен не целиком»"
   },
   {
    "id": "learn.confirmation-counted-without-the-lock",

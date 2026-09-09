@@ -6,15 +6,15 @@
 
 <p align="center"><img src="assets/superstack-hero.jpg" alt="SUPERSTACK — the build is checked before it is called done" width="100%"></p>
 
-[![version](https://img.shields.io/badge/version-0.12.0-1f6feb)](.claude-plugin/marketplace.json)
-[![tests](https://img.shields.io/badge/tests-2430-2ea043)](tests)
-[![mutations](https://img.shields.io/badge/mutations-696-8957e5)](tests/mutations.json)
+[![version](https://img.shields.io/badge/version-0.13.0-1f6feb)](.claude-plugin/marketplace.json)
+[![tests](https://img.shields.io/badge/tests-2447-2ea043)](tests)
+[![mutations](https://img.shields.io/badge/mutations-702-8957e5)](tests/mutations.json)
 [![python](https://img.shields.io/badge/python-3.8%2B-3776ab)](#requirements-and-platforms)
 [![dependencies](https://img.shields.io/badge/dependencies-none-555555)](#under-the-hood)
 [![license](https://img.shields.io/badge/license-MIT-97ca00)](LICENSE)
 [![Claude Code plugin](https://img.shields.io/badge/Claude%20Code-plugin-d97757)](#quick-start)
 
-2430 tests · 696 mutations, all caught · 463 mechanisms.
+2447 tests · 702 mutations, all caught · 469 mechanisms.
 
 ## What this is
 
@@ -70,7 +70,7 @@ and answers with an exit code.
 downstream.
 
 **The plugin holds itself to the bar it sells.** Nine gates, and the harshest is
-mutation: **696 registered mutations** break the code on purpose, and every one
+mutation: **702 registered mutations** break the code on purpose, and every one
 of them must turn the suite red. A check that cannot fail is not a check.
 
 ## Quick start
@@ -232,7 +232,7 @@ checked" — which is not the same as "no".
 | What is compared | SUPERSTACK | Superpowers | Skills Matt Pocock |
 | --- | --- | --- | --- |
 | Who decides "done" | **an exit code**: non-zero keeps the turn open (`hooks/verify-gate.py`) | the model, by written rules | the model, by written rules |
-| Breakages that must turn the suite red | **yes**, 696 registered (`tests/mutations.json`) | no | no |
+| Breakages that must turn the suite red | **yes**, 702 registered (`tests/mutations.json`) | no | no |
 | Tests of the tool itself | **yes**, suite green under any `HOME` (`tools/gauntlet.py`) | 44 files | not found |
 | Blind acceptance | **yes**: the reviewer gets only the request and the diff (`tools/blind_accept.py`) | no, the spec is handed over | no, the spec is handed over |
 | Numbers on the panel | **from files**; "claimed" shown apart and never added up (`tools/progress.py`) | no panel | no panel |
@@ -285,7 +285,7 @@ Every line below is not a promise but a place in the code where it is locked.
 
 ## Status
 
-Version 0.12.0. All nine gates green on the tree this text ships from.
+Version 0.13.0. All nine gates green on the tree this text ships from.
 
 Known **not** done, and said here rather than discovered later:
 

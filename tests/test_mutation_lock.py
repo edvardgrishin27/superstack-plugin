@@ -60,10 +60,21 @@ class TestTheLockIsTaken(Base):
         self.assertIsNone(gt.acquire_lock())
         self.assertTrue((self.plug / ".mutation-lock").is_file())
 
-    def test_lock_records_who_holds_it(self):
+    def test_lock_records_whose_run_holds_it(self):
+        """Один номер — это не улика.
+
+        Ворота герметичности краснели строкой «набор зависит от HOME», а
+        настоящей причиной был отказ по замку: «дерево уже мутирует процесс
+        27713». Установить, ЧЕЙ это был процесс, не удалось вовсе — к моменту
+        чтения отчёта его уже не было в `ps`, а в файле замка, кроме числа, не
+        лежало ничего. Поэтому замок называет и прогон.
+        """
         gt.acquire_lock()
-        self.assertEqual((self.plug / ".mutation-lock").read_text("utf-8").strip(),
-                         str(os.getpid()))
+        строка = (self.plug / ".mutation-lock").read_text("utf-8").strip()
+        self.assertEqual(строка.split()[0], str(os.getpid()), строка)
+        self.assertIn("test_mutation_lock.py", строка,
+                      "замок назвал номер и не назвал прогон — виновника по "
+                      "такому отказу установить не по чем")
 
     def test_release_frees_the_tree(self):
         gt.acquire_lock()
@@ -88,6 +99,24 @@ class TestALiveHolderBlocks(Base):
         held = gt.acquire_lock()
         self.assertIsNotNone(held)
         self.assertIn("уже мутирует", held)
+
+    def test_refusal_names_whose_run_holds_the_tree(self):
+        """Отказ обязан назвать виновника, а не номер.
+
+        «Дерево уже мутирует процесс 27713» — это не диагноз: спросить по
+        такому отказу не у кого, процесс к тому времени уже завершился.
+        """
+        (self.plug / ".mutation-lock").write_text(
+            "1 набор: tests/test_чужой.py::Класс::тест\n", encoding="utf-8")
+        held = gt.acquire_lock()
+        self.assertIn("tests/test_чужой.py", held)
+
+    def test_a_nameless_lock_says_so_instead_of_guessing(self):
+        """Замок от прежней версии несёт только номер. Это «прогон не
+        назвался», а не повод выдумать за него имя."""
+        self.write_lock(1)
+        held = gt.acquire_lock()
+        self.assertIn("не назвался", held)
 
     def test_dead_holder_does_not_block_forever(self):
         """Процесс, убитый по SIGKILL, замок за собой не снимет. Вечная
