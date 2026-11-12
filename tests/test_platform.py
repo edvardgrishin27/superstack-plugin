@@ -121,9 +121,13 @@ class ПереносимостьИнструментов(unittest.TestCase):
         bar = importlib.util.module_from_spec(s)
         s.loader.exec_module(bar)
         было = bar.os.name
+        # Путь создается ДО подмены имени системы: на Python 3.8 Path(".")
+        # при os.name == "nt" выбирает WindowsPath и падает на Linux, то есть
+        # тест ронял не код, а сам себя (задание «нижняя версия Python» в CI).
+        корень = Path(".")
         try:
             bar.os.name = "nt"
-            argv, отказ = bar._argv(Path("."), {"run": r"C:\проект\npm.cmd test"})
+            argv, отказ = bar._argv(корень, {"run": r"C:\проект\npm.cmd test"})
         finally:
             bar.os.name = было
         self.assertEqual(отказ, "")
