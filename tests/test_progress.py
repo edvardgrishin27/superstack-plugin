@@ -312,9 +312,15 @@ class TestParallelWritersDoNotEraseEachOther(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
-        self.f = Path(self.tmp.name) / "state.json"
+        # «Доказано» ставит только свежая зелёная запись гейта, поэтому ход
+        # работ лежит в настоящем проекте, и гейт по нему прогнан по-настоящему.
+        import real_gate
+        root = real_gate.project(Path(self.tmp.name) / "проект")
+        self.f = root / ".superstack" / "state.json"
         subprocess.run([sys.executable, str(TOOL), "init", str(self.f), "проба"],
                        capture_output=True, env=ENV, timeout=60)
+        gate = real_gate.run_gate(root, Path(self.tmp.name) / "attempts.json")
+        self.assertEqual(gate.returncode, 0, gate.stderr[-300:])
         for tid in ("01", "02"):
             subprocess.run([sys.executable, str(TOOL), "task", str(self.f), tid,
                             f"часть {tid}", "--wave", "1", "--status", "running"],

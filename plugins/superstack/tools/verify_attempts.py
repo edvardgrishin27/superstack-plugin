@@ -55,9 +55,24 @@ def _state_path() -> Path:
 
 def _load_attempts(path: Path) -> dict:
     try:
-        return json.loads(path.read_text("utf-8"))
+        state = json.loads(path.read_text("utf-8"))
     except (OSError, ValueError):
         return {}
+    return state if isinstance(state, dict) else {}
+
+
+def _series(state: dict, key: str) -> dict:
+    """Серия провалов проекта — или пустая, если записи нет или форма чужая.
+
+    До правки от 26.08 значение было числом, теперь это запись с полями. Файл
+    переписывается целиком вместе с чужими ключами, поэтому старые числа живут
+    в нём навсегда. Читать их как запись значило ронять гейт трассировкой
+    вместо вердикта. Запись неизвестной формы — это «серии нет»; при первой
+    же записи её заменит запись нынешней формы. Читают серию двое (гейт и
+    выбор модели), и оба — через эту функцию, а не каждый своей защитой.
+    """
+    series = state.get(key)
+    return series if isinstance(series, dict) else {}
 
 
 def _save_attempts(path: Path, state: dict) -> None:
@@ -104,9 +119,18 @@ def _failure_signature(text: str) -> str:
 # список и то же обоснование, что SKIP в project_doctor.py; полным для
 # каждого возможного инструмента он не будет — это верхняя, частая часть
 # хвоста, а не гарантия на все экосистемы.
+#: Папка, куда плагин пишет своё состояние в проекте человека.
+_OWN_DIR = ".superstack"
+
 _FINGERPRINT_SKIP = {".git", "node_modules", "__pycache__", "dist", "build",
                      ".venv", "venv", ".next", "target", "vendor",
-                     ".pytest_cache"}
+                     ".pytest_cache",
+                     # Своя бухгалтерия плагина: запись вердикта гейта, ход
+                     # работ, панель. Её пишет сам плагин, а не человек, и
+                     # прогон от неё не зависит. Без этого имени запись
+                     # вердикта, сделанная прошлым прогоном, читалась бы как
+                     # правка дерева, и повтор без правок тратил бы попытку.
+                     _OWN_DIR}
 
 
 def _tree_fingerprint(project: Path) -> "str | None":
@@ -154,7 +178,10 @@ def _tree_fingerprint(project: Path) -> "str | None":
         if head.returncode != 0:
             return None
         tracked = subprocess.run(
-            ["git", "-c", "core.quotepath=false", "diff", "HEAD", "--"],
+            # `:/` — всё хранилище, как и без указания путей; своя папка
+            # плагина вычеркнута (см. `_OWN_DIR`), если проект её отслеживает.
+            ["git", "-c", "core.quotepath=false", "diff", "HEAD", "--", ":/",
+             f":(exclude){_OWN_DIR}"],
             cwd=str(project), capture_output=True, text=True, timeout=120)
         untracked = subprocess.run(
             ["git", "-c", "core.quotepath=false", "ls-files", "-o",
@@ -271,7 +298,7 @@ def apply_attempt_ceiling(v: dict, project: Path, state_path: Path,
         return v          # "absent" серию не двигает — ни вперёд, ни назад
 
     signature = _failure_signature(v["blockers"][0] if v["blockers"] else v["next"])
-    series = state.get(key) or {}
+    series = _series(state, key)
     if series.get("sig") != signature:
         # Поломка сменилась — прежняя серия (счёт и отпечаток) к делу не
         # относится: начинаем с нуля, а не наследуем чужой счёт.

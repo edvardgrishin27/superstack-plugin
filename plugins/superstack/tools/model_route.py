@@ -198,7 +198,7 @@ def заход(проект: Path) -> tuple:
     неделе, и спорить они стали бы в тот момент, когда нужен точный ответ.
     """
     записи = verify._load_attempts(verify._state_path())
-    серия = записи.get(str(Path(проект).expanduser().resolve())) or {}
+    серия = verify._series(записи, str(Path(проект).expanduser().resolve()))
     try:
         число = int(серия.get("attempt", 0))
     except (TypeError, ValueError):

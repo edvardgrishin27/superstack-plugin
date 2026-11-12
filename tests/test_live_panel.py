@@ -698,6 +698,15 @@ class ВедомостьИЛентаДоезжаютДоСтраницы(unittes
             ]}, ensure_ascii=False), encoding="utf-8")
         self._progress("init", str(self.state), "запись к парикмахеру")
         self._progress("phase", str(self.state), "Пишем код", "исполнитель")
+        # «Доказано» ставит только свежая зелёная запись гейта: проект
+        # настоящий, и гейт по нему прогнан по-настоящему.
+        import real_gate
+        real_gate.project(Path(self.tmp.name))
+        счётчик = tempfile.TemporaryDirectory()
+        self.addCleanup(счётчик.cleanup)
+        gate = real_gate.run_gate(Path(self.tmp.name),
+                                  Path(счётчик.name) / "attempts.json")
+        self.assertEqual(gate.returncode, 0, gate.stderr[-300:])
         self._progress("task", str(self.state), "01", "Выбор мастера",
                        "--wave", "1", "--status", "proven", "--exit-code", "0",
                        "--requirements", "R01",

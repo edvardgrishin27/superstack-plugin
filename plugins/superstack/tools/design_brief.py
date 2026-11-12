@@ -54,6 +54,11 @@ import re
 import sys
 from pathlib import Path
 
+# Каталог инструмента при импорте из теста в sys.path не попадает, поэтому
+# добавляется явно — как у соседей.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import atomic_store  # noqa: E402
+
 #: Правила сборки дизайн-системы — из чек-листа Claude Design, а не из общих
 #: соображений. Лежат данными рядом, потому что меняются вместе с инструментом,
 #: а не вместе с кодом.
@@ -105,15 +110,8 @@ DOCS_FRESH_DAYS = 30
 
 
 def load(path: Path) -> dict:
-    if not path.is_file():
-        return json.loads(json.dumps(EMPTY))
-    try:
-        d = json.loads(path.read_text("utf-8"))
-    except (OSError, ValueError):
-        return json.loads(json.dumps(EMPTY))
-    for k, v in EMPTY.items():
-        d.setdefault(k, json.loads(json.dumps(v)))
-    return d
+    # Нечитаемый файл не подменяется пустым: см. atomic_store.прочитать_состояние.
+    return atomic_store.прочитать_состояние(path, EMPTY, "файл брифа дизайна")
 
 
 def save(path: Path, data: dict, now: str = None) -> None:
@@ -357,4 +355,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(atomic_store.запустить(main))

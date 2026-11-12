@@ -270,21 +270,3 @@ class TestWritingIsNotAVerdict(unittest.TestCase):
         self.assertEqual(self._run("route", str(self.f)).returncode, 1)
 
 
-class TestTheLessonWatchdogIgnoresTheSystemsOwnNoise(unittest.TestCase):
-    """«Файл изменился» не значит «работал агент».
-
-    Прогон мутаций правит и восстанавливает файлы в том же дереве десятки минут
-    подряд. Критерий «изменился ли хоть один файл» давал «да» на каждом
-    разговорном ходе — шесть подряд, ни в одном не было правки. Сторож считал
-    собственный шум системы работой человека и снова превращал разговор в петлю
-    коротких реплик, ради выхода из которой критерий и вводился.
-    """
-
-    HOOK = PKG / "hooks" / "session-lesson.py"
-
-    def test_the_hook_is_silent_while_mutations_run(self):
-        t = self.HOOK.read_text("utf-8")
-        self.assertIn(".mutation-lock", t,
-                      "хук не знает признака «система работает сама»")
-        self.assertIn(".mutation-backup", t,
-                      "служебные копии считаются работой человека")

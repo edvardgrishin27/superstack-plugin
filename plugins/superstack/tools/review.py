@@ -79,15 +79,8 @@ EMPTY = {"schema": "superstack.review.v1", "task": None,
 
 
 def load(path: Path) -> dict:
-    if not path.is_file():
-        return json.loads(json.dumps(EMPTY))
-    try:
-        d = json.loads(path.read_text("utf-8"))
-    except (OSError, ValueError):
-        return json.loads(json.dumps(EMPTY))
-    for k, v in EMPTY.items():
-        d.setdefault(k, json.loads(json.dumps(v)))
-    return d
+    # Нечитаемый файл не подменяется пустым: см. atomic_store.прочитать_состояние.
+    return atomic_store.прочитать_состояние(path, EMPTY, "файл ревью")
 
 
 def save(path: Path, data: dict, now: str = None) -> None:
@@ -207,11 +200,14 @@ def repair_route(data: dict, kind: str, reason: str = "") -> dict:
         raise ValueError(f"неизвестный вид возврата: {kind} — есть "
                          + ", ".join(KINDS))
     if not reason.strip():
-        return {"to": "свежий контекст", "step": "отказ",
-                "allowed": True, "why":
-                "причина не названа. Починка без названной причины лечит "
-                "симптом: подгоняет тест, глушит ошибку, вписывает значение. "
-                "Это отказ, а не ремонт — нужен свежий контекст"}
+        # Маршрут считаем так, будто причина названа, но ответ отказной, а
+        # ступень лестницы тратится: повтор без причины не бывает бесплатным.
+        r = repair_route(data, kind, "причина не названа")
+        r = {**r, "allowed": False, "refused": "причина не названа"}
+        if r["step"] != "сдача":
+            r["why"] = ("причина не названа: починка наугад лечит симптом. "
+                        "Назови, что именно сломано")
+        return r
 
     f = data.get("followups", 0)
     r = data.get("retries", 0)
@@ -290,7 +286,8 @@ def reviewer_continuity(data: dict, axis: str, who: str, wave: int) -> dict:
 
 def verdict(data: dict) -> dict:
     by = {a: [f for f in data["findings"] if f["axis"] == a] for a in AXES}
-    blocking = [f for f in data["findings"] if f["blocking"]]
+    blocking = [f for f in data["findings"]
+                if f["blocking"] and not f.get("closed")]
     return {
         # Оси отдаются РАЗДЕЛЬНО. Сложенные в один список, они позволяют одной
         # замаскировать другую: чистое ремесло гасит впечатление от «сделано не то».
@@ -362,7 +359,7 @@ def main() -> int:
         elif cmd == "repair":
             kind = _one(argv, "--kind") or SHORTFALL
             r = repair_route(data, kind, _one(argv, "--reason") or "")
-            if r["allowed"]:
+            if r["allowed"] or r.get("refused"):
                 data = count_repair(data, r["step"])
                 save(path, data)
             print(json.dumps(r, ensure_ascii=False, indent=1))
@@ -391,4 +388,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(atomic_store.запустить(main))

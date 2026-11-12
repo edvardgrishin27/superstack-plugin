@@ -2,83 +2,55 @@
 
 # SUPERSTACK
 
-**Say what you want built. Get a version whose "done" was closed by an exit code, not by a sentence in the chat.**
+**Describe a product in your own words. Get a version that was checked before anyone called it done.**
 
-<p align="center"><img src="assets/superstack-hero.jpg" alt="SUPERSTACK — the build is checked before it is called done" width="100%"></p>
+<p align="center"><img src="assets/superstack-hero.jpg" alt="SUPERSTACK, the build is checked before it is called done" width="100%"></p>
 
-[![version](https://img.shields.io/badge/version-0.13.0-1f6feb)](.claude-plugin/marketplace.json)
-[![tests](https://img.shields.io/badge/tests-2447-2ea043)](tests)
-[![mutations](https://img.shields.io/badge/mutations-702-8957e5)](tests/mutations.json)
+[![version](https://img.shields.io/badge/version-0.14.0-1f6feb)](.claude-plugin/marketplace.json)
+[![tests](https://img.shields.io/badge/tests-2538-2ea043)](tests)
+[![mutations](https://img.shields.io/badge/mutations-724-8957e5)](tests/mutations.json)
 [![python](https://img.shields.io/badge/python-3.8%2B-3776ab)](#requirements-and-platforms)
 [![dependencies](https://img.shields.io/badge/dependencies-none-555555)](#under-the-hood)
 [![license](https://img.shields.io/badge/license-MIT-97ca00)](LICENSE)
 [![Claude Code plugin](https://img.shields.io/badge/Claude%20Code-plugin-d97757)](#quick-start)
 
-2447 tests · 702 mutations, all caught · 469 mechanisms.
+2538 tests · 724 mutations, all caught · 492 mechanisms.
 
-## What this is
+These are project numbers. Tests check the code. A mutation breaks the code on
+purpose, and the test suite has to notice. A mechanism is a separately checkable
+part of the plugin.
 
-SUPERSTACK is a plugin for Claude Code. You describe a product in your own
-words — *"I want a site where people book a haircut"* — and it carries the job
-all the way to a version that was actually checked. The rule the whole thing is
-built around is short: **a report is a claim, not a proof.** "Should work" and
-"tests should pass" mean the work is not done.
+## What you get
 
-Here is what that looks like for the haircut site. It writes your sentence down
-verbatim, then asks only the handful of questions you alone can answer — who
-books, what happens on a double booking, what the client sees afterwards — and
-measures everything else itself. It turns the answers into a requirements list
-and a spec, designs the interface on a canvas and pulls the real values into the
-code instead of retelling them, and shows you a plan. **You approve the plan
-before a single line of code exists.** Then the tasks go out to a builder agent,
-one fresh context per task, and the result is put in front of commands whose
-exit code decides whether the turn may close.
+SUPERSTACK is a plugin for Claude Code. You write one sentence, for example
+*"I want a site where people book a haircut"*, and you get a working version.
+At the end comes a report with a **How to open it** section. It holds an
+address, not a status.
 
-Before it says "done", a separate agent reads only your original sentence and
-the diff — no spec, no plan, no conversation — and answers one question: is this
-what was asked for? What you get at the end is a report with a **How to open it**
-section. An address, not a status.
+The plugin takes six steps between the sentence and the address.
 
-It also knows how to look at your Claude Code setup, explain where every finding
-came from, and change nothing without asking.
+1. It writes your sentence down verbatim and asks only what you alone know.
+   Who books, what happens on a double booking, what the client sees afterwards.
+2. It turns the answers into a requirements list and a description of how the
+   product should work. It draws the interface on a canvas and carries colors
+   and sizes into the code as exact values.
+3. It shows a plan. The first line of code appears after your yes.
+4. It hands tasks to a coding agent one at a time. The agent does each one from
+   a clean slate, without the tail of earlier conversations.
+5. It runs the project's own checks. Until they pass, the work does not count as
+   finished.
+6. It asks a separate agent to read only your original request and the changes.
+   The agent answers one question. Is this what was asked for?
 
-## Why
-
-**An exit code closes the turn, not a sentence.** The end-of-session check in
-`hooks/verify-gate.py` runs the project's own commands; while they return
-non-zero the turn stays open, and no wording in the chat can close it.
-
-**Blind acceptance before the word "done".** A separate agent
-(`agents/blind-acceptance.md`) is handed your original request and the diff and
-nothing else, so it grades what was asked for instead of agreeing with the plan
-it just read.
-
-**Snapshots at every stage boundary, so "put it back" is one sentence.**
-`tools/checkpoint.py` snapshots the product folder before and after every edit;
-`/oops` shows you what would come back before it returns anything. Nothing in
-this system is deleted — removals go to quarantine, and a backup is written
-before the first change.
-
-**Plain language enforced by code, not by good intentions.** Jargon is
-impossible to proofread out of your own writing — to notice an opaque word you
-have to stop understanding it. The product talks to you in Russian, and
-`tools/plain_ru.py` keeps that word list as data, finds the jargon by machine,
-and answers with an exit code.
-
-**No dependencies at all.** Python 3 and the standard library — 72 tools, about
-24,800 lines, zero third-party packages, nothing to install, nothing to audit
-downstream.
-
-**The plugin holds itself to the bar it sells.** Nine gates, and the harshest is
-mutation: **702 registered mutations** break the code on purpose, and every one
-of them must turn the suite red. A check that cannot fail is not a check.
+The `/superstack` command checks how your Claude Code is set up, separately, and
+changes nothing without your consent.
 
 ## Quick start
 
 ### Without opening a terminal
 
-The plugin only works in Claude Code. Paste this text to your Claude Code and it
-will do the rest itself:
+The plugin runs only in Claude Code. Paste this text into your Claude Code and
+it does the rest itself.
 
 ```
 Install SUPERSTACK for me. Run exactly these three commands in the terminal, one
@@ -88,29 +60,28 @@ CLAUDECODE= claude plugin marketplace add edvardgrishin27/superstack-plugin
 CLAUDECODE= claude plugin marketplace update superstack
 CLAUDECODE= claude plugin install superstack@superstack
 
-On a machine where SUPERSTACK was installed before, the first command answers
-"Marketplace 'superstack' is already installed" and exits with code 1. That is
-NOT a failed install and not a reason to stop: the marketplace is simply already
-there. Keep going.
-
-The second command is the one this whole text was rewritten for. Without it, such
-a machine takes the OLD package list from its cache and installs the previous
-version. It looks successful: green command, plugin installed, wrong version. On
-a clean machine it is harmless, which is why it always runs.
-
-The CLAUDECODE= prefix is required: without it `claude` refuses to start from
-inside a session ("cannot be launched inside another Claude Code session"), and
-that is not a bug — it is the guard against nested sessions.
-
-Install nothing else. When you are finished, say in one line that it is done, and
-tell the person to restart the whole application — not a new chat in the same
-window: quit it completely (Cmd+Q on a Mac) and open it again. Plugins are read
-at startup.
+If the first command answers "Marketplace 'superstack' is already installed",
+that is not an error, keep going. Always run the second command, it refreshes
+the package list. The CLAUDECODE= prefix is required. Install nothing else.
+When you are finished, say in one line that it is done and tell the person to
+quit the whole application (Cmd+Q on a Mac) and open it again. A new chat in the
+same window will not do, plugins are read at startup.
 ```
 
-Verified by running it, not reasoned about: both sequences were executed against
-an isolated config (`CLAUDE_CONFIG_DIR`), on a clean machine and again on top of
-an existing install. Both ended on a working version.
+Tested on a clean computer and on top of an earlier install.
+
+<details id="inside-this-text">
+<summary>What is inside this text</summary>
+
+The first command adds the plugin catalog. If it is already added, the command
+exits with code 1, and that is normal. The second command refreshes the package
+list. Without it, a computer with an earlier install takes the old list from its
+cache and installs the previous version while everything looks successful. The
+`CLAUDECODE=` prefix is needed because `claude` refuses to start from inside
+another session. Both sequences were run against an isolated config
+(`CLAUDE_CONFIG_DIR`).
+
+</details>
 
 ### From a terminal
 
@@ -120,227 +91,232 @@ claude plugin marketplace update superstack
 claude plugin install superstack@superstack
 ```
 
-No prefix needed here — you are already outside a session. On a machine that
-already has the marketplace, the first line exits with code 1; that is fine, the
-second line fixes it.
+No prefix is needed here, you are already outside a session. If the catalog is
+already added, the first line exits with code 1. That is normal, and
+the second line fixes the rest.
 
-Then quit Claude Code completely (Cmd+Q on a Mac) and open it again. After that
-you can just talk to it — there are no magic words to memorise.
+Quit Claude Code completely (Cmd+Q on a Mac) and open it again. After that,
+write what you need in plain words, no special words to learn. A hint on where
+to start arrives together with the answer to your first sentence.
+
+## Why you can trust it
+
+**An exit code closes the turn.** The end-of-turn check
+(`hooks/verify-gate.py`) runs the project's own commands. While they return
+non-zero the turn stays open, and no wording in the chat changes that. When a
+turn is closed without a fresh check, the check says so aloud, once per session.
+
+**"Proven" comes from a run record.** The check leaves a record with the exit
+code, the test count, the time and a fingerprint of the project. Without a fresh
+green record carrying the same fingerprint, the report says "on its word".
+
+**Blind acceptance.** The agent in `agents/blind-acceptance.md` gets your
+original request and the changes, with no description and no plan. It compares
+the result with the request, and it has no plan to agree with.
+
+**"Put it back" in one sentence.** `tools/checkpoint.py` snapshots the product
+folder before and after every edit. `/oops` returns the state from before the
+edit and shows what will come back first. No Claude Code setting is deleted.
+Removals go to quarantine, and a copy is written before the first change.
+
+**Answers are written without jargon.** The list of banned words lives in
+`tools/plain_ru.py`, and a text containing one fails the check.
+
+**The plugin holds itself to a bar.** `tools/gauntlet.py` runs nine gates. The
+strictest are the mutation gates. Each of the **724 registered mutations**
+breaks the code on purpose and must turn the test suite red. A check that cannot
+fail does not count as a check.
+
+**No third-party dependencies.** Python 3 and the standard library. Nothing to
+install, nothing to audit downstream.
 
 ## Commands
 
-Seven commands. You never have to type them: each one also answers to ordinary
-language, which is what the middle column is for.
+There are seven. You do not have to type them, each also answers to plain words.
 
-| Command | Say it like this | What you get | What it does **not** do |
-|---|---|---|---|
-| `/go` | "I want a site for booking haircuts", "build me a bot that…" | A new product, or a large new part of one, from your sentence to a proved version: requirements list → spec → design on a canvas → a plan **you** approve → tasks built by agents → verification by exit code → a security pass → blind acceptance → project memory → a report with "How to open it" | Writes no code before you approve the plan; never calls the work done while the check returns non-zero; never drops a requirement on its own |
-| `/change` | "fix the button", "change that text", "add a field" | One small edit to something that already works: snapshot before, the edit written by the builder agent, verification, snapshot after — so "changed the colour" and "broke the order form" cannot look alike in the chat | Not for building something large — that is `/go`; does not edit product files by hand, and does not fix unrelated things along the way |
-| `/what` | "where was I", "what's next" | Exactly one line of state and exactly one next step, read from the tools rather than from the conversation | Not a menu, not a report; will not lift a pause on your behalf |
-| `/stop` | "stop", "turn superstack off" — and back: "switch it on" | Everything pauses on your word alone, with no terminal, and the same way it comes back. The brake holds even when the agent stops responding, because it is a file on disk | Does not argue, does not talk you out of it, does not pause on its own initiative |
-| `/oops` | "undo that", "put it back the way it was" | Two different things it never mixes up: the Claude Code settings this system changed, and your project folder returned to a snapshot from the build. It shows what will come back and rolls back only after you say yes | Does not return anything the system never touched; does not restore a secret — a backup keeps the file, never the password value |
-| `/fix` | "not working", "nothing happens", "error again" | The links of the system itself, checked in order and stopping at the first broken one: is Python there, are the plugin files in place, does an automatic check point at a file that is gone, is everything paused, can the system write to its own folder. You get one broken link and one action | Does not look at your product and does not fix it — this is about the system, not about what you built. No menus, no stack traces |
-| `/superstack` | "check my setup", "what do I have installed", "why is the agent behaving like this" | A profile of this machine and a repair pass: probes read configs, count skills and automatic checks, look at memory and connectors; the verdict opens as a page where every finding carries its origin — measured · inferred · ambiguous | Deletes nothing (quarantine instead, backup before the first change); applies no blocking finding without an explicit yes; prints no number a probe did not return |
+| Command | Say it in words | What it does |
+|---|---|---|
+| `/go` | "I want a booking site", "build a bot that…" | Carries a new product or a large part from a sentence to a checked version. Requirements list, spec, canvas design, a plan with your yes, builders at work, exit-code check, security, blind acceptance, project memory, a "How to open it" report |
+| `/change` | "fix the button", "change the text", "add a field" | One small edit to something that already works. Snapshot before, edit by a builder, check, snapshot after. If a snapshot fails, it asks "this cannot be undone, continue?" and waits for a yes |
+| `/what` | "where am I", "what next", "where did I stop" | One line of state and one next step, which a tool reads from the project files |
+| `/stop` | "stop", "switch superstack off", and back with "switch it on" | A pause from one sentence, no terminal commands. While the brake file exists, no new step starts. It does not interrupt work already running |
+| `/oops` | "undo", "put it back" | Returns the project folder to its state before the edit, or the Claude Code settings the system changed itself. It shows what will come back first and rolls back after your consent. If there is nothing to return to, it answers "nowhere to go back to" |
+| `/fix` | "it does not work", "nothing happens", "error again" | Checks the links of the system itself in order and stops at the first broken one. Is Python there, are the plugin files in place, are the checks on in this folder, is a pause active, can the state folder be written. It answers with one link and one action |
+| `/superstack` | "check my install", "what do I have installed", "why does the agent behave like this" | A machine profile. Probes read settings, count skills and checks, look at memory and connections. The verdict opens as a page where every finding carries its origin, measured, derived or ambiguous |
 
 ## How it works
 
-`/go` runs in phases, and the code is written in the second-to-last one. Every
-phase before it establishes **what** to build; every phase after it proves that
-**this** is what got built.
+`/go` runs in phases. Code is written in the fourth. Every phase before it works
+out **what** to build, every phase after it proves that **this** is what got
+built.
 
 ```mermaid
 flowchart LR
     A["Your sentence"]
-    B["0 Open"]
+    B["0 Set up"]
     C["1 Understand · G1"]
     D["2 Spec · G2"]
-    E["2.5 Direction"]
+    E["2.5 Design"]
     F["3 Plan · G3, you approve"]
-    G["4 Work"]
-    H["5 Verification · exit ≠ 0 holds"]
+    G["4 Build"]
+    H["5 Verify · non-zero code holds the turn"]
     I["5.4 Security"]
-    J["5.5 Look"]
+    J["5.5 By eye"]
     K["6 Blind acceptance · G4"]
     L["7 Project memory"]
-    M["8 Report · “How to open”"]
+    M["8 Report · How to open it"]
     A --> B --> C --> D --> E --> F --> G --> H --> I --> J --> K --> L --> M
 ```
 
-Skipping a phase is allowed; skipping it silently is not. When the design phase
-or the security phase does not apply, it says so in one line — because "we
-decided it wasn't needed" and "we forgot" look identical otherwise.
+A phase may be skipped, never silently. When design or security is not needed,
+one line says so.
 
+<p align="center"><img src="assets/panel-en.jpg" alt="The SUPERSTACK progress page, the main number counts only what the machine verified" width="100%"></p>
 
-<p align="center"><img src="assets/panel-en.jpg" alt="The SUPERSTACK progress panel: the headline number counts only machine-proved work" width="100%"></p>
-
-The progress panel: the headline number counts only what a machine proved; "the
-assistant says so" is shown separately and is never added to it. This is a
-screenshot of the real page on a demo state, not a mock-up.
+The progress panel shows only what the machine verified as its main number. The
+"on the assistant's word" figure stands apart and is never added to it. This is
+a snapshot of the real page on a demo state.
 
 ## Under the hood
 
-Python 3 and the standard library. Nothing else. 72 tools (about 24,800 lines),
-7 skills, 3 agents, and three automatic checks wired into the session: one at
-start-up, one before the context is compacted, one at the end of a turn.
+Python 3 and the standard library. 7 skills, 3 agents and three automatic checks
+in a session. They fire at start, before context compaction and at the end of a
+turn. Every mechanism sits in a file you can open.
 
-The mechanisms worth naming, each of them a file you can open:
-
-| Mechanism | Where it lives | What it buys |
+| Mechanism | Where it lives | What it does |
 |---|---|---|
-| Verification closes the turn | `hooks/verify-gate.py`, `tools/verify.py` | "Done" is an exit code of zero; anything else keeps the turn open |
-| Blind acceptance | `agents/blind-acceptance.md`, `tools/blind_accept.py` | Judgement made from the original request and the diff, with no plan to agree with |
-| Snapshots and rollback | `tools/checkpoint.py`, `tools/oops.py` | Every stage boundary is a restore point; "put it back" is one sentence |
-| Plain-language check | `tools/plain_ru.py` | Jargon in text meant for a human is found by code, not by proofreading |
-| Live progress panel | `tools/live_panel.py`, `tools/progress.py` | A page on `localhost:8787` with an honest "how much is left" |
-| Hand-off notice | `tools/notify.py` | You are told when the turn came back to you, instead of watching a chat |
-| Builder wave watchdog | `tools/watchdog.py`, `tools/stall.py` | A stalled agent is noticed by the system rather than by you |
-| Design pulled, not retold | `tools/design_pull.py` | Canvas values land in the code as values; contrast below 4.5:1 is refused |
-| Security pass | `tools/security_pack.py`, `tools/data_rollback.py` | For products that face people; a data rollback path is named in commands or it does not count as ready |
-| Builder contracts | `tools/contract.py` | "DONE" reported over a red suite is caught by code, not by reading |
-| The pause file | `tools/pause.py`, `~/.claude/superstack/PAUSE` | An emergency brake that holds even when the agent will not answer |
-| Nothing is deleted | `tools/apply.py`, quarantine + backups | Every change is reversible, and secrets are never copied — not even into a backup |
+| Verification closes the turn | `hooks/verify-gate.py`, `tools/verify.py` | "Done" means exit code zero, anything else keeps the turn open |
+| Blind acceptance | `agents/blind-acceptance.md`, `tools/blind_accept.py` | A verdict on the original request and the diff, with no plan |
+| Snapshots and rollback | `tools/checkpoint.py`, `tools/oops.py` | Every stage boundary is a return point |
+| Plain-Russian dictionary | `tools/plain_ru.py` | Jargon in text for a person is caught by code |
+| Progress panel | `tools/live_panel.py`, `tools/progress.py` | A page on `localhost:8787` with an estimate of how much is left |
+| Turn notification | `tools/notify.py` | You are told when the turn is back with you |
+| Builder watchdog | `tools/watchdog.py`, `tools/stall.py` | A frozen agent is noticed by the system |
+| Design as values | `tools/design_pull.py` | Canvas values go into code as they are, contrast below `4.5:1` is refused |
+| Security pack | `tools/security_pack.py`, `tools/data_rollback.py` | For products that reach people. The data rollback path is declared as commands |
+| Builder contracts | `tools/contract.py` | "Done" with red tests is caught by code |
+| Brake file | `tools/pause.py`, `~/.claude/superstack/PAUSE` | No new step starts while the file exists |
+| Settings are not deleted | `tools/apply.py` | An edit is reversible, secrets are not copied even into the backup |
 
 ### The bar the plugin holds itself to
 
-Nine gates, run by `tools/gauntlet.py`. Numbers below are measured, not typed in.
+Nine gates, run by `tools/gauntlet.py`. The numbers at the top of this page are
+measured. The release script (`tools/sync_public.py`) rewrites
+them in both language versions.
 
 | Gate | What it proves |
 |---|---|
-| suite | the whole test suite green |
-| hermetic | the same suite, still green, under any `HOME` |
-| mutations | every registered breakage must turn the suite red |
-| wiring | every tool reachable from a skill or an automatic check — built but unreachable is a real failure mode here |
-| rules | the rule files are intact |
-| manifest | marketplace entries match the tree, versions agree, schemas valid |
-| plan | every mechanism in the map is present, and most of them are proved by an actual breakage |
-| reconciliation | the map was read against the plan, and the plan has not changed since |
-| skill weight | every skill stays under the size ceiling |
+| **suite** | the whole test suite is green |
+| **hermetic** | the same suite is green under any `HOME` |
+| **mutations** | 724 registered mutations, each must turn the suite red |
+| **wiring** | every tool is reachable from a skill or an automatic check |
+| **rules** | the rule files are intact |
+| **manifest** | marketplace entries match the tree, versions agree, schemas are valid |
+| **plan** | every mechanism on the map is in place, and most are checked by a real break |
+| **reconciled** | the map was read against the plan, and the plan has not changed since |
+| **weight** | every skill fits under the size ceiling |
 
-The counts at the top of this page — badges and summary line — are rewritten by
-measurement at release time (`tools/sync_public.py`), in both language versions.
-A showcase for a product that promises never to claim the unmeasured does not
-get to type its own figures.
+## How it compares to the sets next to it
 
-## How it differs from the sets next to it
-
-Two other sets for Claude Code sit next to this one, and "how are they
-different" is asked before install. Cells about SUPERSTACK name a file you can
-open. Cells about the others carry only what was verified by reading their code
-and docs on 3 September 2026; where verification was not possible it says "not
-checked" — which is not the same as "no".
+People ask how it differs before they install. The SUPERSTACK cells point to a
+file you can open. The data on the others comes from their code and descriptions
+on 3 September 2026. Where a check was not possible, the cell says so.
 
 | What is compared | SUPERSTACK | Superpowers | Skills Matt Pocock |
 | --- | --- | --- | --- |
-| Who decides "done" | **an exit code**: non-zero keeps the turn open (`hooks/verify-gate.py`) | the model, by written rules | the model, by written rules |
-| Breakages that must turn the suite red | **yes**, 702 registered (`tests/mutations.json`) | no | no |
-| Tests of the tool itself | **yes**, suite green under any `HOME` (`tools/gauntlet.py`) | 44 files | not found |
-| Blind acceptance | **yes**: the reviewer gets only the request and the diff (`tools/blind_accept.py`) | no, the spec is handed over | no, the spec is handed over |
-| Numbers on the panel | **from files**; "claimed" shown apart and never added up (`tools/progress.py`) | no panel | no panel |
-| "Put it back" | **yes**, one sentence, a snapshot at every stage (`tools/checkpoint.py`) | a branch, no command | no |
-| Stop with one word | **yes**, a file that holds even when the agent is silent (`tools/pause.py`) | no | no |
-| Your list of requirements | **yes**, verbatim and numbered; dropping needs your quote, checked by code (`tools/manifest.py`) | plan tasks, not requirements | numbered tickets |
-| See where the work is | **yes**: a page-file with a snapshot, no server, RU/EN, on a phone (`tools/live_panel.py`) | a log and a to-do list | an issue tracker |
-| Task size | **yes**: waves and tier computed by code (`tools/crew.py`) | yes | yes |
-| How it starts | a plugin once, then seven commands and ordinary words | a plugin, skills fire by themselves | a plugin or files |
+| Who decides "done" | **an exit code**, non-zero means the turn is not closed (`hooks/verify-gate.py`) | the model, from rule text | the model, from rule text |
+| Breaks that must fail the suite | **yes**, 724 registered (`tests/mutations.json`) | no | no |
+| Tests for the tool itself | **yes**, suite green under any `HOME` (`tools/gauntlet.py`) | 44 files | not found |
+| Blind acceptance | **yes**, the checker gets only the request and the changes (`tools/blind_accept.py`) | no, it is given the spec | no, it is given the spec |
+| Numbers on the panel | **from files**, "on its word" kept apart (`tools/progress.py`) | no panel | no panel |
+| "Put it back" | **yes**, in one sentence, a snapshot at every stage (`tools/checkpoint.py`) | a branch, no command | no |
+| Stop in one word | **yes** (`tools/pause.py`) | no | no |
+| Your requirements list | **yes**, verbatim and numbered, dropped only with your own quote (`tools/manifest.py`) | plan tasks | numbered tickets |
+| How it starts | one plugin install, then seven commands and plain words | a plugin, skills switch on by themselves | a plugin or files |
 
 ## What SUPERSTACK never does
 
-Every line below is not a promise but a place in the code where it is locked.
+Only what a file backs is listed here. What the lead (the main agent of the
+session) follows as a working rule is called a rule.
 
-- **Never calls the work done while the check returns non-zero.** The turn stays
-  open until the code is zero — `hooks/verify-gate.py`, `tools/verify.py`.
-- **Never writes code before you approve the plan.** The work phase does not
-  open earlier — `tools/gates.py`, `skills/go/phases/3-план.md`.
-- **Never drops one of your requirements on its own.** A drop needs your own
-  words, and code checks they are in the original request — `tools/manifest.py`.
-- **Deletes nothing.** Quarantine instead of deletion, a copy before the first
-  edit — `tools/apply.py`.
-- **Never copies your keys.** A backup keeps the file but not the password
-  value, and the value never reaches the log — `tools/apply.py`, `tools/log.py`.
-- **Never continues after "stop".** The brake is a file on disk, and it holds
-  even when the agent will not answer — `tools/pause.py`.
-- **Never runs destructive commands.** The list of dangerous ones is single for
-  the whole set, and a separate layer enforces it rather than the model's
-  memory — `tools/deny_list.py`.
-- **Never prints a number it did not measure.** The progress page counts from
-  files, and the figures on this page are rewritten at release time —
-  `tools/progress.py`, `tools/sync_public.py`.
+- **Does not close a turn while the checks are red.** While the exit code is
+  non-zero the turn stays open. If a turn is closed without a fresh check, the
+  check says so aloud (`hooks/verify-gate.py`, `tools/verify.py`).
+- **Does not write code without your yes on the plan.** This is a working rule
+  the lead follows (`skills/go/phases/3-план.md`).
+- **Does not drop your requirement without your words.** Code checks they are in
+  the original request (`tools/manifest.py`).
+- **Does not delete Claude Code settings.** Quarantine instead of deletion, a
+  copy before the first edit (`tools/apply.py`). "Put it back" returns the
+  product folder.
+- **Does not copy your keys.** A backup keeps the file without the password
+  value, and the value never reaches the log (`tools/apply.py`, `tools/log.py`).
+- **Does not start new steps after "stop".** The brake is a file on disk.
+  It does not interrupt work already running (`tools/pause.py`).
+- **Does not switch on the forbidden-command list without your consent**
+  (`tools/deny_list.py`).
+- **Does not print a number it did not measure.** The progress page counts from
+  files, and the figures on this page are rewritten at release time
+  (`tools/progress.py`, `tools/sync_public.py`).
 
 ## Requirements and platforms
 
-- **Claude Code**, desktop app or terminal. The plugin runs nowhere else —
-  `claude plugin …` exists only here.
+- **Claude Code**, desktop app or terminal. `claude plugin …` exists nowhere
+  else.
 - **Python 3.8 or newer**, whatever the system already has. The floor comes from
-  the syntax in the code: assignment expressions (`:=`) are used, nothing newer
-  is. No third-party packages, at any version.
-- **pytest**, only if you want to run the test suite.
-- **macOS and Linux** — run live, end to end.
-- **Windows** — the code paths are there (file locking falls back to `msvcrt`
-  where `fcntl` is absent; the process-alive probe knows `os.kill` behaves
-  differently), but **no live run has ever been done**. That is a status, not a
-  disclaimer: `tools/platform_check.py` says it out loud at the start of a
-  session and names what stops working — self-launch where the interpreter is
-  not called `python3`, non-ASCII output in the Windows console, and the
-  one-line `.sh` wrappers next to the tools.
+  the syntax in the code, which uses assignment expressions (`:=`) and nothing
+  newer. No third-party packages.
+- **pytest**, if you want to run the test suite.
+- **macOS and Linux** are verified end to end.
+- **Windows**. The code paths are there, but no live run has ever been done.
+- **Language.** The product answers in the language you write in. Messages
+  printed straight by the hooks and by several tools are in Russian.
 
 ## Status
 
-Version 0.13.0. All nine gates green on the tree this text ships from.
-
-Known **not** done, and said here rather than discovered later:
-
-- Windows has never been run live. See above.
+Version 0.14.0. The release script checks the nine-gate bar on the same tree
+this text ships from.
 
 ## Contributing
 
-The rule for anything new is fixed, and it runs in this order:
+One order for everything new.
 
 > **mechanism → map → test → mutation → code.**
 
-A mechanism is finished when it exists in `data/plan-coverage.json` with an
-evidence file and a literal substring of executable text, has a test in `tests/`,
-and has a registered breakage in `tests/mutations.json` that actually turns the
-suite red. A mechanism nothing can break is not a mechanism.
+A mechanism is done when it is recorded in `data/plan-coverage.json` with an
+evidence file and a literal substring of the executable text, has a test in
+`tests/`, and has a registered mutation in `tests/mutations.json` that
+turns the suite red.
 
 ```bash
 python3 -m pytest tests/ -q          # the suite
-python3 tools/gauntlet.py --quick    # fast loop: skips mutations and hermetic
-python3 tools/gauntlet.py            # everything, roughly two hours
+python3 tools/gauntlet.py --quick    # fast loop, no mutations or hermetic gate
+python3 tools/gauntlet.py            # everything, about two hours
 ```
 
-`--quick` exits with code 2 by design — two gates are not run in it, and
-"skipped" is deliberately not "passed".
+`--quick` returns code 2 on purpose. Two gates do not run in it, and "skipped"
+must look different from "passed".
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT, see [LICENSE](LICENSE).
 
 <details>
 <summary>If you installed before version 0.3.0</summary>
 
-Up to version 0.3.0 the system shipped as seven packages (`superstack-core`,
-`-install`, `-spec`, `-guard`, `-build`, `-brain`, `-control`). There is one
-package now, and the old seven have to be removed — otherwise two copies of the
-same skills sit side by side and either of them can be picked up by description.
+Before version 0.3.0 the system shipped as seven packages (`superstack-core`,
+`-install`, `-spec`, `-guard`, `-build`, `-brain`, `-control`). It is one package
+now, and the old seven must be removed. Otherwise two copies of the same skills
+sit side by side, and either one can be picked up by description.
 
-In the desktop app: **settings → plugins**, remove each of the seven old ones,
-then **update** the `superstack` marketplace and install `superstack`. The order
-matters twice. While the old ones are still there, two copies of the same skills
-sit side by side. And without updating the marketplace, the old cached list is
-used — the one with seven packages — and the previous version gets installed,
-looking no different from the new one.
+In the desktop app open **settings → plugins**, remove each of the seven old
+ones, then press **update** on the `superstack` marketplace and install
+`superstack`. The order matters. Without the marketplace update the old list
+comes from the cache, where there are seven packages, and the previous version
+gets installed, looking the same as the new one.
 
-Why the split is gone. Seven packages would have made sense if they were
-installed and updated separately. Neither ever happened once: the whole set went
-in together and was updated together, seven identical actions in a row. The price
-was cross-package addressing — a skill in one package calling a tool in another
-through a path that does not exist inside its own package. That is how 14 tools
-out of 29 once became unreachable, and how both calls in the only build skill
-pointed at nothing for several runs. One package removes that whole class of
-failure instead of patching it with another check.
-
-**The `/plugin` slash command will not help.** It exists only in terminal Claude
-Code; the desktop app does not have it, and trying it there answers "isn't
-available in this environment". Verified on the desktop, not inferred.
+**The `/plugin` slash command will not work.** It exists only in terminal Claude
+Code. The desktop app answers "isn't available in this environment". Verified on
+the desktop.
 
 </details>

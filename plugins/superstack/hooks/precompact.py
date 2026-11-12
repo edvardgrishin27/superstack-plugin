@@ -208,17 +208,33 @@ def вычистить_старые(каталог: Path, сколько: int) -
             pass
 
 
+def папка_из_входа(сырое: str) -> "Path | None":
+    """Корень сеанса не отмечен — смотрим, где Claude работает сейчас (`cwd`).
+
+    Общий модуль подключается с запасом: нет его или он упал — хук молчит,
+    как раньше, и сохранность памяти от соседнего файла не зависит.
+    """
+    try:
+        sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "tools"))
+        import hook_folder
+        return hook_folder.папка(сырое, позвали_здесь)
+    except Exception:
+        return None
+
+
 def main() -> int:
     # Аварийный выключатель — до stdin, до диска, до всего.
     if os.environ.get("SUPERSTACK_DISABLE") == "1":
         return 0
     корень = проект()
-    if not позвали_здесь(корень):
-        return 0
 
     # stdin читаем, только если это не терминал: при ручном запуске без
     # перенаправления чтение повисло бы навсегда, выглядя как зависший хук.
     сырое = "" if sys.stdin.isatty() else sys.stdin.read()
+
+    if not позвали_здесь(корень):
+        if папка_из_входа(сырое) is None:
+            return 0
     поле = поля(сырое)
     сессия = безопасное_имя(поле.get("session_id", ""))
     повод = поле.get("trigger") or "unknown"

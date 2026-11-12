@@ -9,8 +9,8 @@
 даёт уверенность ровно там, где её быть не должно.
 
 Поэтому здесь «готово» — не статус, а СЛЕДСТВИЕ. Задача переходит в `proven`
-только вместе с кодом возврата гейта, и записать иначе нельзя: функция требует
-доказательство отдельным аргументом и отказывается без него. Сказанное агентом
+только по свежей зелёной записи, которую гейт оставил сам (tools/gate_record.py);
+число `--exit-code` в вызове её не заменяет и даёт только «со слов». Сказанное агентом
 записывается как `claimed` и на экране выглядит иначе — не потому, что мы не
 доверяем, а потому, что это другое утверждение.
 
@@ -66,6 +66,7 @@ from pathlib import Path
 # поэтому добавляется явно — как у соседей.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import atomic_store  # noqa: E402
+import gate_record  # noqa: E402
 
 # Словарь состояний работы и всё, что по нему считается, — рядом, в
 # `panel_facts.py`. Ввоз односторонний: числа панели не знают про запись
@@ -124,16 +125,10 @@ EMPTY = {
 }
 
 
-def load(path: Path) -> dict:
-    if not path.is_file():
-        return json.loads(json.dumps(EMPTY))
-    try:
-        d = json.loads(path.read_text("utf-8"))
-    except (OSError, ValueError):
-        return json.loads(json.dumps(EMPTY))
-    for k, v in EMPTY.items():
-        d.setdefault(k, json.loads(json.dumps(v)))
-    return d
+def load(path: Path, поверх_битого: bool = False) -> dict:
+    # Нечитаемый файл не подменяется пустым: см. atomic_store.прочитать_состояние.
+    return atomic_store.прочитать_состояние(path, EMPTY, "файл хода",
+                                            поверх_битого=поверх_битого)
 
 
 #: Замок переехал в общий модуль записи вместе с веткой для Windows: тот же
@@ -643,7 +638,7 @@ def main() -> int:
     # записью, вернёт файл к прежнему виду — молча и с кодом 0.
     lock = _Lock(path)
     lock.__enter__()
-    data = load(path)
+    data = load(path, cmd == "init" and "--fresh" in rest)
 
     try:
         if cmd == "criteria":
@@ -713,10 +708,17 @@ def main() -> int:
             # существующего таска в его копию (см. set_task). Не передали
             # волну — таск остаётся там, где лежит.
             _w = _flag(rest, "--wave")
+            статус = _flag(rest, "--status", WAITING)
+            код = int(code) if code is not None else None
+            if статус == PROVEN:
+                # «Доказано» ставит запись гейта, а не число в вызове.
+                запись = gate_record.свежая_зелёная(path)
+                код = запись["exit_code"] if запись else None
+                if код != 0:
+                    статус = CLAIMED
+                    print(gate_record.СО_СЛОВ, file=sys.stderr)
             data = set_task(data, rest[0], rest[1],
-                            int(_w) if _w is not None else None,
-                            _flag(rest, "--status", WAITING),
-                            int(code) if code is not None else None,
+                            int(_w) if _w is not None else None, статус, код,
                             [x.strip() for x in reqs.split(",") if x.strip()]
                             if reqs is not None else None,
                             [x.strip() for x in zone.split(",") if x.strip()]
@@ -776,4 +778,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(atomic_store.запустить(main))

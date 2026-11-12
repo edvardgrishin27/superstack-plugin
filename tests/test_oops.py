@@ -117,5 +117,19 @@ class TestUndoThatRestoredNothing(unittest.TestCase):
         self.assertIn("руками", вердикт, "не назван следующий шаг человека")
 
 
+class TestOopsSkillTakesTheTargetFromTheTool(unittest.TestCase):
+    """Навык не выбирает снимок по месту в списке: цель называет инструмент."""
+
+    def setUp(self):
+        self.текст = (PKG / "skills" / "oops" / "SKILL.md").read_text("utf-8")
+
+    def test_no_pick_by_the_word_latest_and_names_the_target_field(self):
+        self.assertNotIn("`последний`", self.текст,
+                         "навык берёт самый свежий снимок — после правки это "
+                         "состояние, в котором человек уже стоит")
+        self.assertIn("цель_отката", self.текст)
+        self.assertIn("возвращать некуда", self.текст)
+
+
 if __name__ == "__main__":
     unittest.main()

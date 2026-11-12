@@ -36,7 +36,6 @@ _s.loader.exec_module(en)
 #: намеренно: оно ограничено счётчиком на машине (три раза за всё время), и
 #: человеку, поставившему плагин, полезно узнать об этом хотя бы раз.
 AUTO_HOOKS = (
-    PKG / "hooks" / "session-lesson.py",
     PKG / "hooks" / "precompact.py",
     PKG / "hooks" / "verify-gate.py",
 )
@@ -354,15 +353,6 @@ class TestHooksAreSilentInForeignProjects(unittest.TestCase):
                                  f"{hook.name} вернул ненулевой код в чужом "
                                  "проекте — это может не дать закрыть ход")
 
-    def test_the_lesson_hook_speaks_once_the_project_is_enabled(self):
-        """Обратный контроль: гейт не должен глушить систему там, где её
-        позвали, — иначе он лечит шум ценой продукта."""
-        (self.state / "projects").write_text(str(self.foreign) + "\n",
-                                             encoding="utf-8")
-        p = self._run(PKG / "hooks" / "session-lesson.py",
-                      self.foreign)
-        self.assertIn("hookSpecificOutput", p.stdout)
-
 
 class TestTheGateSurvivesASymlinkedPath(unittest.TestCase):
     """Отметка стоит, а гейт её не видит — из-за симлинка в пути.
@@ -460,7 +450,7 @@ class TestTheGateSurvivesASymlinkedPath(unittest.TestCase):
         """
         (self.state / "projects").write_text(
             str(self.через_ссылку) + "\n", encoding="utf-8")
-        сказал, _, _ = self._след(PKG / "hooks" / "session-lesson.py",
+        сказал, _, _ = self._след(PKG / "hooks" / "verify-gate.py",
                                   self.настоящий)
         self.assertTrue(сказал, "отметка неразрешённым путём перестала "
                                 "находиться — починили одну сторону, сломав "

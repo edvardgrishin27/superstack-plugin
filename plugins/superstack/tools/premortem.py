@@ -83,15 +83,8 @@ EMPTY = {"schema": "superstack.premortem.v1", "ran": False,
 
 
 def load(path: Path) -> dict:
-    if not path.is_file():
-        return json.loads(json.dumps(EMPTY))
-    try:
-        d = json.loads(path.read_text("utf-8"))
-    except (OSError, ValueError):
-        return json.loads(json.dumps(EMPTY))
-    for k, v in EMPTY.items():
-        d.setdefault(k, json.loads(json.dumps(v)))
-    return d
+    # Нечитаемый файл не подменяется пустым: см. atomic_store.прочитать_состояние.
+    return atomic_store.прочитать_состояние(path, EMPTY, "файл разбора рисков")
 
 
 def save(path: Path, data: dict, now: str = None) -> None:
@@ -226,4 +219,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(atomic_store.запустить(main))

@@ -177,11 +177,14 @@ class TestPersistence(unittest.TestCase):
             self.assertTrue(back["ran"])
             self.assertEqual(len(back["findings"]), 4)
 
-    def test_unreadable_file_gives_an_unrun_pass_not_a_clean_one(self):
+    def test_unreadable_file_stops_instead_of_reading_as_unrun(self):
+        """Пустое вместо нечитаемого стирало разбор следующей записью."""
         with tempfile.TemporaryDirectory() as t:
             p = Path(t) / "pm.json"
             p.write_text("{сломано", encoding="utf-8")
-            self.assertFalse(pm.load(p)["ran"])
+            with self.assertRaises(pm.atomic_store.ФайлПовреждён):
+                pm.load(p)
+            self.assertEqual(p.read_text("utf-8"), "{сломано")
 
 
 if __name__ == "__main__":

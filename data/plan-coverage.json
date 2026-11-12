@@ -835,10 +835,10 @@
   {
    "id": "L7.lesson-trigger",
    "layer": "L7 эволюция",
-   "mechanism": "вопрос «что забрать навсегда» задаётся ХУКОМ в конце хода: журнал был построен целиком и стоял пустым, потому что его никто не вызывал",
+   "mechanism": "вопрос «что забрать навсегда» задаётся фазой 7 после сдачи: журнал был построен целиком и стоял пустым, потому что его никто не вызывал",
    "evidence": {
-    "file": "plugins/superstack/hooks/session-lesson.py",
-    "contains": "\"hookEventName\": \"Stop\""
+    "file": "plugins/superstack/skills/go/phases/7-переживёт.md",
+    "contains": "tools/learn.py"
    }
   },
   {
@@ -1820,15 +1820,6 @@
    }
   },
   {
-   "id": "GAP.1596",
-   "layer": "L7 эволюция",
-   "mechanism": "Stop-хук урока молчит на ходе без работы и при замке мутаций",
-   "evidence": {
-    "file": "plugins/superstack/hooks/session-lesson.py",
-    "contains": "def что_то_менялось"
-   }
-  },
-  {
    "id": "GAP.1559",
    "layer": "L4 исполнение",
    "mechanism": "два читателя ADR сверяются на одних файлах",
@@ -2771,6 +2762,15 @@
    "evidence": {
     "file": "tools/gauntlet.py",
     "contains": "вне_поставки"
+   }
+  },
+  {
+   "id": "Q.merge-reads-declared-out",
+   "layer": "качество",
+   "mechanism": "сведение долей читает объявленные «вне поставки» записи и зеленеет только когда выполнено плюс объявлено равно реестру; недосчёт без объявления остаётся красным",
+   "evidence": {
+    "file": "tools/gauntlet.py",
+    "contains": "объявлено вне поставки"
    }
   },
   {
@@ -3717,7 +3717,7 @@
    "mechanism": "подпись проверяющего покрывает каждый его файл, а не только гейт",
    "evidence": {
     "file": "plugins/superstack/tools/verify.py",
-    "contains": "_ЧАСТИ = (verify_attempts, verify_report)"
+    "contains": "_ЧАСТИ = (verify_attempts, verify_report, atomic_store)"
    }
   },
   {
@@ -3985,10 +3985,10 @@
   {
    "id": "BAR.merged-green-needs-the-sum-to-match",
    "layer": "планка",
-   "mechanism": "сведение долей зеленеет только когда сумма выполненных равна числу зарегистрированных: «все доли зелёные» и «набор проверен» — разные утверждения, и второе тут единственное нужное",
+   "mechanism": "сведение долей зеленеет только когда сумма выполненных и объявленных вне поставки равна числу зарегистрированных: «все доли зелёные» и «набор проверен» — разные утверждения, и второе тут единственное нужное",
    "evidence": {
     "file": "tools/gauntlet.py",
-    "contains": "if выполнено != реестр:"
+    "contains": "if выполнено + len(объявлено) != реестр:"
    }
   },
   {
@@ -4232,6 +4232,213 @@
    "evidence": {
     "file": "plugins/superstack/tools/tier_payoff.py",
     "contains": "def исходы("
+   }
+  },
+  {
+   "id": "L5.rollback-targets-a-different-state",
+   "layer": "L5 гарантии",
+   "mechanism": "список снимков сам называет цель отката — первый снимок, возврат к которому меняет папку; «верни как было» не берёт самый свежий, равный текущему состоянию",
+   "evidence": {
+    "file": "plugins/superstack/tools/checkpoint.py",
+    "contains": "\"цель_отката\""
+   }
+  },
+  {
+   "id": "L5.change-sets-a-return-point",
+   "layer": "L5 гарантии",
+   "mechanism": "/change до правки заводит снимки, а если не вышло — спрашивает «вернуть будет нельзя — продолжать?», вместо молчаливой правки без точки возврата",
+   "evidence": {
+    "file": "plugins/superstack/skills/change/SKILL.md",
+    "contains": "checkpoint.py\" . init"
+   }
+  },
+  {
+   "id": "L5.hook-follows-the-session-folder",
+   "layer": "L5 гарантии",
+   "mechanism": "Хук проверки хода и хук страховки памяти берут папку из входа (cwd), когда корень сеанса не отмечен, а рабочая папка лежит внутри отмеченной",
+   "evidence": {
+    "file": "plugins/superstack/hooks/verify-gate.py",
+    "contains": "корень = папка_из_входа(вход)"
+   }
+  },
+  {
+   "id": "L5.fix-checks-the-project-is-enabled",
+   "layer": "L5 гарантии",
+   "mechanism": "/fix называет звено «проверки в этой папке», если папку не заводили",
+   "evidence": {
+    "file": "plugins/superstack/tools/fix.py",
+    "contains": "(\"enabled\", \"проверки в этой папке\", _link_enabled,"
+   }
+  },
+  {
+   "id": "L5.verdict-record-written-by-the-gate",
+   "layer": "L5 гарантии",
+   "mechanism": "Гейт верификации сам пишет запись последнего вердикта (код, число тестов, время, отпечаток дерева) в папку проекта, и автономия с панелью читают настоящий прогон, а не подкладку",
+   "evidence": {
+    "file": "plugins/superstack/tools/verify.py",
+    "contains": "RECORD = \".superstack/verify-last.json\""
+   }
+  },
+  {
+   "id": "L5.proven-requires-a-gate-record",
+   "layer": "L5 гарантии",
+   "mechanism": "Статус «доказано» ставится только по свежей зелёной записи гейта с тем же отпечатком дерева; ручной код возврата понижается до «со слов»",
+   "evidence": {
+    "file": "plugins/superstack/tools/progress.py",
+    "contains": "запись = gate_record.свежая_зелёная(path)"
+   }
+  },
+  {
+   "id": "L5.green-needs-a-passing-test-check",
+   "layer": "L5 гарантии",
+   "mechanism": "«Прошло» требует хотя бы одной прошедшей проверки с меткой «тесты»; проект только со сборкой, линтером или типами получает «проверять нечем»",
+   "evidence": {
+    "file": "plugins/superstack/tools/verify.py",
+    "contains": "elif not _a_test_passed(evidence):"
+   }
+  },
+  {
+   "id": "L5.attempt-record-of-unknown-shape-is-replaced",
+   "layer": "L5 гарантии",
+   "mechanism": "Запись счётчика попыток неизвестной формы читается как «серии нет» одной общей функцией и заменяется при первой записи, без трассировки",
+   "evidence": {
+    "file": "plugins/superstack/tools/verify_attempts.py",
+    "contains": "def _series(state: dict, key: str) -> dict:"
+   }
+  },
+  {
+   "id": "L5.phase5-promotes-only-by-gate-record",
+   "layer": "L5 гарантии",
+   "mechanism": "Фаза проверки переводит ждущие и заявленные части в «доказано» только по свежей зелёной записи гейта; без неё ничего не меняет и отвечает кодом 1",
+   "evidence": {
+    "file": "plugins/superstack/tools/state_fields.py",
+    "contains": "def promote(path: Path) -> int:"
+   }
+  },
+  {
+   "id": "L5.broken-state-file-is-set-aside",
+   "layer": "L5 гарантии",
+   "mechanism": "Пять загрузчиков состояния читают файл одной общей функцией: файла нет — пустое состояние; файл есть, но не читается — копия рядом с отпечатком в имени и остановка кодом 5 с фразой «повреждён, копия сохранена, ничего не стёрто»",
+   "evidence": {
+    "file": "plugins/superstack/tools/atomic_store.py",
+    "contains": "def прочитать_состояние("
+   }
+  },
+  {
+   "id": "L2.memory-written-atomically",
+   "layer": "L2 память",
+   "mechanism": "Память проекта собирается и сверяется по отпечатку внешнего текста до записи и кладётся атомарной заменой; не сошлось или тело несёт текст маркера — файл побайтно прежний",
+   "evidence": {
+    "file": "plugins/superstack/tools/memory_file.py",
+    "contains": "atomic_store.записать(path, new"
+   }
+  },
+  {
+   "id": "L2.memory-init-refuses-an-occupied-block",
+   "layer": "L2 память",
+   "mechanism": "Повторное заведение памяти при существующем нашем блоке отвечает кодом 4 и ничего не трогает; с --fresh прежний файл сперва ложится копией рядом",
+   "evidence": {
+    "file": "plugins/superstack/tools/memory_file.py",
+    "contains": "ЗАНЯТО = 4"
+   }
+  },
+  {
+   "id": "L5.repair-without-cause-spends-a-rung",
+   "layer": "L5 гарантии",
+   "mechanism": "Починка без названной причины получает отказ с кодом 1 и всё равно тратит ступень лестницы; после четырёх ступеней ответ — сдача человеку",
+   "evidence": {
+    "file": "plugins/superstack/tools/review.py",
+    "contains": "\"refused\": \"причина не названа\""
+   }
+  },
+  {
+   "id": "L5.closed-finding-does-not-block",
+   "layer": "L5 гарантии",
+   "mechanism": "Вердикт ревью считает блокирующими только незакрытые находки: закрытая находка не держит ревью красным",
+   "evidence": {
+    "file": "plugins/superstack/tools/review.py",
+    "contains": "not f.get(\"closed\")"
+   }
+  },
+  {
+   "id": "L5.page-check-reads-all-interface-files",
+   "layer": "интерфейс",
+   "mechanism": "проверка страницы читает все файлы интерфейса любой глубины (html, vue, svelte, jsx, tsx, astro, md и другие), а не только src и корневой index.html",
+   "evidence": {
+    "file": "plugins/superstack/tools/page_check.py",
+    "contains": "INTERFACE_EXTENSIONS"
+   }
+  },
+  {
+   "id": "L5.page-check-unread-is-not-green",
+   "layer": "интерфейс",
+   "mechanism": "если часть файлов интерфейса не прочитана, проверка страницы не говорит «можно показывать»: статус «смотреть не смог», код 2",
+   "evidence": {
+    "file": "plugins/superstack/tools/page_check.py",
+    "contains": "посмотреть не смог: не прочитал"
+   }
+  },
+  {
+   "id": "Q.gate-names-its-own-release",
+   "layer": "качество",
+   "mechanism": "хук закрытия хода говорит человеку одну фразу, когда отпускает без новой проверки: при повторной остановке и при сбое самого хука; один раз за сеанс, выход 0",
+   "evidence": {
+    "file": "plugins/superstack/hooks/verify-gate.py",
+    "contains": "ход закрыт без новой проверки"
+   }
+  },
+  {
+   "id": "Q.plan-consent-one-rule",
+   "layer": "качество",
+   "mechanism": "согласие «да» на план нужно на любой ступени автономии; ступени 2 и 3 снимают подтверждение шагов и закрытия хода, а не плана (решение владельца 11.11.2026)",
+   "evidence": {
+    "file": "plugins/superstack/skills/go/phases/3-план.md",
+    "contains": "План показывается и ждёт «да» на любой ступени"
+   }
+  },
+  {
+   "id": "Q.first-run-invites-building",
+   "layer": "качество",
+   "mechanism": "хук первого старта зовёт сказать своими словами, что построить, и называет три фразы для дальнейшего; про проверку настроек первым предложением не говорит",
+   "evidence": {
+    "file": "plugins/superstack/hooks/first-run.py",
+    "contains": "что хочешь построить"
+   }
+  },
+  {
+   "id": "Q.python-floor-has-a-job",
+   "layer": "дистрибуция",
+   "mechanism": "заявленная нижняя версия Python (3.8) проверяется отдельным заданием сборки, которое гоняет набор тестов",
+   "evidence": {
+    "file": ".github/workflows/gates.yml",
+    "contains": "python-version: \"3.8\""
+   }
+  },
+  {
+   "id": "L5.lesson-question-costs-no-extra-turn",
+   "layer": "L5 гарантии",
+   "mechanism": "вопрос «есть ли урок на всегда» задаётся один раз в фазе 7 после сдачи, а не хуком на каждом ходу: Stop с дополнительным текстом продолжает разговор и стоит платного хода",
+   "evidence": {
+    "file": "plugins/superstack/skills/go/phases/7-переживёт.md",
+    "contains": "есть ли урок на всегда"
+   }
+  },
+  {
+   "id": "Q.chain-run-walks-the-real-tools",
+   "layer": "качество",
+   "mechanism": "запись проверки лежит под одним именем для писавшего и читающих (автономия, «доказано»); сквозной прогон гоняет настоящие инструменты подряд и роняет набор, если имя разошлось",
+   "evidence": {
+    "file": "plugins/superstack/tools/verify.py",
+    "contains": "RECORD = \".superstack/verify-last.json\""
+   }
+  },
+  {
+   "id": "Q.wave-acceptance-is-one-line-from-code",
+   "layer": "качество",
+   "mechanism": "приёмка волны решается кодом и выдаётся одной строкой с кодом возврата: зелёный набор, пойманные поломки волны, зелёная быстрая планка и итог полной планки на этом же дереве; слово «принята» без них невозможно",
+   "evidence": {
+    "file": "tools/accept_wave.py",
+    "contains": "def caught_mutations(gate: dict, expected: int)"
    }
   }
  ],

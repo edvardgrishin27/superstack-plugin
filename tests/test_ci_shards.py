@@ -320,6 +320,23 @@ class Сведение(unittest.TestCase):
         self.assertEqual(r["status"], "pass", r)
         self.assertIn("выполнено 9", r["detail"])
 
+    def test_объявленный_пропуск_не_роняет_сведение(self):
+        """Запись «вне поставки» доля откладывает и называет: сведение это читает."""
+        self.доля(1)
+        self.доля(2)
+        self.доля(3, executed=2, caught=2, **{"вне_дерева": ["x"]})
+        r = self.свести()
+        self.assertEqual(r["status"], "pass", r)
+        self.assertIn("объявлено вне поставки 1", r["detail"])
+
+    def test_необъявленный_пропуск_роняет_сведение(self):
+        """Недосчёт без объявления остаётся красным: молчаливый пропуск не лечится."""
+        self.доля(1)
+        self.доля(2)
+        self.доля(3, executed=2, caught=2)
+        r = self.свести()
+        self.assertEqual(r["status"], "fail", r)
+
     def test_нехватка_доли_роняет_и_называет_номер(self):
         """«Остальные прошли» — самая дорогая формулировка в этом файле."""
         self.доля(1)
@@ -653,7 +670,7 @@ class РабочийПроцесс(unittest.TestCase):
             self.skipTest("pyyaml не установлен — разбор проверяется там, где он есть")
         d = yaml.safe_load(self.текст)
         self.assertEqual(sorted(d["jobs"]),
-                         ["gates", "merged", "mutations", "suite"])
+                         ["floor", "gates", "merged", "mutations", "suite"])
         self.assertEqual(d["jobs"]["merged"]["needs"], "mutations")
 
     def test_у_доли_есть_свой_предел_времени(self):

@@ -1,0 +1,133 @@
+{
+ "W1.S1": {
+  "mutations": [
+   "mutations.merge-ignores-declared-out",
+   "mutations.merge-counts-undeclared-as-declared"
+  ],
+  "tests": [
+   "tests/test_ci_shards.py",
+   "tests/test_gauntlet.py"
+  ]
+ },
+ "W1.S2": {
+  "mutations": [
+   "checkpoint.target-is-the-latest-snapshot",
+   "checkpoint.back-to-an-equal-snapshot-succeeds",
+   "change.no-snapshot-bootstrap"
+  ],
+  "tests": [
+   "tests/test_checkpoint.py",
+   "tests/test_novice_skills.py",
+   "tests/test_oops.py"
+  ]
+ },
+ "W1.S3": {
+  "mutations": [
+   "hooks.gate-ignores-input-folder",
+   "hooks.precompact-ignores-input-folder",
+   "fix.enabled-link-missing",
+   "scope.verify-gate-runs-everywhere",
+   "scope.precompact-runs-everywhere"
+  ],
+  "tests": [
+   "tests/test_hook_subfolder.py",
+   "tests/test_novice_skills.py"
+  ]
+ },
+ "W1.S4": {
+  "mutations": [
+   "verify.gate-does-not-write-its-record",
+   "progress.proven-by-hand-exit-code",
+   "verify.build-only-is-green",
+   "verify.record-changes-the-fingerprint",
+   "verify.attempt-record-shape-trusted",
+   "state.promote-without-gate-record"
+  ],
+  "tests": [
+   "tests/test_gate_record.py",
+   "tests/test_progress.py",
+   "tests/test_live_panel.py"
+  ]
+ },
+ "W1.S5": {
+  "mutations": [
+   "state.load-swaps-a-broken-file-for-empty",
+   "memory.write-before-check",
+   "memory.marker-in-body-accepted",
+   "memory.init-overwrites",
+   "progress.state-written-without-a-lock"
+  ],
+  "tests": [
+   "tests/test_broken_state_files.py",
+   "tests/test_memory_file.py",
+   "tests/test_review.py",
+   "tests/test_premortem.py"
+  ]
+ },
+ "W1.S6": {
+  "mutations": [
+   "review.repair-without-cause-is-free",
+   "review.closed-finding-keeps-the-verdict-red",
+   "review.repair-without-a-named-cause-is-allowed"
+  ],
+  "tests": [
+   "tests/test_review.py"
+  ]
+ },
+ "W1.S7": {
+  "mutations": [
+   "page_check.reads-only-the-old-globs",
+   "page_check.unread-counts-as-green"
+  ],
+  "tests": [
+   "tests/test_page_check.py",
+   "tests/test_novice_skills.py"
+  ]
+ },
+ "W1.S8": {
+  "mutations": [
+   "hooks.gate-silent-on-second-stop",
+   "hooks.gate-silent-on-failure",
+   "skills.plan-consent-skipped-at-level-3",
+   "hooks.first-run-offers-a-settings-audit",
+   "apply.uses-a-39-only-call",
+   "gate.loop-guard-removed",
+   "undo.manifest-path-not-resolved"
+  ],
+  "tests": [
+   "tests/test_showcase_honesty.py",
+   "tests/test_distribution.py",
+   "tests/test_ci_shards.py"
+  ]
+ },
+ "W1.S9": {
+  "mutations": [
+   "hooks.lesson-returns-to-stop",
+   "phase7.lesson-question-dropped"
+  ],
+  "tests": [
+   "tests/test_lesson_at_end.py",
+   "tests/test_project_scope.py",
+   "tests/test_first_run_defects.py"
+  ]
+ },
+ "W1.S10": {
+  "mutations": [
+   "chain.verify-record-name-split",
+   "chain.report-trusts-claimed"
+  ],
+  "tests": [
+   "tests/test_chain_run.py"
+  ]
+ },
+ "W1.S11": {
+  "mutations": [
+   "accept.ignores-survived",
+   "accept.accepts-without-full-bar",
+   "accept.pytest-code-ignored"
+  ],
+  "tests": [
+   "tests/test_accept_wave.py"
+  ]
+ }
+}

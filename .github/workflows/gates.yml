@@ -30,7 +30,9 @@ on:
   push:
   pull_request:
   schedule:
-    - cron: "0 3 * * *"
+    # Раз в неделю, в понедельник 03:00 UTC: ночной прогон каждый день съедал
+    # ~380 минут Actions в месяц из 2000 бесплатных (решение владельца 26.10.2026).
+    - cron: "0 3 * * 1"
   workflow_dispatch:
 
 jobs:
@@ -48,6 +50,22 @@ jobs:
       - name: герметичность — тот же набор при чужом HOME
         run: HOME="$(mktemp -d)" python -m pytest tests/ -q
 
+  floor:
+    name: набор на нижней версии Python
+    # README обещает «Python 3.8 или новее». Это задание и есть проверка
+    # обещания: красное — значит, граница ложна, и её либо чинят, либо
+    # поднимают во всех местах разом. Образ 22.04 взят потому, что на нём
+    # сборка 3.8 для setup-python точно есть.
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.8"
+      - run: python -m pip install --quiet pytest
+      - name: тесты на нижней версии
+        run: python -m pytest -q tests/
+
   gates:
     name: ворота
     runs-on: ubuntu-latest
@@ -64,7 +82,7 @@ jobs:
 
   mutations:
     name: мутации ${{ matrix.shard }}
-    # Только по ночам, на теге и по кнопке: 648 поломок × прогон набора.
+    # Только по расписанию (раз в неделю), на теге и по кнопке: 648 поломок × прогон набора.
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
     # На долю приходится около сорока поломок и один базовый прогон — это

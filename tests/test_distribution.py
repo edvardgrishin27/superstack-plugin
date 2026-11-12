@@ -406,7 +406,8 @@ class TestFirstRunHook(unittest.TestCase):
         data = json.loads(out)
         spec = data["hookSpecificOutput"]
         self.assertEqual(spec["hookEventName"], "SessionStart")
-        self.assertIn("superstack", spec["additionalContext"])
+        self.assertIn("построить", spec["additionalContext"])
+        self.assertNotIn("настройку Claude Code", spec["additionalContext"])
 
     def test_does_not_fabricate_a_user_message(self):
         """initialUserMessage завёл бы разговор сам: приписал человеку слова,
@@ -799,7 +800,7 @@ class TestVerifyGateHook(unittest.TestCase):
         """
         self.stub(1)
         d = self.decision(self.gate(self.stdin_for(active=True)))
-        self.assertIsNone(d, "хук заблокировал ход второй раз подряд")
+        self.assertNotIn("decision", d or {}, "хук заблокировал ход второй раз подряд")
         self.assertFalse(self.ran.exists(),
                          "на повторном заходе проверка запустилась снова")
 

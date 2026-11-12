@@ -107,16 +107,10 @@ def sha(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()[:16]
 
 
-def load(path: Path) -> dict:
-    if not path.is_file():
-        return json.loads(json.dumps(EMPTY))
-    try:
-        d = json.loads(path.read_text("utf-8"))
-    except (OSError, ValueError):
-        return json.loads(json.dumps(EMPTY))
-    for k, v in EMPTY.items():
-        d.setdefault(k, json.loads(json.dumps(v)))
-    return d
+def load(path: Path, поверх_битого: bool = False) -> dict:
+    # Нечитаемый файл не подменяется пустым: см. atomic_store.прочитать_состояние.
+    return atomic_store.прочитать_состояние(path, EMPTY, "файл требований",
+                                            поверх_битого=поверх_битого)
 
 
 def save(path: Path, data: dict, now: "str | None" = None) -> None:
@@ -435,7 +429,7 @@ def main() -> int:
     # записью, вернёт файл к прежнему виду — молча и с кодом 0.
     lock = atomic_store.Lock(path)
     lock.__enter__()
-    data = load(path)
+    data = load(path, cmd == "init" and "--fresh" in rest)
 
     try:
         if cmd == "init":
@@ -564,4 +558,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(atomic_store.запустить(main))

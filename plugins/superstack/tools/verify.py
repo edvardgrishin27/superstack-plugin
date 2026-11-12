@@ -85,12 +85,14 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 # ЕДИНЫМ адресом для тех, кто зовёт его снаружи (tools/what.py, Stop-хук,
 # тесты), и переезд куска внутрь соседнего модуля не имеет права менять этот
 # адрес. Часть имён отсюда не вызывается — это re-export, а не мусор.
+import atomic_store  # noqa: E402
 import verify_attempts  # noqa: E402
 import verify_report  # noqa: E402
 from verify_attempts import (  # noqa: E402,F401
     MAX_ATTEMPTS, STATE_ENV, _FINGERPRINT_SKIP,
     _failure_signature, _finalize, _give_up_text, _load_attempts,
-    _save_attempts, _state_path, _tree_fingerprint, apply_attempt_ceiling,
+    _save_attempts, _series, _state_path, _tree_fingerprint,
+    apply_attempt_ceiling,
 )
 from verify_report import (  # noqa: E402,F401
     EMPTY_MARKERS, STUB_MARKERS,
@@ -372,12 +374,24 @@ def verdict(results: list, project: Path, unrunnable: tuple = ()) -> dict:
         # прошедшая проверка закрывает ход за ту, которую никто не запускал.
         status = "absent"
         nxt = f"осталось непроверенным: {unrunnable[0].check.label} — {unrunnable[0].reason}"
+    elif not _a_test_passed(evidence):
+        # Правило 1 из шапки: проверка поведения — это тест. Сборка, линт и
+        # типы говорят, что код собирается, но не что он делает то, что надо.
+        # Проект, объявивший только их, не получает «прошло».
+        status = "absent"
+        blockers.append("ни одной проверки с меткой «тесты»")
+        nxt = "собирается, но поведение не проверено — завести хотя бы один тест"
     else:
         status = "pass"
         nxt = "гейт пройден: можно закрывать ход"
 
     return {"gate": "verify", "status": status, "project": str(project),
             "blockers": blockers, "evidence": evidence, "next": nxt}
+
+
+def _a_test_passed(evidence: list) -> bool:
+    """Есть ли среди улик прошедшая проверка с меткой «тесты»."""
+    return any(e["label"] == "тесты" and e["state"] == "pass" for e in evidence)
 
 
 HEAD = {"pass": "ПРОШЛО", "fail": "НЕ ПРОШЛО", "absent": "ПРОВЕРЯТЬ НЕЧЕМ"}
@@ -527,7 +541,11 @@ def _declared_commands(project: Path) -> str:
 #: tests/test_verify.py::ПодписьПроверяющего). Пока подпись бралась с одного
 #: файла, вынос половины гейта в соседний модуль выключил бы половину этого
 #: механизма — механизм остался бы на месте и перестал бы что-либо покрывать.
-_ЧАСТИ = (verify_attempts, verify_report)
+#:
+#: `atomic_store` вердикт не считает — им пишется запись вердикта. Он в
+#: списке по тому же правилу «всё, что гейт берёт из пакета»: лишняя
+#: перепроверка после его правки дешевле исключения из правила.
+_ЧАСТИ = (verify_attempts, verify_report, atomic_store)
 
 
 def _verifier_identity() -> "str | None":
@@ -604,6 +622,60 @@ def _reuse_fingerprint(project: Path) -> "str | None":
     return hashlib.sha256(raw.encode("utf-8", "replace")).hexdigest()
 
 
+# --------------------------------------------------------------------------
+# запись последнего вердикта
+# --------------------------------------------------------------------------
+#: Где гейт оставляет свой последний вердикт. Её читают ступень
+#: самостоятельности (tools/autonomy.py), панель (tools/panel_facts.py) и
+#: запись хода работ: «доказано» ставится по ней, а не по числу из вызова.
+#: Пишет её только гейт, и только в проекте, где плагин уже завёл свою папку:
+#: заводить служебную папку в чужом репозитории проверка не вправе.
+RECORD = ".superstack/verify-last.json"
+
+
+def _measured_tests(results: list) -> "int | None":
+    """Сколько тестов выполнено — только если это сказал сам прогонщик.
+
+    Число берётся из итоговой строки pytest у КАЖДОЙ проверки с меткой
+    «тесты». Хоть у одной сводки нет — числа нет вовсе: половина, выданная
+    за целое, читалась бы как измерение.
+    """
+    total = None
+    for r in results:
+        if r.check.label != "тесты":
+            continue
+        counts = _pytest_summary(r.output)
+        if counts is None:
+            return None
+        # Пропущенный тест не выполнялся — в число он не входит.
+        total = (total or 0) + sum(counts.get(w, 0) for w in
+                                   verify_report._RAN_WORDS if w != "skipped")
+    return total
+
+
+def write_record(project: Path, v: dict, results: list,
+                 fingerprint: "str | None") -> None:
+    """Оставить запись вердикта. Неудача записи — не провал проверки.
+
+    Код возврата гейта от неё не меняется. Но и молчать нельзя: без записи
+    «доказано» и ступень 2 недостижимы, и человек обязан узнать почему.
+    """
+    if not (project / ".superstack").is_dir():
+        return
+    from datetime import datetime, timezone
+    rec = {"schema": "superstack.verify-last.v1",
+           "exit_code": EXIT.get(v["status"], 1), "status": v["status"],
+           "updated": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+           "fingerprint": fingerprint}
+    tests = _measured_tests(results)
+    if tests is not None:
+        rec["tests"] = tests
+    try:
+        atomic_store.записать_json(project / RECORD, rec, indent=1)
+    except OSError as e:
+        print(f"запись вердикта не легла ({RECORD}): {e}", file=sys.stderr)
+
+
 def halt_if_paused() -> None:
     if os.environ.get("SUPERSTACK_IGNORE_PAUSE") == "1":
         return
@@ -646,9 +718,14 @@ def main() -> int:
     # покрытия) не должен попасть в снимок и исказить его для следующего
     # вызова (см. докстринг _tree_fingerprint).
     fingerprint = _tree_fingerprint(project)
+    # Отпечаток для записи вердикта — тот, по которому зелёное переиспользуют:
+    # «доказано» обещает равенство состояний, а не только дерева.
+    след = (_reuse_fingerprint(project)
+            if (project / ".superstack").is_dir() else None)
     results = [_run(c, project) for c in detect_checks(project)]
     v = verdict(results, project, tuple(unrunnable_checks(project)))
     v = apply_attempt_ceiling(v, project, _state_path(), fingerprint)
+    write_record(project, v, results, след)
     if not quiet:
         print(human(v), file=sys.stderr)
     print(json.dumps(v, ensure_ascii=False, indent=1))

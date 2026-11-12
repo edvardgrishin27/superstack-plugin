@@ -27,12 +27,13 @@
      проверенной.
 
   python3 memory_file.py detect <корень>
-  python3 memory_file.py init   <корень> --project "Название" [--about "одна строка"]
+  python3 memory_file.py init   <корень> --project "Название" [--about "одна строка"] [--fresh]
   python3 memory_file.py set    <корень> --section "Команды" --body "..."
   python3 memory_file.py get    <корень> --section "Команды"
   python3 memory_file.py check  <корень>
 
-  код 0 — чисто, 1 — нарушено, 2 — не смог проверить, 3 — ошибка вызова
+  код 0 — чисто, 1 — нарушено, 2 — не смог проверить, 3 — ошибка вызова,
+  4 — у `init`: наш блок уже есть, ничего не тронуто (см. --fresh)
   у `get`: 0 — раздел есть, 2 — такого раздела в памяти нет
 """
 from __future__ import annotations
@@ -44,10 +45,26 @@ import re
 import sys
 from pathlib import Path
 
+# Каталог инструмента при импорте из теста в sys.path не попадает, поэтому
+# добавляется явно — как у соседей.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import atomic_store  # noqa: E402
+
 START = "<!-- superstack:start -->"
 END = "<!-- superstack:end -->"
 
 CLAUDE, AGENTS = "CLAUDE.md", "AGENTS.md"
+
+#: Код отказа «здесь уже заведена память». Число то же, что у manifest.py и
+#: progress.py: для человека это одно событие — работа здесь уже начата.
+ЗАНЯТО = 4
+
+#: Режим НОВОГО файла памяти. Это обычный файл проекта, его читают все, кто
+#: работает с репозиторием, — как и до перехода на атомарную запись.
+_РЕЖИМ_ПАМЯТИ = 0o644
+
+МАРКЕР_В_ТЕЛЕ = ("НЕ ЗАПИСАЛ: в тексте есть служебная метка памяти. Убери её "
+                 "из текста. Файл не тронут.")
 
 #: Порядок детекции. Останавливаемся на первом совпадении — и первые два
 #: пункта не случайно вперёд всех: существующий файл уже отвечает на вопрос,
@@ -120,7 +137,17 @@ def write_block(path: Path, block: str) -> dict:
     Отпечатки внешнего текста снимаются до и после и сверяются здесь же:
     правило «пишем только между маркерами» без проверки — это обещание, а
     стирание чужих правил происходит ровно один раз и замечается нескоро.
+
+    Новый текст собирается и сверяется В ПАМЯТИ, и только потом файл
+    заменяется одним движением. Раньше запись шла прямо в файл, а сверка —
+    после неё: несошедшаяся сверка оставляла на диске файл с двумя метками
+    начала, и дальше он считался сломанным навсегда.
+
+    Тело с текстом метки отклоняется до записи (ValueError): именно оно
+    ломало файл. Несошедшаяся сверка — RuntimeError, файл побайтно прежний.
     """
+    if START in block or END in block:
+        raise ValueError(МАРКЕР_В_ТЕЛЕ)
     old = path.read_text("utf-8") if path.is_file() else ""
     parts = split(old)
     if parts is None:
@@ -132,14 +159,17 @@ def write_block(path: Path, block: str) -> dict:
         new = f"{before}{START}\n{block.strip()}\n{END}{after}"
         before_sha = hashlib.sha256((before + after).encode()).hexdigest()
 
-    path.write_text(new, encoding="utf-8")
-    check = split(path.read_text("utf-8"))
+    check = split(new)
     after_sha = hashlib.sha256(
         ((check[0] + check[2]) if check else "").encode()).hexdigest()
+    if check is None:
+        raise RuntimeError("метки памяти не сложились в пару — запись "
+                           "отменена, файл не тронут")
     if parts is not None and before_sha != after_sha:
-        raise RuntimeError("текст вне маркеров изменился — запись отменена бы "
-                           "быть должна; это тот самый случай, когда стираются "
-                           "правила, выстраданные командой")
+        raise RuntimeError("текст вне маркеров изменился бы — запись "
+                           "отменена, файл не тронут; это тот самый случай, "
+                           "когда стираются правила, выстраданные командой")
+    atomic_store.записать(path, new, режим_нового=_РЕЖИМ_ПАМЯТИ)
     return {"file": str(path), "outside_sha": after_sha[:12]}
 
 
@@ -250,6 +280,20 @@ def _one(argv, name, default=""):
         argv.index(name) + 1 < len(argv) else default
 
 
+def _записать(path: Path, block: str) -> "dict | int":
+    """Запись блока из командной строки: отказ — одна фраза и код, а не
+    трассировка. Метка в тексте — ошибка вызова (3), несошедшаяся сверка —
+    нарушение (1). Файл в обоих случаях не тронут."""
+    try:
+        return write_block(path, block)
+    except ValueError as e:
+        print(e, file=sys.stderr)
+        return 3
+    except RuntimeError as e:
+        print(f"НЕ УДАЛОСЬ: {e}", file=sys.stderr)
+        return 1
+
+
 def main() -> int:
     halt_if_paused()
     argv = sys.argv[1:]
@@ -282,10 +326,24 @@ def main() -> int:
         if not project:
             print("НЕ УДАЛОСЬ: нужно --project", file=sys.stderr)
             return 3
+        # Заведение поверх нашего блока — не заведение, а стирание: повторный
+        # init уносил записанные команды и ход прошлого прогона молча, кодом 0.
+        p = root / d["file"]
+        if p.is_file() and START in p.read_text("utf-8", errors="replace"):
+            if "--fresh" not in argv:
+                print("НЕ ЗАВЁЛ: память проекта здесь уже заведена, ничего не "
+                      f"тронуто: {p}. Начать заново можно с --fresh: прежний "
+                      "файл сперва ляжет копией рядом.", file=sys.stderr)
+                return ЗАНЯТО
+            копия, _ = atomic_store.отложить_копию(p, "before-fresh")
+            print(f"вчерашнее не пропало, копия лежит рядом: {копия}",
+                  file=sys.stderr)
         for sub in SKELETON_DIRS:
             (root / sub).mkdir(parents=True, exist_ok=True)
-        r = write_block(root / d["file"], SKELETON.format(
+        r = _записать(p, SKELETON.format(
             project=project, about=_one(argv, "--about", "")))
+        if isinstance(r, int):
+            return r
         if d["pointer"]:
             # Указатель пишется только когда агент не опознан: при опознанном
             # второй файл — второе место для рассинхрона, и оно рассинхронится.
@@ -302,7 +360,10 @@ def main() -> int:
         p = root / d["file"]
         parts = split(p.read_text("utf-8") if p.is_file() else "")
         ours = apply_section(parts[1] if parts else "", section, body)
-        print(json.dumps(write_block(p, ours), ensure_ascii=False, indent=1))
+        r = _записать(p, ours)
+        if isinstance(r, int):
+            return r
+        print(json.dumps(r, ensure_ascii=False, indent=1))
         return 0
 
     if cmd == "get":

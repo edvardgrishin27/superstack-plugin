@@ -32,15 +32,6 @@
             "timeout": 180
           }
         ]
-      },
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/session-lesson.py\"",
-            "timeout": 10
-          }
-        ]
       }
     ]
   }

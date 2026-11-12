@@ -48,9 +48,21 @@ PLACEHOLDER_LIMIT = 2
 #: Метка заглушки. Одна на всю систему: договорённость, а не догадка по тексту.
 PLACEHOLDER = "[ВПИШИ:"
 
-#: Где искать то, что окажется на экране.
-LOOK_IN = ("src/**/*.ts", "src/**/*.tsx", "src/**/*.js", "index.html",
-           "content/*.json")
+#: Какие файлы считаются интерфейсом. Один список на всех: другие инструменты
+#: читают эту константу и не заводят второй.
+INTERFACE_EXTENSIONS = (".html", ".htm", ".vue", ".svelte", ".jsx", ".tsx",
+                        ".astro", ".js", ".ts", ".md", ".mdx")
+
+#: Тексты в `content/*.json` тоже попадают на экран.
+CONTENT_JSON_DIR = "content"
+
+#: Каталоги, где лежит чужой или собранный код, а не страница.
+SKIP_DIRS = frozenset({"node_modules", "dist", "build", ".git", ".next",
+                       "__pycache__", ".venv", "venv", "target", "vendor"})
+
+#: Потолок чтения одного файла. Файл больше потолка не читается целиком;
+#: он считается «не прочитан», а не «чист».
+MAX_READ_BYTES = 2_000_000
 
 #: Признаки пустого состояния в разметке и текстах — по классам системы и по
 #: словам, которыми такие блоки подписывают.
@@ -60,27 +72,41 @@ EMPTY_MARKS = ("empty-state", "EmptyState", "пока пусто", "скоро �
 
 def _files(root: Path) -> list:
     out = []
-    for pat in LOOK_IN:
-        out.extend(p for p in root.glob(pat) if p.is_file())
+    for dirpath, dirs, names in os.walk(root):
+        dirs[:] = sorted(d for d in dirs if d not in SKIP_DIRS)
+        here = Path(dirpath)
+        in_content = here == root / CONTENT_JSON_DIR
+        for n in sorted(names):
+            if n.endswith(INTERFACE_EXTENSIONS) or (
+                    in_content and n.endswith(".json")):
+                out.append(here / n)
     return out
+
+
+def _read(f: Path):
+    """Текст файла или None, если файл не прочитан (права, размер, сбой)."""
+    try:
+        if f.stat().st_size > MAX_READ_BYTES:
+            return None
+        return f.read_text("utf-8", errors="replace")
+    except OSError:
+        return None
 
 
 def scan(root: Path) -> dict:
     """Что окажется перед глазами человека."""
-    files = _files(root)
+    # Тестовые файлы отражают страницу, а не являются ею: их вхождения
+    # удвоили бы счёт и превратили нормальную страницу в «каркас».
+    files = [f for f in _files(root) if ".test." not in f.name]
     if not files:
         return {"status": "unknown", "detail": "страницы нет — смотреть нечего"}
 
-    placeholders, empties = [], []
+    placeholders, empties, unread = [], [], []
     images = accents = 0
     for f in files:
-        try:
-            t = f.read_text("utf-8", errors="replace")
-        except OSError:
-            continue
-        # Тестовые файлы отражают страницу, а не являются ею: их вхождения
-        # удвоили бы счёт и превратили нормальную страницу в «каркас».
-        if ".test." in f.name:
+        t = _read(f)
+        if t is None:
+            unread.append(f.relative_to(root).as_posix())
             continue
         for m in re.finditer(re.escape(PLACEHOLDER) + r"([^\]]*)", t):
             what = m.group(1).strip()
@@ -96,13 +122,14 @@ def scan(root: Path) -> dict:
 
     seen = sorted(set(placeholders))
     caркас = len(seen) > PLACEHOLDER_LIMIT
-    return {
+    out = {
         "status": "fail" if caркас else "pass",
         "placeholders": seen,
         "placeholder_count": len(seen),
         "empty_blocks": len(set(empties)),
         "images": images,
         "accents": accents,
+        "unread": unread,
         "detail": (
             f"на странице {len(seen)} незаполненных мест и {len(set(empties))} "
             "пустых блоков — человек увидит не сайт, а форму для ввода своих "
@@ -111,6 +138,12 @@ def scan(root: Path) -> dict:
             f"незаполненных мест {len(seen)} при пороге {PLACEHOLDER_LIMIT} — "
             "страницу можно показывать"),
     }
+    if unread and not caркас:
+        out["status"] = "unknown"
+        out["detail"] = (
+            f"посмотреть не смог: не прочитал {len(unread)} файлов интерфейса, "
+            f"например {', '.join(unread[:3])}")
+    return out
 
 
 def what_to_ask(v: dict) -> list:

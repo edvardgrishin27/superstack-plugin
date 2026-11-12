@@ -206,5 +206,82 @@ class TestTheFileDocumentsWhatExists(Base):
         self.assertEqual(v["status"], "unknown")
 
 
+class TestMemoryIsNeverLeftHalfWritten(Base):
+    """Запись шла прямо в файл, а сверка — после неё. Сбой сверки оставлял
+    файл с двумя метками начала, и дальше он считался сломанным навсегда."""
+
+    ENV = {**__import__("os").environ, "SUPERSTACK_IGNORE_PAUSE": "1"}
+
+    def _cli(self, *args: str):
+        import subprocess
+        import sys
+        return subprocess.run([sys.executable, str(MF), *args],
+                              capture_output=True, text=True, env=self.ENV,
+                              timeout=60)
+
+    def test_a_failed_check_leaves_the_file_byte_for_byte(self):
+        p = self.root / "CLAUDE.md"
+        p.write_text("правила команды\n", encoding="utf-8")
+        mf.write_block(p, "первое")
+        было = p.read_bytes()
+        настоящий = mf.split
+        вызовы = []
+
+        def подменённый(text):
+            вызовы.append(1)
+            got = настоящий(text)
+            if len(вызовы) > 1 and got:
+                return (got[0] + "чужая правка", got[1], got[2])
+            return got
+
+        mf.split = подменённый
+        try:
+            with self.assertRaises(RuntimeError):
+                mf.write_block(p, "второе")
+        finally:
+            mf.split = настоящий
+        self.assertEqual(p.read_bytes(), было)
+
+    def test_a_body_with_a_marker_is_refused_before_writing(self):
+        (self.root / ".claude").mkdir()
+        self.assertEqual(self._cli("init", str(self.root), "--project", "П")
+                         .returncode, 0)
+        p = self.root / "CLAUDE.md"
+        было = p.read_bytes()
+        r = self._cli("set", str(self.root), "--section", "Команды",
+                      "--body", f"текст {mf.START} ещё")
+        self.assertEqual(r.returncode, 3, r.stderr)
+        self.assertIn("служебная метка", r.stderr)
+        self.assertNotIn("Traceback", r.stderr)
+        self.assertEqual(p.read_bytes(), было)
+
+    def test_second_init_refuses_and_keeps_the_commands(self):
+        (self.root / ".claude").mkdir()
+        self.assertEqual(self._cli("init", str(self.root), "--project", "П")
+                         .returncode, 0)
+        self.assertEqual(self._cli("set", str(self.root), "--section",
+                                   "Команды", "--body", "npm run dev")
+                         .returncode, 0)
+        p = self.root / "CLAUDE.md"
+        было = p.read_bytes()
+        r = self._cli("init", str(self.root), "--project", "П")
+        self.assertEqual(r.returncode, 4, r.stderr)
+        self.assertEqual(p.read_bytes(), было)
+        self.assertIn("npm run dev",
+                      mf.get_section(self.root, "Команды")["body"])
+
+    def test_fresh_init_sets_the_old_file_aside_first(self):
+        (self.root / ".claude").mkdir()
+        self._cli("init", str(self.root), "--project", "П")
+        self._cli("set", str(self.root), "--section", "Команды",
+                  "--body", "npm run dev")
+        было = (self.root / "CLAUDE.md").read_bytes()
+        r = self._cli("init", str(self.root), "--project", "П", "--fresh")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("вчерашнее не пропало, копия лежит рядом", r.stderr)
+        копии = list(self.root.glob("CLAUDE.md.*.bak"))
+        self.assertEqual([c.read_bytes() for c in копии], [было])
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -26,7 +26,9 @@
 from __future__ import annotations
 
 import json
+import os
 import shutil
+import subprocess
 import sys
 from pathlib import Path
 
@@ -94,6 +96,29 @@ def _link_pause() -> tuple:
     return False, "проверил флаг паузы", f"система стоит на паузе с {since}"
 
 
+def _link_enabled() -> tuple:
+    """Заведены ли проверки в папке, где идёт разговор.
+
+    Без отметки автоматические проверки молчат весь сеанс, и человек видит
+    ровно то, с чем приходит в /fix: «ничего не происходит».
+    """
+    tried = "спросил у реестра, заведена ли текущая папка"
+    env = {**os.environ,
+           "SUPERSTACK_STATE_DIR": os.environ.get("SUPERSTACK_STATE_DIR") or str(STATE)}
+    try:
+        p = subprocess.run(
+            [sys.executable, str(Path(__file__).resolve().parent / "enable.py"),
+             os.getcwd(), "--check"],
+            capture_output=True, text=True, timeout=30, env=env)
+    except (OSError, subprocess.SubprocessError) as e:
+        return False, tried, f"не смог спросить: {e}"
+    if p.returncode == 0:
+        return True, tried, ""
+    if p.returncode == 1:
+        return False, tried, "здесь проверки не включены"
+    return False, tried, "не смог узнать, включены ли здесь проверки"
+
+
 def _link_writable() -> tuple:
     try:
         STATE.mkdir(parents=True, exist_ok=True)
@@ -116,6 +141,8 @@ LINKS = (
      "переустанови плагин — часть его файлов пропала"),
     ("hooks", "автоматические проверки", _link_hooks,
      "переустанови плагин — автоматическая проверка ссылается на файл, которого нет"),
+    ("enabled", "проверки в этой папке", _link_enabled,
+     "здесь проверки не включены; скажи «начнём» — я включу"),
     ("pause", "пауза", _link_pause,
      "скажи «включи» или позови /stop — сама пауза не пройдёт"),
     ("writable", "права на запись", _link_writable,

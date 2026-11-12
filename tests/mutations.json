@@ -258,8 +258,8 @@
   {
    "id": "gate.loop-guard-removed",
    "file": "plugins/superstack/hooks/verify-gate.py",
-   "find": "    if re.search(r'\"stop_hook_active\"\\s*:\\s*true', вход):\n        return 0",
-   "replace": "    if False:\n        return 0",
+   "find": "    if re.search(r'\"stop_hook_active\"\\s*:\\s*true', вход):",
+   "replace": "    if False:",
    "why": "снят разрыв цикла: гейт блокирует подряд до предела Claude Code в 8 продолжений, каждое стоит полного прогона набора — проверка превращается в ловушку"
   },
   {
@@ -1031,34 +1031,6 @@
    "find": "            inner = \"<p class='unchecked'>никто не проверял</p>\"",
    "replace": "            inner = \"<p class='clean'>проверено, закрывать нечего</p>\"",
    "why": "отсутствие проверки печатается как её результат — та же подмена, что и в линте памяти, только на самой заметной поверхности продукта"
-  },
-  {
-   "id": "lesson.hook-unwired",
-   "file": "plugins/superstack/hooks/hooks.json",
-   "find": "python3 \\\"${CLAUDE_PLUGIN_ROOT}/hooks/session-lesson.py\\\"",
-   "replace": "true \\\"${CLAUDE_PLUGIN_ROOT}/hooks/session-lesson.py\\\"",
-   "why": "спусковой крючок памяти отключён: журнал построен целиком и снова стоит пустым — механизм без вызова не работает так же, как отсутствующий, но выглядит построенным"
-  },
-  {
-   "id": "lesson.bar-not-stated",
-   "file": "plugins/superstack/hooks/session-lesson.py",
-   "find": "    \"--failure ... --deadend ... . Не все три — НЕ ЗАПИСЫВАЙ и не упоминай: \"",
-   "replace": "    \"--failure ... --deadend ... . \"",
-   "why": "исчезает разрешение молчать: хук вынуждает записать что-нибудь каждый ход, память наполняется шумом, а шумную память перестают читать — она умирает тише, чем пустая"
-  },
-  {
-   "id": "lesson.printf-eats-the-keys",
-   "file": "plugins/superstack/hooks/session-lesson.py",
-   "find": "\"--failure ... --deadend ... . Не все три",
-   "replace": "\"--deadend ... . Не все три",
-   "why": "строка, начинающаяся с «--», снова принимается printf за опцию: половина команды молча пропадает, и агент получает инструкцию без ключей"
-  },
-  {
-   "id": "lesson.no-tool-still-asks",
-   "file": "plugins/superstack/hooks/session-lesson.py",
-   "find": "    if not learn.is_file():",
-   "replace": "    if False:",
-   "why": "вопрос задаётся, когда инструмента нет: человек читает просьбу записать урок и не находит куда"
   },
   {
    "id": "unstick.restore-not-verified",
@@ -1838,45 +1810,17 @@
    "why": "возврат объявляется без сверки с оригиналом — «поломки больше нет» верно и для испорченного файла, а это ровно тот случай, что уже случился"
   },
   {
-   "id": "lesson.asks-on-every-turn",
-   "file": "plugins/superstack/hooks/session-lesson.py",
-   "find": "        if ломают_дерево(корень) or not что_то_менялось(отметка, корень):\n            return 0",
-   "replace": "        if ломают_дерево(корень):\n            return 0",
-   "why": "вопрос про урок снова задаётся на ходу без единого изменения — агент обязан ответить, ответ порождает новый Stop, и разговор встаёт в петлю коротких реплик"
-  },
-  {
-   "id": "lesson.mark-never-set",
-   "file": "plugins/superstack/hooks/session-lesson.py",
-   "find": "        отметка.write_text(\"\", encoding=\"utf-8\")",
-   "replace": "        pass",
-   "why": "отметка времени не ставится — точки отсчёта нет, и хук навсегда остаётся в режиме «спрашивать каждый ход»"
-  },
-  {
-   "id": "lesson.disabled-hook-moves-the-mark",
-   "file": "plugins/superstack/hooks/session-lesson.py",
-   "find": "    if os.environ.get(\"SUPERSTACK_DISABLE\") == \"1\":\n        return True",
-   "replace": "    if False:\n        return True",
-   "why": "выключенный хук сдвигает точку отсчёта — вся работа, сделанная при выключенном хуке, перестаёт считаться изменением, и первый же урок после включения теряется"
-  },
-  {
-   "id": "scope.lesson-hook-runs-everywhere",
-   "file": "plugins/superstack/hooks/session-lesson.py",
-   "find": "    if not позвали_здесь(корень):\n        return 0",
-   "replace": "    if False:\n        return 0",
-   "why": "хук урока снова срабатывает в КАЖДОМ проекте на машине — плагины стоят глобально, и человек, пишущий в соседнем каталоге что-то своё, получает вопросы от системы, которую там не звал"
-  },
-  {
    "id": "scope.verify-gate-runs-everywhere",
    "file": "plugins/superstack/hooks/verify-gate.py",
-   "find": "    if not позвали_здесь(корень):\n        return 0",
-   "replace": "    if False:\n        return 0",
+   "find": "    if not позвали_здесь(корень):\n        корень = папка_из_входа(вход)",
+   "replace": "    if False:\n        корень = папка_из_входа(вход)",
    "why": "гейт верификации снова работает в чужих проектах — самый дорогой случай: он может НЕ ДАТЬ ЗАКРЫТЬ ХОД там, где нет ни тестов, ни плана"
   },
   {
    "id": "scope.precompact-runs-everywhere",
    "file": "plugins/superstack/hooks/precompact.py",
-   "find": "    if not позвали_здесь(корень):\n        return 0",
-   "replace": "    if False:\n        return 0",
+   "find": "    if not позвали_здесь(корень):\n        if папка_из_входа(сырое) is None:",
+   "replace": "    if False:\n        if папка_из_входа(сырое) is None:",
    "why": "снимки транскриптов снова сохраняются из любого проекта на машине, включая те, где систему не звали"
   },
   {
@@ -2095,13 +2039,6 @@
    "find": "    if cmd == \"find\":\n        return 0",
    "replace": "    if False:\n        return 0",
    "why": "запись находки снова возвращает вердикт — успешно записанная первая находка выглядит отказом инструмента, и скрипт бросает ревью на середине"
-  },
-  {
-   "id": "lesson.watchdog-counts-system-noise",
-   "file": "plugins/superstack/hooks/session-lesson.py",
-   "find": "    return (состояние() / \".mutation-lock\").is_file() \\\n        or (корень / \".mutation-lock\").is_file()",
-   "replace": "    return False",
-   "why": "сторож урока снова считает правки прогона мутаций работой человека — на каждом разговорном ходе спрашивает про урок, и разговор превращается в петлю коротких реплик"
   },
   {
    "id": "design.direction-phase-removed",
@@ -2379,8 +2316,8 @@
   {
    "id": "page.tests-counted-as-the-page",
    "file": "plugins/superstack/tools/page_check.py",
-   "find": "        if \".test.\" in f.name:\n            continue",
-   "replace": "        if False:\n            continue",
+   "find": "if \".test.\" not in f.name]",
+   "replace": "if True]",
    "why": "тестовые файлы считаются страницей: их вхождения удваивают счёт заглушек, и нормальная наполненная страница объявляется каркасом — проверке перестают верить"
   },
   {
@@ -2498,8 +2435,8 @@
   {
    "id": "progress.state-written-without-a-lock",
    "file": "plugins/superstack/tools/progress.py",
-   "find": "    lock = _Lock(path)\n    lock.__enter__()\n    data = load(path)",
-   "replace": "    lock = _Lock(path)\n    data = load(path)",
+   "find": "    lock = _Lock(path)\n    lock.__enter__()\n    data = load(path, cmd == \"init\"",
+   "replace": "    lock = _Lock(path)\n    data = load(path, cmd == \"init\"",
    "why": "два помощника одной волны пишут состояние одновременно, и второй затирает правку первого: отметка «проверено» исчезает молча, с кодом возврата 0, и заметить это можно только глазами"
   },
   {
@@ -2571,13 +2508,6 @@
    "find": "        мод = имя[:-3]",
    "replace": "        мод = имя[:-3]\n        return мод in где",
    "why": "вызовом считается любое упоминание имени — строка справочника и комментарий зеленят ворота, и мёртвый инструмент прикидывается подключённым. Ровно так карта владельцев маскировала derive_phase"
-  },
-  {
-   "id": "scope.symlinked-path-not-resolved",
-   "file": "plugins/superstack/hooks/session-lesson.py",
-   "find": "            реальный = str(Path(строка).resolve()).rstrip(\"/\") + \"/\"",
-   "replace": "            реальный = строка.rstrip(\"/\") + \"/\"",
-   "why": "гейт области снова сверяет пути буквально: отметка записана разрешённым путём, а оболочка отдаёт $PWD как есть — у человека, чей проект под симлинком, отметка стоит и НИ ОДИН хук не срабатывает. Ни гейта верификации, ни страховки памяти, и узнать об этом неоткуда"
   },
   {
    "id": "brake.block-does-not-name-the-way-out",
@@ -3406,13 +3336,6 @@
    "why": "на Windows чужой замок объявляется мёртвым: второй прогон ломает дерево тому, кто в этот момент меряет"
   },
   {
-   "id": "lesson.path-quoted-only-sometimes",
-   "file": "plugins/superstack/hooks/session-lesson.py",
-   "find": "    команда = '\"%s\"' % str(learn).replace('\"', '\\\\\"')",
-   "replace": "    команда = str(learn)",
-   "why": "путь печатается без кавычек: в каталоге с пробелом скопированная команда не работает, а форма вывода начинает зависеть от места установки"
-  },
-  {
    "id": "text.number-not-substituted",
    "file": "plugins/superstack/tools/adjudicate.py",
    "find": "    out = text.replace(\"{n}\", str(n) if n is not None else \"?\")",
@@ -3432,14 +3355,6 @@
    "find": "\"ASK\": \"спрошу тебя\", \"BLOCK\": \"остановлюсь до твоего решения\",",
    "replace": "\"ASK\": \"ASK\", \"BLOCK\": \"BLOCK\",",
    "why": "вердикт печатается кодом: человеку в лицо уходит ASK вместо «спрошу тебя»"
-  },
-  {
-   "id": "corpus.range-counts-passes-not-repos",
-   "file": "research/deep-read.json",
-   "find": "\"files_per_repo\": {\n  \"min\": 30,",
-   "replace": "\"files_per_repo\": {\n  \"min\": 9,",
-   "why": "диапазон на репозиторий снова считается по проходам: «30–100 на репозиторий» подменяется минимумом одного прохода, и глубина чтения занижается там, где читателю важнее всего знать правду",
-   "вне_поставки": "research/ — материалы разработки, они не ставятся вместе с плагином"
   },
   {
    "id": "design.invented-colour-passes",
@@ -4053,8 +3968,8 @@
   {
    "id": "readme.install-text-promises-any-agent",
    "file": "README.md",
-   "find": "Плагин работает только в Claude Code. Вставьте этот текст своему Claude Code,\nон всё сделает сам:",
-   "replace": "Вставьте этот текст своему агенту — Claude Code, Cursor, Codex. Он всё сделает сам:",
+   "find": "Плагин работает только в Claude Code. Вставь этот текст своему Claude Code, он\nсделает все сам.",
+   "replace": "Вставь этот текст своему агенту, Claude Code, Cursor или Codex. Он сделает все сам.",
    "why": "витрина снова обещает, что текст установки годится любому агенту. Команд `claude plugin …` нет нигде, кроме Claude Code: человек получает отказ на первом же шаге и читает его как поломку продукта, а не как чужой инструмент"
   },
   {
@@ -4242,7 +4157,7 @@
   {
    "id": "verify.identity-signs-only-the-gate",
    "file": "plugins/superstack/tools/verify.py",
-   "find": "_ЧАСТИ = (verify_attempts, verify_report)",
+   "find": "_ЧАСТИ = (verify_attempts, verify_report, atomic_store)",
    "replace": "_ЧАСТИ = ()",
    "why": "подпись проверяющего снова покрывает только гейт: правка адаптера отчёта или потолка попыток перестаёт обесценивать прошлое зелёное — набор, прогнанный ДРУГИМ кодом, засчитывается за доказательство нового"
   },
@@ -4305,8 +4220,8 @@
   {
    "id": "undo.manifest-path-not-resolved",
    "file": "plugins/superstack/tools/apply.py",
-   "find": "    if not цель.is_relative_to(корень):",
-   "replace": "    if False:",
+   "find": "        цель.relative_to(корень)\n",
+   "replace": "        pass\n",
    "why": "снята проверка пути после разбора: разрешённое имя, оказавшееся ссылкой наружу, выводит запись за каталог настроек"
   },
   {
@@ -4522,8 +4437,8 @@
   {
    "id": "merge.sum-not-compared",
    "file": "tools/gauntlet.py",
-   "find": "    if выполнено != реестр:",
-   "replace": "    if False:",
+   "find": "    if выполнено + len(объявлено) != реестр:",
+   "replace": "    if выполнено + len(объявлено) > реестр:",
    "why": "сведение перестаёт сверять сумму выполненных с числом зарегистрированных: пятнадцать долей из шестнадцати складываются в зелёный итог"
   },
   {
@@ -4917,6 +4832,244 @@
    "find": "sorted(tests_dir.rglob(\"*.py\"))",
    "replace": "sorted(tests_dir.glob(\"*.py\"))",
    "why": "обход при разбиении литералов снова плоский, а осмотр остаётся рекурсивным: вложенный каталог тестов не разбивается, выкладка встаёт на литерале, который сама же обязана была разбить, и человек чинит это руками каждый релиз"
+  },
+  {
+   "id": "mutations.merge-ignores-declared-out",
+   "file": "tools/gauntlet.py",
+   "find": "    объявлено = sorted({i for d in доли for i in (d.get(\"вне_дерева\") or [])})",
+   "replace": "    объявлено = []",
+   "why": "сведение долей перестаёт читать объявленные пропуски: публичная сборка снова красная на каждом прогоне, а значок на первой странице врёт"
+  },
+  {
+   "id": "mutations.merge-counts-undeclared-as-declared",
+   "file": "tools/gauntlet.py",
+   "find": "    if выполнено + len(объявлено) != реестр:",
+   "replace": "    if False:",
+   "why": "сведение засчитывает недосчёт без объявления: часть поломок не проверена, а сборка зелёная"
+  },
+  {
+   "id": "checkpoint.target-is-the-latest-snapshot",
+   "file": "plugins/superstack/tools/checkpoint.py",
+   "find": "next((s for s in снимки if _возврат_меняет_папку(root, s[\"sha\"])),\n                None)",
+   "replace": "снимки[0]",
+   "why": "«верни как было» берёт самый свежий снимок, равный текущей папке: человек слышит «верну», а правка остаётся на месте"
+  },
+  {
+   "id": "checkpoint.back-to-an-equal-snapshot-succeeds",
+   "file": "plugins/superstack/tools/checkpoint.py",
+   "find": "    if not _возврат_меняет_папку(root, sha):",
+   "replace": "    if False:",
+   "why": "возврат к снимку, равному папке, кончается кодом 0 и словами «файлы вернулись», хотя ничего не изменилось"
+  },
+  {
+   "id": "change.no-snapshot-bootstrap",
+   "file": "plugins/superstack/skills/change/SKILL.md",
+   "find": "checkpoint.py\" . init",
+   "replace": "checkpoint.py\" . list",
+   "why": "правка в папке без снимков идёт без точки возврата, а человеку об этом не говорят"
+  },
+  {
+   "id": "hooks.gate-ignores-input-folder",
+   "file": "plugins/superstack/hooks/verify-gate.py",
+   "find": "        корень = папка_из_входа(вход)",
+   "replace": "        корень = None",
+   "why": "чат в домашней папке, проект в подпапке: проверка хода молчит весь сеанс, и красные тесты не мешают закрыть ход"
+  },
+  {
+   "id": "hooks.precompact-ignores-input-folder",
+   "file": "plugins/superstack/hooks/precompact.py",
+   "find": "        if папка_из_входа(сырое) is None:",
+   "replace": "        if True:",
+   "why": "чат в домашней папке, проект в подпапке: перед сжатием разговор не сохраняется, и детали теряются"
+  },
+  {
+   "id": "fix.enabled-link-missing",
+   "file": "plugins/superstack/tools/fix.py",
+   "find": "    (\"enabled\", \"проверки в этой папке\", _link_enabled,\n     \"здесь проверки не включены; скажи «начнём» — я включу\"),\n",
+   "replace": "",
+   "why": "на жалобу «ничего не происходит» система не говорит, что проверки в этой папке не включены"
+  },
+  {
+   "id": "verify.gate-does-not-write-its-record",
+   "file": "plugins/superstack/tools/verify.py",
+   "find": "    write_record(project, v, results, след)\n",
+   "replace": "",
+   "why": "гейт не оставляет запись вердикта: ступень 2 не открывается после зелёной проверки, а «доказано» поставить не на чем"
+  },
+  {
+   "id": "progress.proven-by-hand-exit-code",
+   "file": "plugins/superstack/tools/progress.py",
+   "find": "                код = запись[\"exit_code\"] if запись else None",
+   "replace": "                код = int(code) if code is not None else None",
+   "why": "«доказано» снова ставится по числу, которое напечатал ведущий, и отчёт пишет «проверено машиной» на словах"
+  },
+  {
+   "id": "verify.build-only-is-green",
+   "file": "plugins/superstack/tools/verify.py",
+   "find": "    elif not _a_test_passed(evidence):",
+   "replace": "    elif False:",
+   "why": "проект, где есть только сборка, получает «прошло», хотя поведение не проверял ни один тест"
+  },
+  {
+   "id": "verify.record-changes-the-fingerprint",
+   "file": "plugins/superstack/tools/verify_attempts.py",
+   "find": "                     _OWN_DIR}",
+   "replace": "                     }",
+   "why": "запись вердикта сама меняет отпечаток дерева: повторная проверка без правок тратит попытку, и потолок наступает раньше"
+  },
+  {
+   "id": "verify.attempt-record-shape-trusted",
+   "file": "plugins/superstack/tools/verify_attempts.py",
+   "find": "    return series if isinstance(series, dict) else {}",
+   "replace": "    return series or {}",
+   "why": "старая запись счётчика числом роняет проверку трассировкой, и человек видит ошибку вместо причины"
+  },
+  {
+   "id": "state.promote-without-gate-record",
+   "file": "plugins/superstack/tools/state_fields.py",
+   "find": "        запись = gate_record.свежая_зелёная(path)",
+   "replace": "        запись = {\"exit_code\": 0}",
+   "why": "фаза проверки переводит части в «доказано» без свежей зелёной записи гейта"
+  },
+  {
+   "id": "state.load-swaps-a-broken-file-for-empty",
+   "file": "plugins/superstack/tools/atomic_store.py",
+   "find": "        raise ФайлПовреждён(path, что, копия) from None",
+   "replace": "        return json.loads(json.dumps(пустое))",
+   "why": "нечитаемый файл снова читается как пустой, и следующая запись молча стирает ход стройки, требования, ревью, разбор рисков или бриф"
+  },
+  {
+   "id": "memory.write-before-check",
+   "file": "plugins/superstack/tools/memory_file.py",
+   "find": "    check = split(new)\n",
+   "replace": "    path.write_text(new, encoding=\"utf-8\")\n    check = split(new)\n",
+   "why": "память снова пишется до сверки: несошедшаяся сверка оставляет файл с двумя метками, и он сломан навсегда"
+  },
+  {
+   "id": "memory.marker-in-body-accepted",
+   "file": "plugins/superstack/tools/memory_file.py",
+   "find": "    if START in block or END in block:\n        raise ValueError(МАРКЕР_В_ТЕЛЕ)",
+   "replace": "    if False:\n        raise ValueError(МАРКЕР_В_ТЕЛЕ)",
+   "why": "текст со служебной меткой больше не отклоняется простой фразой, и человек не узнаёт, что убрать"
+  },
+  {
+   "id": "memory.init-overwrites",
+   "file": "plugins/superstack/tools/memory_file.py",
+   "find": "        if p.is_file() and START in p.read_text(\"utf-8\", errors=\"replace\"):",
+   "replace": "        if False:",
+   "why": "повторное заведение памяти снова стирает записанные команды запуска, и отчёт не знает, чем открыть продукт"
+  },
+  {
+   "id": "review.repair-without-cause-is-free",
+   "file": "plugins/superstack/tools/review.py",
+   "find": "            if r[\"allowed\"] or r.get(\"refused\"):",
+   "replace": "            if r[\"allowed\"]:",
+   "why": "починка без названной причины снова не стоит ничего: повторы идут без конца и счётчик молчит"
+  },
+  {
+   "id": "review.closed-finding-keeps-the-verdict-red",
+   "file": "plugins/superstack/tools/review.py",
+   "find": " and not f.get(\"closed\")]",
+   "replace": "]",
+   "why": "после первой починенной находки ревью остаётся красным навсегда и человек не может закончить"
+  },
+  {
+   "id": "page_check.reads-only-the-old-globs",
+   "file": "plugins/superstack/tools/page_check.py",
+   "find": "            if n.endswith(INTERFACE_EXTENSIONS) or (",
+   "replace": "            if (here == root / \"src\" and n.endswith((\".ts\", \".tsx\", \".js\"))) or (",
+   "why": "проект на .vue, .jsx или во вложенных страницах получает «страницу можно показывать» при полном наборе заглушек"
+  },
+  {
+   "id": "page_check.unread-counts-as-green",
+   "file": "plugins/superstack/tools/page_check.py",
+   "find": "    if unread and not caркас:",
+   "replace": "    if False and unread and not caркас:",
+   "why": "страница, которую инструмент не смог прочитать, объявляется годной к показу"
+  },
+  {
+   "id": "hooks.gate-silent-on-second-stop",
+   "file": "plugins/superstack/hooks/verify-gate.py",
+   "find": "        return сказать_один_раз(\n            \"SUPERSTACK: ход закрыт без новой проверки.\", вход)",
+   "replace": "        return 0",
+   "why": "ход закрывается без новой проверки молча: человек принимает отпуск за пройденную проверку"
+  },
+  {
+   "id": "hooks.gate-silent-on-failure",
+   "file": "plugins/superstack/hooks/verify-gate.py",
+   "find": "            сказать_один_раз(\n                \"SUPERSTACK: проверка не смогла запуститься, ход закрыт без неё.\",\n                _ВХОД)",
+   "replace": "            pass",
+   "why": "хук упал и промолчал: ход закрыт без проверки, а человек уверен, что она прошла"
+  },
+  {
+   "id": "skills.plan-consent-skipped-at-level-3",
+   "file": "plugins/superstack/skills/go/phases/3-план.md",
+   "find": "Ступень 3 — ход закрывается без вопроса к человеку, и",
+   "replace": "Ступень 3 — ход закрывается без подтверждения плана, и",
+   "why": "текст снова говорит, что на высшей ступени план не ждёт «да»: человек получает стройку, которую не одобрял"
+  },
+  {
+   "id": "hooks.first-run-offers-a-settings-audit",
+   "file": "plugins/superstack/hooks/first-run.py",
+   "find": "ТЕКСТ = (\n    \"SUPERSTACK (напоминание {} из {}): человек только поставил плагин и не \"\n    \"знает, с чего начать. Сначала ответь на то, с чем он пришёл. Если он уже \"\n    \"назвал, что строить, — ничего не добавляй. Иначе добавь одну строку: \"\n    \"скажи своими словами, что хочешь построить, и я возьмусь. И коротко \"\n    \"назови три фразы для дальнейшего: «добавь …» — малая правка того, что \"\n    \"уже работает; «верни как было» — откат; «останови всё» — пауза \"\n    \"(проверки встанут, вернёшь словом «включи обратно»). Откажется или \"\n    \"скажет, что не нужно, — выполни python3 {} done, и больше не предлагай \"\n    \"никогда. Этот текст не пересказывай дословно.\"\n)\n",
+   "replace": "ТЕКСТ = (\n    \"SUPERSTACK (напоминание {} из {}): настройку Claude Code на этом \"\n    \"компьютере ещё ни разу не проверяли. Сначала ответь на то, с чем пришёл \"\n    \"человек, а затем добавь ровно одну строку: могу заодно посмотреть, как \"\n    \"настроен твой Claude Code — это минута, менять ничего не буду. \"\n    \"Согласится — вызови скилл superstack. Откажется — выполни python3 {} \"\n    \"done, и больше не предлагай никогда. Без согласия проверку не запускай и \"\n    \"этот текст не пересказывай дословно.\"\n)\n",
+   "why": "новичок первым делом слышит про проверку своих настроек, а не про то, что можно построить"
+  },
+  {
+   "id": "apply.uses-a-39-only-call",
+   "file": "plugins/superstack/tools/apply.py",
+   "find": "    try:\n        цель.relative_to(корень)\n    except ValueError:\n        raise UnsafeName(",
+   "replace": "    if not цель.is_relative_to(корень):\n        raise UnsafeName(",
+   "why": "на Python 3.8 откат настроек падает с ошибкой в тот момент, когда человек просит «верни как было»"
+  },
+  {
+   "id": "hooks.lesson-returns-to-stop",
+   "file": "plugins/superstack/hooks/hooks.json",
+   "find": "    \"Stop\": [\n      {",
+   "replace": "    \"Stop\": [\n      {\n        \"hooks\": [\n          {\n            \"type\": \"command\",\n            \"command\": \"python3 \\\"${CLAUDE_PLUGIN_ROOT}/hooks/session-lesson.py\\\"\",\n            \"timeout\": 10\n          }\n        ]\n      },\n      {",
+   "why": "вопрос об уроке снова подключён к событию Stop: на этом событии он продолжает разговор, и каждый ход с правками получает лишний платный ход"
+  },
+  {
+   "id": "phase7.lesson-question-dropped",
+   "file": "plugins/superstack/skills/go/phases/7-переживёт.md",
+   "find": "есть ли урок на всегда",
+   "replace": "всё записано",
+   "why": "вопрос об уроке нигде не задаётся: журнал находок остаётся пустым, и следующий прогон заходит в те же тупики"
+  },
+  {
+   "id": "chain.verify-record-name-split",
+   "file": "plugins/superstack/tools/verify.py",
+   "find": "RECORD = \".superstack/verify-last.json\"",
+   "replace": "RECORD = \".superstack/verify-result.json\"",
+   "why": "проверка пишет запись под одним именем, автономия и «доказано» читают под другим: ступень 2 и слово «проверено машиной» недостижимы, а тесты по одному инструменту зелёные"
+  },
+  {
+   "id": "chain.report-trusts-claimed",
+   "file": "plugins/superstack/tools/report.py",
+   "find": "\"проверено\": [t for t in tasks if t.get(\"status\") == PROVEN],",
+   "replace": "\"проверено\": [t for t in tasks if t.get(\"status\") in (PROVEN, CLAIMED)],",
+   "why": "отчёт называет «проверено машиной» то, что только заявлено со слов: человек принимает непроверенное за доказанное"
+  },
+  {
+   "id": "accept.ignores-survived",
+   "file": "tools/accept_wave.py",
+   "find": "def caught_mutations(gate: dict, expected: int) -> \"str | None\":\n    \"\"\"Причина, по которой выборка поломок не считается пойманной, или None.\n\n    Пойманы, когда одновременно: ничего не выжило, выполнено ровно столько,\n    сколько названо, статус `partial`. `fail` — поломка выжила; `unknown` —\n    прогон не состоялся.\n    \"\"\"\n    if gate.get(\"survived\"):",
+   "replace": "def caught_mutations(gate: dict, expected: int) -> \"str | None\":\n    \"\"\"Причина, по которой выборка поломок не считается пойманной, или None.\n\n    Пойманы, когда одновременно: ничего не выжило, выполнено ровно столько,\n    сколько названо, статус `partial`. `fail` — поломка выжила; `unknown` —\n    прогон не состоялся.\n    \"\"\"\n    if False:",
+   "why": "приёмка не читает выживших: волна принимается при поломке, которую тесты не держат, и человек получает «принято» поверх дыры"
+  },
+  {
+   "id": "accept.accepts-without-full-bar",
+   "file": "tools/accept_wave.py",
+   "find": "    if rec is None:\n        return WAIT\n",
+   "replace": "    if rec is None:\n        return ACCEPTED\n",
+   "why": "слово «принята» печатается без итога полной планки: волна сдана по быстрой проверке, которой часы работы не заменяют"
+  },
+  {
+   "id": "accept.pytest-code-ignored",
+   "file": "tools/accept_wave.py",
+   "find": "    if code != 0:\n        raise Stop(1, \"тесты красные\"",
+   "replace": "    if False:\n        raise Stop(1, \"тесты красные\"",
+   "why": "код возврата набора тестов не читается: волна принимается при красных тестах"
   }
  ]
 }

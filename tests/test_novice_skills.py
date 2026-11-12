@@ -42,6 +42,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -729,6 +730,11 @@ class FixFixture(unittest.TestCase):
         (hooks / "verify-gate.py").write_text("import sys\nsys.exit(0)\n",
                                       encoding="utf-8")
         fix_mod.ROOT = root
+        # Звено «проверки в этой папке» спрашивает реестр: здоровый стенд
+        # обязан иметь отметку на текущей папке.
+        fix_mod.STATE.mkdir(parents=True, exist_ok=True)
+        (fix_mod.STATE / "projects").write_text(
+            str(Path.cwd().resolve()) + "\n", encoding="utf-8")
         return root
 
 
@@ -779,11 +785,13 @@ class TestFixOrderedChain(FixFixture):
         self.make_healthy_root()
         blocker = Path(self.tmp.name) / "blocker-is-a-file"
         blocker.write_text("x", encoding="utf-8")
+        отмеченный = fix_mod.STATE  # реестр с отметкой остаётся тут
         fix_mod.STATE = blocker / "superstack"  # родитель — файл, mkdir провалится
-        v = fix_mod.diagnose()
+        with mock.patch.dict(os.environ, {"SUPERSTACK_STATE_DIR": str(отмеченный)}):
+            v = fix_mod.diagnose()
         self.assertEqual(v["status"], "broken")
         self.assertEqual(v["link"], "права на запись")
-        self.assertEqual(v["broken_index"], 5)
+        self.assertEqual(v["broken_index"], 6)
 
     def test_first_broken_link_wins_over_a_later_one(self):
         """Механизм: цепочка останавливается на ПЕРВОМ разрыве, даже если
@@ -883,6 +891,12 @@ class TestSmallEditHasItsOwnRoute(unittest.TestCase):
         "fix": ("не работает", "сломалось", "не запускается"),
     }
 
+    def test_step_six_names_exit_code_two_for_a_page(self):
+        """Код 2 от проверки страницы — не успех: человека просят описать словами."""
+        шаг = self.текст.split("## 6.")[1].split("## 7.")[0]
+        self.assertIn("Код 2", шаг)
+        self.assertIn("расскажи словами, что ты видишь", шаг)
+
     def setUp(self):
         self.текст = (SKILLS / "change" / "SKILL.md").read_text("utf-8")
         self.описание = {}
@@ -937,6 +951,19 @@ class TestSmallEditHasItsOwnRoute(unittest.TestCase):
         self.assertLess(проверка, снимки[1],
                         "оба снимка стоят до проверки — правка не проверена "
                         "между ними, и второй снимок фиксирует непроверенное")
+
+    def test_change_sets_a_return_point_before_the_first_snapshot(self):
+        инициализация = self.текст.find(
+            '"$CLAUDE_PLUGIN_ROOT/tools/checkpoint.py" . init')
+        первый_снимок = self.текст.find(
+            '"$CLAUDE_PLUGIN_ROOT/tools/checkpoint.py" . snap ')
+        self.assertNotEqual(инициализация, -1,
+                            "скилл не заводит снимки: в чистой папке правка "
+                            "пойдёт без точки возврата")
+        self.assertLess(инициализация, первый_снимок,
+                        "снимки заводятся после первого снимка")
+        self.assertIn("вернуть будет нельзя — продолжать?", self.текст,
+                      "не сказано, что делать, если снимки завести не вышло")
 
     def test_every_tool_is_called_by_its_literal_path(self):
         голые = []

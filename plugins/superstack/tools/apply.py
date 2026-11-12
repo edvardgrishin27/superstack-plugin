@@ -633,7 +633,9 @@ def safe_target(имя) -> Path:
                          f"трогать ({', '.join(WRITABLE)})")
     цель = (CLAUDE / имя).resolve()
     корень = CLAUDE.resolve()
-    if not цель.is_relative_to(корень):
+    try:
+        цель.relative_to(корень)
+    except ValueError:
         raise UnsafeName(f"«{имя}» после разбора пути уводит за каталог "
                          f"настроек: {цель}")
     return CLAUDE / имя

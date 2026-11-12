@@ -446,4 +446,5 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    # Повреждённый файл — одна фраза и код 5, а не трассировка.
+    sys.exit(mf.atomic_store.запустить(main))

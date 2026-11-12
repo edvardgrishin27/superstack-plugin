@@ -695,25 +695,31 @@ class TestEveryMutationAnchorResolves(unittest.TestCase):
         мутация не исполняется, ворота зелёные, и механизм считается
         проверенным поломкой, которой не было.
         """
-        плохие, проверено = [], 0
-        for m in self.muts:
+        self.assertEqual(self._мёртвые_метки(self.muts), [],
+                         "метка прикрывает поломку")
+
+    def test_marker_on_a_target_that_exists_nowhere_is_named(self):
+        """Сторож краснеет на искусственной записи: каталога цели нет нигде."""
+        запись = {"id": "ghost.mark", "file": "нет-такого-каталога/f.json",
+                  "find": "x", "replace": "y", "why": "w",
+                  "вне_поставки": "прикрытие"}
+        self.assertEqual([i for i, _ in self._мёртвые_метки([запись])],
+                         ["ghost.mark"])
+
+    @staticmethod
+    def _мёртвые_метки(muts: list) -> list:
+        плохие = []
+        for m in muts:
             if not m.get("вне_поставки"):
                 continue
             f = Path(gt.PLUG) / m["file"]
-            # Каталога нет вовсе — это дерево поставки, и здесь проверять
-            # нечего. Каталог есть, а файла в нём нет — это уже мёртвый якорь,
-            # прикрытый меткой, и он обязан быть назван.
             if not f.parent.is_dir():
-                continue
-            проверено += 1
-            if not f.is_file():
+                плохие.append((m["id"], f"нет каталога цели: {m['file']}"))
+            elif not f.is_file():
                 плохие.append((m["id"], f"нет файла {m['file']} рядом с его же каталогом"))
             elif f.read_text("utf-8", errors="replace").count(m["find"]) != 1:
                 плохие.append((m["id"], "якорь не один"))
-        self.assertEqual(плохие, [], f"метка прикрывает поломку: {плохие}")
-        if not проверено:
-            self.skipTest("объявленного вне поставки в этом дереве нет — "
-                          "проверять нечем; сверка идёт в репозитории разработки")
+        return плохие
 
     def test_ids_are_unique(self):
         ids = [m["id"] for m in self.muts]

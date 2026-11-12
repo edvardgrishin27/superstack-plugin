@@ -213,11 +213,14 @@ class TestPersistence(unittest.TestCase):
             self.assertEqual(back["findings"], d["findings"])
             self.assertEqual(back["updated"], "2026-08-14T00:00:00+00:00")
 
-    def test_unreadable_file_gives_an_empty_state_not_a_crash(self):
+    def test_unreadable_file_stops_instead_of_reading_as_empty(self):
+        """Пустое вместо нечитаемого стирало находки следующей записью."""
         with tempfile.TemporaryDirectory() as t:
             p = Path(t) / "r.json"
             p.write_text("{не json", encoding="utf-8")
-            self.assertEqual(rv.load(p)["findings"], [])
+            with self.assertRaises(rv.atomic_store.ФайлПовреждён):
+                rv.load(p)
+            self.assertEqual(p.read_text("utf-8"), "{не json")
 
 
 class TestRepairKnowsWhyItFailed(unittest.TestCase):
@@ -262,7 +265,8 @@ class TestRepairKnowsWhyItFailed(unittest.TestCase):
         """«Почини, чтобы проходило» — приглашение лечить симптом: подогнать
         тест, заглушить ошибку, вписать значение."""
         r = rv.repair_route({}, rv.SHORTFALL, "")
-        self.assertEqual(r["step"], "отказ")
+        self.assertFalse(r["allowed"])
+        self.assertEqual(r["refused"], "причина не названа")
         self.assertIn("симптом", r["why"])
 
     def test_an_unknown_kind_is_refused(self):
@@ -275,6 +279,42 @@ class TestRepairKnowsWhyItFailed(unittest.TestCase):
         d = rv.count_repair(d, "повтор")
         self.assertEqual(d["followups"], 1)
         self.assertEqual(d["retries"], 1)
+
+
+class TestRepairCommandSpendsTheLadder(unittest.TestCase):
+    """Дыра жила в связке маршрута, счётчика и команды, поэтому тест идёт через процесс."""
+
+    def run_cmd(self, *args):
+        import subprocess, os
+        env = {**os.environ, "SUPERSTACK_IGNORE_PAUSE": "1"}
+        return subprocess.run(["python3", str(REVIEW), *args],
+                              capture_output=True, text=True, env=env)
+
+    def test_five_repairs_without_a_cause_end_in_handoff(self):
+        with tempfile.TemporaryDirectory() as d:
+            f = Path(d) / "review.json"
+            steps = []
+            for _ in range(5):
+                p = self.run_cmd("repair", str(f))
+                self.assertEqual(p.returncode, 1, p.stderr)
+                steps.append(json.loads(p.stdout)["step"])
+            saved = json.loads(f.read_text(encoding="utf-8"))
+            self.assertEqual(steps[-1], "сдача")
+            self.assertEqual((saved["followups"], saved["retries"],
+                              saved["approaches"]), (2, 1, 1))
+
+    def test_a_closed_blocking_finding_does_not_turn_show_red(self):
+        with tempfile.TemporaryDirectory() as d:
+            f = Path(d) / "review.json"
+            p = self.run_cmd("find", str(f), "--axis", "craft", "--where",
+                             "a.py:1", "--what", "сломано", "--must", "починить")
+            self.assertEqual(p.returncode, 0, p.stderr)
+            self.assertEqual(self.run_cmd("show", str(f)).returncode, 1)
+            p = self.run_cmd("close", str(f), "0", "--by", "тест")
+            self.assertEqual(p.returncode, 0, p.stderr)
+            p = self.run_cmd("show", str(f), "--json")
+            self.assertEqual(p.returncode, 0, p.stderr)
+            self.assertEqual(json.loads(p.stdout)["status"], "pass")
 
 
 if __name__ == "__main__":
